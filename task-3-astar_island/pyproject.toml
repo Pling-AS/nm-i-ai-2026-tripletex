@@ -1,0 +1,11 @@
+[project]
+name = "astar-island"
+version = "0.1.0"
+description = "Norse civilization simulator prediction for NM i AI 2026"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "requests",
+    "python-dotenv",
+]

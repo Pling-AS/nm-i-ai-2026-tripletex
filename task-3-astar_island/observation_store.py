@@ -1,0 +1,142 @@
+"""Aggregate observations and compute Dirichlet posteriors."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Any
+
+import numpy as np
+from numpy.typing import NDArray
+
+from features import CellArchetype
+from utils import NUM_CLASSES, TERRAIN_TO_CLASS
+
+
+class ObservationStore:
+    """Stores per-cell terrain observations across all seeds and queries.
+
+    Each simulation query yields a viewport of terrain codes.  We convert
+    these to prediction class indices and accumulate counts.
+    """
+
+    def __init__(self, seeds_count: int, height: int, width: int) -> None:
+        self.seeds_count = seeds_count
+        self.height = height
+        self.width = width
+
+        # Per-cell observation counts: (seed, y, x) -> counts[6]
+        self._counts = np.zeros(
+            (seeds_count, height, width, NUM_CLASSES), dtype=np.int32
+        )
+        # How many times each cell has been observed
+        self._obs_count = np.zeros((seeds_count, height, width), dtype=np.int32)
+
+        # Archetype-level pooled counts: archetype -> counts[6]
+        self._archetype_counts: dict[CellArchetype, NDArray[np.int32]] = defaultdict(
+            lambda: np.zeros(NUM_CLASSES, dtype=np.int32)
+        )
+        self._archetype_obs_count: dict[CellArchetype, int] = defaultdict(int)
+
+    def add_observation(
+        self,
+        seed_index: int,
+        viewport: dict[str, int],
+        grid: list[list[int]],
+        archetypes: NDArray[np.object_],
+    ) -> None:
+        """Record one simulation observation.
+
+        Parameters
+        ----------
+        seed_index : which seed was observed.
+        viewport : dict with keys x, y, w, h.
+        grid : viewport_h x viewport_w grid of internal terrain codes.
+        archetypes : full (H, W) archetype array for this seed.
+        """
+        vx, vy = viewport["x"], viewport["y"]
+        vh, vw = len(grid), len(grid[0]) if grid else 0
+
+        for ry in range(vh):
+            for rx in range(vw):
+                ay = vy + ry  # absolute y
+                ax = vx + rx  # absolute x
+                if ay >= self.height or ax >= self.width:
+                    continue
+
+                terrain_code = grid[ry][rx]
+                class_idx = TERRAIN_TO_CLASS.get(terrain_code, 0)
+
+                self._counts[seed_index, ay, ax, class_idx] += 1
+                self._obs_count[seed_index, ay, ax] += 1
+
+                # Pool into archetype
+                archetype = archetypes[ay, ax]
+                self._archetype_counts[archetype][class_idx] += 1
+                self._archetype_obs_count[archetype] += 1
+
+    def get_cell_counts(self, seed_index: int, y: int, x: int) -> NDArray[np.int32]:
+        """Return (6,) observation counts for a specific cell."""
+        return self._counts[seed_index, y, x]
+
+    def get_cell_obs_count(self, seed_index: int, y: int, x: int) -> int:
+        """How many times has this cell been observed?"""
+        return int(self._obs_count[seed_index, y, x])
+
+    def get_archetype_counts(self, archetype: CellArchetype) -> NDArray[np.int32]:
+        """Return pooled (6,) observation counts for an archetype (across all seeds)."""
+        return self._archetype_counts[archetype]
+
+    def get_archetype_obs_count(self, archetype: CellArchetype) -> int:
+        """How many total observations exist for this archetype?"""
+        return self._archetype_obs_count[archetype]
+
+    def get_seed_counts(self, seed_index: int) -> NDArray[np.int32]:
+        """Return (H, W, 6) counts array for one seed."""
+        return self._counts[seed_index]
+
+    def get_seed_obs_counts(self, seed_index: int) -> NDArray[np.int32]:
+        """Return (H, W) observation count array for one seed."""
+        return self._obs_count[seed_index]
+
+    def compute_posterior_entropy(
+        self,
+        seed_index: int,
+        y: int,
+        x: int,
+        alpha: float = 0.5,
+    ) -> float:
+        """Compute entropy of the Dirichlet posterior mean for a cell.
+
+        Higher entropy = more uncertain = higher priority for repeat queries.
+        """
+        counts = self._counts[seed_index, y, x].astype(np.float64)
+        n_obs = self._obs_count[seed_index, y, x]
+
+        if n_obs == 0:
+            # Maximum uncertainty — uniform over 6 classes
+            return np.log(NUM_CLASSES)
+
+        # Dirichlet posterior mean: (count + alpha) / (N + K*alpha)
+        posterior = (counts + alpha) / (n_obs + NUM_CLASSES * alpha)
+        # Entropy
+        # Avoid log(0) by filtering zeros
+        nonzero = posterior > 0
+        entropy = -np.sum(posterior[nonzero] * np.log(posterior[nonzero]))
+        return float(entropy)
+
+    def compute_entropy_grid(
+        self,
+        seed_index: int,
+        alpha: float = 0.5,
+    ) -> NDArray[np.floating]:
+        """Compute posterior entropy for every cell in a seed. Returns (H, W)."""
+        counts = self._counts[seed_index].astype(np.float64)
+        n_obs = self._obs_count[seed_index].astype(np.float64)
+
+        # Dirichlet posterior mean
+        posterior = (counts + alpha) / (n_obs[..., np.newaxis] + NUM_CLASSES * alpha)
+        # Where n_obs == 0, posterior is uniform → entropy = log(6)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            log_post = np.where(posterior > 0, np.log(posterior), 0.0)
+        entropy = -np.sum(posterior * log_post, axis=-1)
+        return entropy
