@@ -1,0 +1,9 @@
+.env
+.browser-data/
+.game-tracker.json
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+round0_state.json
