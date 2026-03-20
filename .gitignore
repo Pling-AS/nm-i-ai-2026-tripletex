@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+.venv
+env/
+venv/
+
+# Submission artifacts
+*.zip
+task-1-norgesgruppen/submission_*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# Agent/System
+.sisyphus/
+submission_status.md
