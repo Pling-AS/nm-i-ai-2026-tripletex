@@ -14,9 +14,18 @@ logger = logging.getLogger(__name__)
 
 from tripletex_agent.config import Settings
 from tripletex_agent.files import prepare_attachments
-from tripletex_agent.openrouter import OpenRouterClient, OpenRouterError
+from tripletex_agent.openrouter import (
+    OpenRouterClient,
+    OpenRouterError,
+    _is_anthropic_model,
+)
 from tripletex_agent.prompts import EXECUTOR_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
 from tripletex_agent.schemas import PlannerOutput, SolveRequest
+from tripletex_agent.executor_knowledge import (
+    get_endpoint_chain,
+    select_field_rules,
+    select_successful_trace,
+)
 from tripletex_agent.spec_index import TripletexSpecIndex
 from tripletex_agent.trace import RunTrace
 from tripletex_agent.tripletex import (
@@ -38,6 +47,10 @@ class ExecutionState:
     cached_tool_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     recent_tool_call_keys: list[str] = field(default_factory=list)
     recent_endpoint_families: list[str] = field(default_factory=list)
+    enforcer_override_active: bool = False
+    enforcer_override_count: int = 0
+    last_enforcer_suggestion: str = ""
+    created_entity_keys: set[str] = field(default_factory=set)
 
 
 class TripletexAccountingAgent:
@@ -195,8 +208,8 @@ class TripletexAccountingAgent:
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4096,
         model_chain: list[str],
+        enable_thinking: bool = False,
     ) -> dict[str, Any]:
-        """Call chat_completion trying each model in chain on retryable failures."""
         last_exc: Exception | None = None
         for model in model_chain:
             try:
@@ -205,6 +218,7 @@ class TripletexAccountingAgent:
                     tools=tools,
                     max_tokens=max_tokens,
                     model_override=model,
+                    enable_thinking=enable_thinking and _is_anthropic_model(model),
                 )
             except Exception as exc:
                 last_exc = exc
@@ -249,6 +263,244 @@ class TripletexAccountingAgent:
         except ValidationError as exc:
             raise OpenRouterError(f"Planner output validation failed: {exc}") from exc
 
+    async def _semantic_enforce(
+        self,
+        openrouter: OpenRouterClient,
+        *,
+        tool_name: str,
+        arguments: dict[str, Any],
+        planner: PlannerOutput,
+        request_prompt: str,
+        execution_history: list[str],
+    ) -> dict[str, Any] | None:
+        if tool_name != "tripletex_request":
+            return None
+        method = (arguments.get("method") or "").upper()
+        if method not in ("POST", "PUT"):
+            return None
+
+        path = arguments.get("path", "")
+        body = arguments.get("json_body") or {}
+        params = arguments.get("params") or {}
+        body_str = json.dumps(body, ensure_ascii=False)
+        params_str = json.dumps(params, ensure_ascii=False)
+        combined = body_str + params_str
+
+        has_amounts = any(
+            kw in combined.lower()
+            for kw in (
+                "amount",
+                "price",
+                "gross",
+                "cost",
+                "rate",
+                "fixedprice",
+                "paidamount",
+                "count",
+            )
+        )
+        is_payment = "/:payment" in path
+        is_voucher = "/ledger/voucher" in path and path.rstrip("/").endswith("/voucher")
+        is_orderline = "/orderline" in path
+        is_invoice = path.rstrip("/").endswith("/invoice") and method == "POST"
+
+        if not (has_amounts or is_payment or is_voucher or is_orderline or is_invoice):
+            return None
+
+        body_summary = body_str[:1500]
+        params_summary = params_str[:500]
+
+        line_items_json = json.dumps(
+            [li.model_dump() for li in planner.line_items], ensure_ascii=False
+        )[:800]
+
+        prompt = (
+            "You are a MATH-ONLY checker for Tripletex API calls. "
+            "You ONLY check if NUMERIC VALUES are correct. "
+            "Do NOT check call ordering, entity IDs, prerequisites, or sequencing.\n\n"
+            f"TASK PROMPT: {request_prompt}\n\n"
+            f"LINE ITEMS FROM PROMPT: {line_items_json}\n\n"
+            f"PROPOSED CALL:\n"
+            f"  {method} {path}\n"
+            f"  Body: {body_summary}\n"
+            f"  Params: {params_summary}\n\n"
+            "CHECK ONLY:\n"
+            "1. Do the AMOUNTS/PRICES match what the task prompt specifies?\n"
+            "2. Is the VAT rate correct? (25%=id:3, 15%=id:5, 0%=id:6. 'sin IVA'/'uten MVA'/'ohne MwSt'=0%)\n"
+            "3. For payments: does paidAmount equal the invoice total INCLUDING VAT?\n"
+            "4. For percentages: is the math correct? (e.g., 75% of 342600 = 256950)\n"
+            "5. For orderlines: does unitPriceExcludingVatCurrency match the line item price?\n\n"
+            "DO NOT reject for: missing fields, wrong IDs, call ordering, prerequisites, or sequencing.\n"
+            "ASSUME all entity IDs are correct — they come from prior API responses.\n\n"
+            'Return JSON: {"allowed": true} or {"allowed": false, "reason": "...", "suggestion": "..."}\n'
+            "Only reject for CLEAR NUMERIC ERRORS. When in doubt, ALLOW."
+        )
+
+        try:
+            result = await openrouter.complete_json(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You check ONLY math and amounts. Return JSON. Never reject for sequencing or IDs.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=200,
+                model_override=self._settings.enforcer_model,
+            )
+            if not result.get("allowed", True):
+                return {
+                    "rejected": True,
+                    "reason": result.get("reason", "Semantic check failed"),
+                    "suggestion": result.get(
+                        "suggestion",
+                        "Review the values against the task prompt.",
+                    ),
+                }
+        except Exception as exc:
+            logger.debug("Semantic enforcer failed (non-fatal): %s", exc)
+        return None
+
+    async def _ask_api_advisor(
+        self,
+        openrouter: OpenRouterClient,
+        question: str,
+        planner: PlannerOutput,
+        request_prompt: str,
+    ) -> dict[str, Any]:
+        search_terms = question.lower().split()[:5]
+        relevant_endpoints: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for term in search_terms:
+            for ep in self._spec_index.search_endpoints(term, limit=3):
+                key = f"{ep.get('method', '')} {ep.get('path', '')}"
+                if key not in seen:
+                    seen.add(key)
+                    relevant_endpoints.append(ep)
+
+        schemas: dict[str, Any] = {}
+        for ep in relevant_endpoints[:10]:
+            for schema_key in ("requestSchema", "responseSchema"):
+                name = ep.get(schema_key)
+                if isinstance(name, str) and name and name not in schemas:
+                    try:
+                        schemas[name] = self._spec_index.get_schema(
+                            name, max_properties=40
+                        )
+                    except KeyError:
+                        pass
+
+        endpoints_text = json.dumps(
+            [
+                {
+                    "method": e.get("method"),
+                    "path": e.get("path"),
+                    "summary": e.get("summary"),
+                    "requestSchema": e.get("requestSchema"),
+                }
+                for e in relevant_endpoints[:10]
+            ],
+            ensure_ascii=False,
+        )
+        schemas_text = json.dumps(schemas, ensure_ascii=False)[:8000]
+
+        from tripletex_agent.executor_knowledge import select_field_rules
+
+        endpoint_keys = [
+            f"{e.get('method', '')} {e.get('path', '')}" for e in relevant_endpoints
+        ]
+        field_rules = select_field_rules(endpoint_keys)
+        rules_text = json.dumps(field_rules, ensure_ascii=False)[:3000]
+
+        advisor_prompt = (
+            "You are a Tripletex API expert advisor. A developer needs help making the right API call.\n\n"
+            f"TASK CONTEXT: {request_prompt}\n\n"
+            f"DEVELOPER QUESTION: {question}\n\n"
+            f"RELEVANT ENDPOINTS:\n{endpoints_text}\n\n"
+            f"SCHEMAS:\n{schemas_text}\n\n"
+            f"FIELD RULES (known gotchas):\n{rules_text}\n\n"
+            "Give a SPECIFIC, ACTIONABLE recommendation:\n"
+            "1. Which endpoint to use (method + path)\n"
+            "2. The EXACT body or params structure with correct field names\n"
+            "3. Any required fields that are easy to miss\n"
+            "4. Common pitfalls for this specific endpoint\n"
+            "Be concise and practical — the developer will use your answer directly."
+        )
+
+        try:
+            result = await openrouter.chat_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a Tripletex REST API expert. Give precise, actionable answers.",
+                    },
+                    {"role": "user", "content": advisor_prompt},
+                ],
+                max_tokens=2000,
+                model_override=self._settings.enforcer_model,
+            )
+            return {
+                "ok": True,
+                "advisor_response": result.get("content", ""),
+                "endpoints_found": len(relevant_endpoints),
+                "schemas_provided": list(schemas.keys()),
+            }
+        except Exception as exc:
+            return {"ok": False, "error": f"Advisor call failed: {exc}"}
+
+    def _resolve_planned_endpoints(
+        self,
+        planner: PlannerOutput,
+    ) -> list[dict[str, Any]]:
+        endpoint_keys: list[str] = get_endpoint_chain(planner.task_type)
+
+        for step in planner.ordered_steps:
+            match = re.search(r"(GET|POST|PUT|DELETE)\s+(/\S+)", step)
+            if match:
+                key = f"{match.group(1)} {match.group(2)}"
+                if key not in endpoint_keys:
+                    endpoint_keys.append(key)
+
+        resolved: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for key in endpoint_keys:
+            if key in seen:
+                continue
+            seen.add(key)
+            parts = key.split(" ", 1)
+            if len(parts) != 2:
+                continue
+            method, path = parts
+            try:
+                endpoint = self._spec_index.get_endpoint(method, path)
+                resolved.append(endpoint)
+            except KeyError:
+                resolved.append(
+                    {"method": method, "path": path, "summary": "Not found in spec"}
+                )
+        return resolved
+
+    def _build_prefetched_schemas(
+        self,
+        planned_endpoints: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        schemas: dict[str, Any] = {}
+        for ep in planned_endpoints:
+            for schema_key in ("requestSchema", "responseSchema"):
+                schema_name = ep.get(schema_key)
+                if not isinstance(schema_name, str) or not schema_name:
+                    continue
+                if schema_name in schemas:
+                    continue
+                try:
+                    schemas[schema_name] = self._spec_index.get_schema(
+                        schema_name,
+                        max_properties=60,
+                    )
+                except KeyError:
+                    pass
+        return schemas
+
     def _build_execution_brief(
         self,
         planner: PlannerOutput,
@@ -273,100 +525,59 @@ class TripletexAccountingAgent:
         )
         requested_field_names = _infer_requested_schema_fields(request_prompt)
         explicit_prompt_values = _extract_explicit_prompt_values(request_prompt)
-        queries = _build_execution_brief_queries(planner, request_prompt)
-        candidate_endpoints: list[dict[str, Any]] = []
-        seen_endpoints: set[tuple[str, str]] = set()
 
-        for query in queries:
-            for endpoint in self._spec_index.search_endpoints(query, limit=4):
-                endpoint_key = (
-                    str(endpoint.get("method") or ""),
-                    str(endpoint.get("path") or ""),
-                )
-                if endpoint_key in seen_endpoints:
-                    continue
+        planned_endpoints = self._resolve_planned_endpoints(planner)
+        prefetched_schemas = self._build_prefetched_schemas(planned_endpoints)
 
-                candidate = {
-                    "query": query,
-                    "method": endpoint.get("method"),
-                    "path": endpoint.get("path"),
-                    "summary": endpoint.get("summary"),
-                    "tags": endpoint.get("tags"),
-                    "requestSchema": endpoint.get("requestSchema"),
-                    "responseSchema": endpoint.get("responseSchema"),
-                }
+        endpoint_keys = [
+            f"{ep.get('method', '')} {ep.get('path', '')}" for ep in planned_endpoints
+        ]
+        field_rules = select_field_rules(endpoint_keys)
+        trace_example = select_successful_trace(planner.task_type)
 
-                request_schema = endpoint.get("requestSchema")
-                if isinstance(request_schema, str) and request_schema:
-                    candidate["request_schema_summary"] = self._spec_index.get_schema(
-                        request_schema,
-                        max_properties=12,
-                    )
-                    requested_field_paths = _find_requested_field_paths(
-                        self._spec_index,
-                        request_schema,
-                        requested_field_names,
-                    )
-                    if requested_field_paths:
-                        candidate["requested_field_paths"] = requested_field_paths
-
-                candidate_endpoints.append(candidate)
-                seen_endpoints.add(endpoint_key)
-                if len(candidate_endpoints) >= 8:
-                    break
-            if len(candidate_endpoints) >= 8:
-                break
+        candidate_endpoints = self._grounded_candidate_endpoints(
+            planner=planner,
+            request_prompt=request_prompt,
+        )
 
         return {
             "goal": planner.goal,
             "task_type": planner.task_type,
             "primary_resource": primary_resource,
             "linked_resources": linked_resources,
+            "candidate_queries": [primary_resource, *(linked_resources[:2])],
+            "candidate_endpoints": candidate_endpoints,
             "preferred_link_fields": preferred_link_fields,
             "requested_field_names": requested_field_names,
             "explicit_prompt_values": explicit_prompt_values,
             "suggested_first_action": planner.suggested_first_action,
             "success_checks": planner.success_checks[:5],
             "risk_notes": planner.risk_notes[:5],
-            "candidate_queries": queries,
-            "candidate_endpoints": candidate_endpoints,
+            "planned_endpoints": [
+                {
+                    "method": ep.get("method"),
+                    "path": ep.get("path"),
+                    "summary": ep.get("summary"),
+                    "requestSchema": ep.get("requestSchema"),
+                    "responseSchema": ep.get("responseSchema"),
+                }
+                for ep in planned_endpoints
+            ],
+            "prefetched_schemas": prefetched_schemas,
+            "field_rules": field_rules,
+            "successful_trace_example": trace_example,
             "computed_dates": computed_dates,
             "entities": [entity.model_dump() for entity in planner.entities],
             "line_items": [line_item.model_dump() for line_item in planner.line_items],
             "actions": planner.actions,
             "ordered_steps": planner.ordered_steps,
             "working_rules": [
-                (
-                    "Preserve explicit facts from the prompt, such as names, emails, "
-                    "and dates. If a requested fact is not top-level in the primary "
-                    "schema, inspect nested schema paths or linked subresources before "
-                    "declaring the task complete."
-                ),
-                (
-                    "When a prompt names another entity to link, prefer schema relation "
-                    "fields whose semantic role matches the prompt wording, such as "
-                    "customer, employee, projectManager, or contact."
-                ),
-                (
-                    "Keep actions anchored to the primary target resource. Only explore "
-                    "other entity families when they are clearly required linked "
-                    "resources for the task."
-                ),
+                "OBEY field_rules BEFORE your first write — they prevent known 422 errors.",
+                "Use prefetched_schemas to know exact field names and types — do NOT call inspect_tripletex_endpoint unless prefetched schemas are missing.",
+                "Follow the successful_trace_example as your primary execution template when available.",
                 "Prefer existing entities when conflicts or duplicates are plausible.",
-                (
-                    "For JSON writes, rely on inspected request schemas and send "
-                    "only supported fields."
-                ),
-                (
-                    "If a failure indicates a missing linked entity, only create "
-                    "or fetch the prerequisite if it directly serves the requested "
-                    "task."
-                ),
-                (
-                    "If docs or API responses indicate external or company-level "
-                    "setup that the prompt did not ask for, stop instead of "
-                    "inventing unrelated configuration work."
-                ),
+                "Keep actions anchored to the primary target resource.",
+                "If blocked by external or company-level setup, stop and report it.",
             ],
         }
 
@@ -383,6 +594,8 @@ class TripletexAccountingAgent:
         candidate_endpoints: list[dict[str, Any]] = []
         seen_endpoints: set[tuple[str, str]] = set()
 
+        requested_field_names = _infer_requested_schema_fields(request_prompt)
+
         for query in grounded_queries:
             for endpoint in self._spec_index.search_endpoints(query, limit=4):
                 endpoint_key = (
@@ -391,12 +604,25 @@ class TripletexAccountingAgent:
                 )
                 if endpoint_key in seen_endpoints:
                     continue
+
+                request_schema = endpoint.get("requestSchema")
+                requested_paths: list[str] = []
+                if request_schema:
+                    requested_paths = _find_requested_field_paths(
+                        self._spec_index,
+                        request_schema,
+                        requested_field_names,
+                    )
+
                 candidate_endpoints.append(
                     {
                         "query": query,
                         "method": endpoint.get("method"),
                         "path": endpoint.get("path"),
                         "summary": endpoint.get("summary"),
+                        "requestSchema": request_schema,
+                        "responseSchema": endpoint.get("responseSchema"),
+                        "requested_field_paths": requested_paths,
                     }
                 )
                 seen_endpoints.add(endpoint_key)
@@ -428,6 +654,23 @@ class TripletexAccountingAgent:
             planner=planner,
             request_prompt=request.prompt,
         )
+        trace.write(
+            "execution_brief",
+            {
+                "planned_endpoints": execution_brief.get("planned_endpoints", []),
+                "prefetched_schema_names": list(
+                    execution_brief.get("prefetched_schemas", {}).keys()
+                ),
+                "field_rules_count": len(execution_brief.get("field_rules", [])),
+                "field_rules": execution_brief.get("field_rules", []),
+                "has_trace_example": execution_brief.get("successful_trace_example")
+                is not None,
+                "trace_example_task": (
+                    execution_brief.get("successful_trace_example") or {}
+                ).get("description"),
+                "computed_dates": execution_brief.get("computed_dates", {}),
+            },
+        )
         computed_dates = execution_brief.get("computed_dates") or {}
         today_iso = computed_dates.get("today_iso")
         due_date_iso = computed_dates.get("due_date_iso")
@@ -441,12 +684,24 @@ class TripletexAccountingAgent:
                         "execution_brief": execution_brief,
                         "instructions": [
                             (
-                                "ACT FIRST: Use candidate_endpoints from the execution_brief "
-                                "to make API calls IMMEDIATELY. Do NOT search or inspect "
-                                "before your first write unless you truly don't know the endpoint."
+                                "SCHEMA-FIRST: execution_brief contains prefetched_schemas with "
+                                "FULL field definitions for all planned endpoints. Read these "
+                                "BEFORE calling any endpoint. Do NOT use inspect_tripletex_endpoint "
+                                "or search_tripletex_api unless the schema is genuinely missing."
+                            ),
+                            (
+                                "FIELD RULES: execution_brief.field_rules contains CRITICAL "
+                                "validation rules for each endpoint. OBEY these rules on your "
+                                "FIRST attempt — they prevent known 422 errors. Every 4xx error "
+                                "reduces your efficiency score."
+                            ),
+                            (
+                                "TRACE TEMPLATE: If execution_brief.successful_trace_example "
+                                "is present, follow that exact call sequence as your template. "
+                                "It shows the proven minimal-call path for this task type."
                             ),
                             "Use the fewest Tripletex API calls possible — every call counts against your efficiency score.",
-                            "ZERO 4xx errors is the target. Read playbooks and schemas carefully before calling.",
+                            "ZERO 4xx errors is the target. Get it right on the FIRST attempt.",
                             (
                                 "TRACK SUCCESSES: After each successful POST, note the resource_id. "
                                 "Never re-create an entity you already created successfully."
@@ -483,6 +738,22 @@ class TripletexAccountingAgent:
                                 "(NOT POST). Use query params: paymentDate, paymentTypeId, "
                                 "paidAmount."
                             ),
+                            (
+                                "VOUCHER RULE: For POST /ledger/voucher, ALWAYS set BOTH "
+                                "amountGross AND amountGrossCurrency to the same value on "
+                                "every posting. Never use row=0. ALWAYS set row=1,2,3... explicitly."
+                            ),
+                            (
+                                "ADMIN RULE: If the prompt mentions admin, administrator, "
+                                "rolle, role, tilgang, accès, Zugang, privilegios, or similar "
+                                "— you MUST call grant_employee_entitlements with template='ALL_PRIVILEGES' "
+                                "after creating/finding the employee. This is worth 5 points."
+                            ),
+                            (
+                                "UPDATE RULE: For update tasks (update_employee, update_customer, etc.), "
+                                "GET the entity first with fields=* to get its id and version. "
+                                "Then PUT with id, version, and ONLY the changed fields."
+                            ),
                         ],
                     },
                     ensure_ascii=False,
@@ -503,15 +774,24 @@ class TripletexAccountingAgent:
                 openrouter,
                 messages=messages,
                 tools=tools,
-                max_tokens=4096,
+                max_tokens=64000,
                 model_chain=executor_model_chain,
+                enable_thinking=True,
             )
             tool_calls = message.get("tool_calls") or []
+            assistant_content = message.get("content") or ""
+            thinking_content = message.get("thinking") or ""
+
+            if thinking_content:
+                trace.write("thinking", {"text": thinking_content[:3000]})
+            if assistant_content and assistant_content.strip():
+                trace.write("assistant_reasoning", {"text": assistant_content[:2000]})
+
             if tool_calls:
                 messages.append(
                     {
                         "role": "assistant",
-                        "content": message.get("content") or "",
+                        "content": assistant_content,
                         "tool_calls": tool_calls,
                     }
                 )
@@ -521,6 +801,172 @@ class TripletexAccountingAgent:
                         tool_call["function"].get("arguments") or "{}"
                     )
                     tool_call_key = _build_tool_call_key(tool_name, arguments)
+
+                    if tool_name == "ask_api_advisor":
+                        trace.write(
+                            "api_advisor_query",
+                            {"question": arguments.get("question", "")},
+                        )
+                        advisor_result = await self._ask_api_advisor(
+                            openrouter,
+                            question=arguments.get("question", ""),
+                            planner=planner,
+                            request_prompt=request.prompt,
+                        )
+                        trace.write(
+                            "api_advisor_response",
+                            {
+                                "endpoints_found": advisor_result.get(
+                                    "endpoints_found", 0
+                                ),
+                                "response_preview": (
+                                    advisor_result.get("advisor_response") or ""
+                                )[:200],
+                            },
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call["id"],
+                                "content": json.dumps(
+                                    advisor_result, ensure_ascii=False
+                                ),
+                            }
+                        )
+                        continue
+
+                    if tool_name == "override_enforcer":
+                        execution_state.enforcer_override_count += 1
+                        override_reason = arguments.get("reason", "")
+                        trace.write(
+                            "enforcer_override",
+                            {
+                                "reason": override_reason,
+                                "count": execution_state.enforcer_override_count,
+                            },
+                        )
+                        if execution_state.enforcer_override_count > 3:
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tool_call["id"],
+                                    "content": json.dumps(
+                                        {
+                                            "ok": False,
+                                            "message": (
+                                                f"Override DENIED — you have used {execution_state.enforcer_override_count} overrides. "
+                                                "The enforcer is protecting you from known API failures. "
+                                                f"Follow the suggestion: {execution_state.last_enforcer_suggestion}"
+                                            ),
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                }
+                            )
+                            continue
+                        execution_state.enforcer_override_active = True
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call["id"],
+                                "content": json.dumps(
+                                    {
+                                        "ok": True,
+                                        "message": f"Override accepted ({execution_state.enforcer_override_count}/3). Your next tool call will bypass the enforcer.",
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                            }
+                        )
+                        continue
+
+                    preflight = _preflight_enforce(
+                        tool_name, arguments, execution_state
+                    )
+                    if (
+                        preflight is not None
+                        and not execution_state.enforcer_override_active
+                    ):
+                        execution_state.last_enforcer_suggestion = preflight[
+                            "suggestion"
+                        ]
+                        trace.write(
+                            "enforcer_rejected",
+                            {
+                                "tool_name": tool_name,
+                                "arguments": arguments,
+                                "reason": preflight["reason"],
+                                "suggestion": preflight["suggestion"],
+                            },
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call["id"],
+                                "content": json.dumps(
+                                    {
+                                        "ok": False,
+                                        "enforcer_rejected": True,
+                                        "reason": preflight["reason"],
+                                        "suggestion": preflight["suggestion"],
+                                        "hint": "Fix the issue and retry, or call override_enforcer if you believe this check is wrong.",
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                            }
+                        )
+                        continue
+                    if not execution_state.enforcer_override_active:
+                        semantic = await self._semantic_enforce(
+                            openrouter,
+                            tool_name=tool_name,
+                            arguments=arguments,
+                            planner=planner,
+                            request_prompt=request.prompt,
+                            execution_history=execution_state.recent_tool_call_keys[
+                                -8:
+                            ],
+                        )
+                        if semantic is not None:
+                            trace.write(
+                                "semantic_enforcer_rejected",
+                                {
+                                    "tool_name": tool_name,
+                                    "arguments": arguments,
+                                    "reason": semantic["reason"],
+                                    "suggestion": semantic["suggestion"],
+                                },
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tool_call["id"],
+                                    "content": json.dumps(
+                                        {
+                                            "ok": False,
+                                            "semantic_enforcer_rejected": True,
+                                            "reason": semantic["reason"],
+                                            "suggestion": semantic["suggestion"],
+                                            "hint": "Fix the values and retry, or call override_enforcer if you believe this check is wrong.",
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                }
+                            )
+                            continue
+                    execution_state.enforcer_override_active = False
+
+                    if tool_name == "tripletex_request":
+                        method_str = (arguments.get("method") or "?").upper()
+                        path_str = arguments.get("path", "?")
+                        trace.write(
+                            "enforcer_passed",
+                            {
+                                "tool_name": tool_name,
+                                "call": f"{method_str} {path_str}",
+                            },
+                        )
+
                     trace.write(
                         "tool_start",
                         {
@@ -543,6 +989,16 @@ class TripletexAccountingAgent:
                             "result": tool_result,
                         },
                     )
+                    if (
+                        not tool_result.get("ok")
+                        and tool_result.get("status_code") in (409, 422)
+                        and execution_state.last_enforcer_suggestion
+                    ):
+                        tool_result["enforcer_reminder"] = (
+                            f"The enforcer previously warned about this. "
+                            f"Follow its suggestion: {execution_state.last_enforcer_suggestion}"
+                        )
+
                     blocking_issue = _detect_blocking_issue(
                         planner=planner,
                         request_prompt=request.prompt,
@@ -975,6 +1431,65 @@ def build_tool_definitions(
         },
     ]
 
+    definitions.append(
+        {
+            "type": "function",
+            "function": {
+                "name": "ask_api_advisor",
+                "description": (
+                    "Consult an API advisor before making a Tripletex API call you're "
+                    "unsure about. The advisor will research the API documentation, "
+                    "inspect relevant schemas, and recommend the EXACT call to make "
+                    "including method, path, and body/params. Use this whenever you're "
+                    "uncertain about: which endpoint to use, required fields, correct "
+                    "field names, or proper request format. This does NOT count as an "
+                    "API call — it only reads documentation."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "description": (
+                                "Your specific question about the Tripletex API. "
+                                "Include what you're trying to accomplish and any "
+                                "entity IDs you've already created."
+                            ),
+                        },
+                    },
+                    "required": ["question"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+    )
+
+    definitions.append(
+        {
+            "type": "function",
+            "function": {
+                "name": "override_enforcer",
+                "description": (
+                    "Override the enforcer's rejection of your previous tool call. "
+                    "Use this ONLY when you are confident the rejected call is correct "
+                    "despite the enforcer's concerns. After calling this, re-submit "
+                    "the exact same tool call and it will be allowed through."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reason": {
+                            "type": "string",
+                            "description": "Why you believe the enforcer is wrong",
+                        },
+                    },
+                    "required": ["reason"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+    )
+
     if _should_include_entitlement_tool(
         planner_task_type=planner_task_type,
         request_prompt=request_prompt,
@@ -1027,14 +1542,24 @@ def _should_include_entitlement_tool(
         for phrase in [
             "employee",
             "ansatt",
+            "mitarbeiter",
+            "employé",
+            "empleado",
+            "funcionário",
             "entitlement",
             "privilege",
-            "administrator access",
-            "admin access",
+            "administrator",
+            "admin",
             "brukertilgang",
             "tilgang",
             "rolle",
             "role",
+            "rôle",
+            "rol",
+            "zugang",
+            "accès",
+            "acceso",
+            "acesso",
         ]
     )
 
@@ -2067,10 +2592,29 @@ def _detect_off_target_drift(
             "bank",
             "account",
         },
+        "register_supplier_invoice": {
+            "supplier",
+            "ledger",
+            "voucher",
+            "account",
+            "incomingInvoice",
+        },
         "create_credit_note": {"invoice", "credit", "ledger"},
         "delete_invoice": {"invoice", "ledger", "order"},
         "create_order": {"order", "customer", "product", "orderline"},
-        "create_project": {"project", "customer", "employee"},
+        "create_project": {
+            "project",
+            "customer",
+            "employee",
+            "department",
+            "activity",
+            "timesheet",
+            "order",
+            "invoice",
+            "ledger",
+            "hourlyRates",
+        },
+        "create_employee": {"employee", "department"},
         "create_travel_expense": {"travelExpense", "employee", "currency"},
         "delete_travel_expense": {"travelExpense", "employee"},
         "bank_reconciliation": {
@@ -2159,6 +2703,198 @@ def _task_mentions_configuration_work(
             "altinn",
         ]
     )
+
+
+def _preflight_enforce(
+    tool_name: str,
+    arguments: dict[str, Any],
+    execution_state: ExecutionState,
+) -> dict[str, Any] | None:
+    """Pre-flight enforcer: intercepts tool calls before API execution.
+
+    Returns None if the call is allowed, or a rejection dict with
+    {rejected: True, reason: str, suggestion: str} if blocked.
+    """
+    if tool_name != "tripletex_request":
+        return None
+
+    method = (arguments.get("method") or "").upper()
+    path = (arguments.get("path") or "").lower()
+    body = arguments.get("json_body") or {}
+
+    # --- POST /product or /product/list: check if products exist first ---
+    if method == "POST" and "/product" in path:
+        products_to_check: list[str] = []
+        if path.endswith("/list"):
+            items = arguments.get("json_body") or []
+            if isinstance(items, list):
+                for item in items:
+                    num = item.get("number") or item.get("productNumber")
+                    if num:
+                        products_to_check.append(str(num))
+        else:
+            num = body.get("number") or body.get("productNumber")
+            if num:
+                products_to_check.append(str(num))
+
+        unchecked = [
+            n
+            for n in products_to_check
+            if f"GET:/product?number={n}" not in execution_state.created_entity_keys
+        ]
+        if unchecked:
+            nums = ", ".join(unchecked)
+            return {
+                "rejected": True,
+                "reason": (
+                    f"Product number(s) {nums} may already exist in the sandbox. "
+                    "The sandbox pre-seeds products — creating duplicates causes a 422."
+                ),
+                "suggestion": (
+                    f"First call GET /product for each number ({nums}) to check. "
+                    "Reuse existing products. Only create ones that don't exist."
+                ),
+            }
+
+    # --- POST /employee with email: check if employee exists first ---
+    if method == "POST" and path.rstrip("/") == "/employee":
+        email = body.get("email")
+        if email:
+            get_key = f"GET:/employee?email={email}"
+            if get_key not in execution_state.created_entity_keys:
+                return {
+                    "rejected": True,
+                    "reason": (
+                        f"Employee with email {email} may already exist in the sandbox. "
+                        "The sandbox pre-seeds employees — creating a duplicate causes a 422."
+                    ),
+                    "suggestion": (
+                        f'First call GET /employee with params {{"email": "{email}"}}. '
+                        "If found, reuse the existing employee ID. Only POST if GET returns 0 results."
+                    ),
+                }
+
+    # --- POST /project without startDate ---
+    if (
+        method == "POST"
+        and "/project" in path
+        and path.rstrip("/").endswith("/project")
+    ):
+        if "startDate" not in body:
+            return {
+                "rejected": True,
+                "reason": "POST /project requires startDate — the API will return a 422 without it.",
+                "suggestion": "Add startDate to the body. Use today_iso from the execution brief.",
+            }
+
+    # --- POST /ledger/voucher: check amountGross/amountGrossCurrency ---
+    if (
+        method == "POST"
+        and "/ledger/voucher" in path
+        and path.rstrip("/").endswith("/voucher")
+    ):
+        postings = body.get("postings") or []
+        for i, posting in enumerate(postings):
+            if "amountGross" in posting and "amountGrossCurrency" not in posting:
+                return {
+                    "rejected": True,
+                    "reason": (
+                        f"Posting {i}: amountGross is set but amountGrossCurrency is missing. "
+                        "Tripletex requires BOTH to be set to the same value."
+                    ),
+                    "suggestion": (
+                        f"Add amountGrossCurrency: {posting['amountGross']} to posting {i}."
+                    ),
+                }
+            row = posting.get("row")
+            if row is None or row == 0:
+                return {
+                    "rejected": True,
+                    "reason": (
+                        f"Posting {i}: row={'MISSING (omitted)' if row is None else '0'}. "
+                        "You MUST set row explicitly. Omitting row is the SAME as row=0. "
+                        "Row 0 is system-generated and Tripletex returns 422 for it."
+                    ),
+                    "suggestion": f'Add "row": {i + 1} to posting {i}. Do NOT omit the row field — omitting it causes the exact same 422 as row=0.',
+                }
+
+    # --- POST /customer or /supplier without invoiceEmail when email is set ---
+    if method == "POST" and any(p in path for p in ("/customer", "/supplier")):
+        if body.get("email") and not body.get("invoiceEmail"):
+            return {
+                "rejected": True,
+                "reason": "email is set but invoiceEmail is missing. Scoring checks BOTH fields.",
+                "suggestion": f'Add invoiceEmail: "{body["email"]}" (same as email).',
+            }
+
+    # --- Wrong method for payment/reverse/send/creditNote ---
+    if method == "POST":
+        if "/:payment" in path:
+            return {
+                "rejected": True,
+                "reason": "Payment registration uses PUT, not POST.",
+                "suggestion": "Change method to PUT. Use query params: paymentDate, paymentTypeId, paidAmount.",
+            }
+        if "/:reverse" in path:
+            return {
+                "rejected": True,
+                "reason": "Voucher reversal uses PUT, not POST.",
+                "suggestion": "Change method to PUT. Use date as query parameter.",
+            }
+        if "/:send" in path:
+            return {
+                "rejected": True,
+                "reason": "Invoice sending uses PUT, not POST.",
+                "suggestion": "Change method to PUT. Use sendType=EMAIL as query parameter.",
+            }
+        if "/:createcreditnote" in path:
+            return {
+                "rejected": True,
+                "reason": "Credit note creation uses PUT, not POST.",
+                "suggestion": "Change method to PUT. Use date as query parameter.",
+            }
+
+    if method == "POST" and "/project/hourlyrates" in path:
+        return {
+            "rejected": True,
+            "reason": (
+                "POST /project/hourlyRates will 409 if a default rate already exists. "
+                "GET /project/hourlyRates?projectId=X first, then PUT to update."
+            ),
+            "suggestion": "Call GET /project/hourlyRates?projectId=<project_id> first. If results exist, use PUT to update.",
+        }
+
+    if (
+        method == "POST"
+        and "/activity" in path
+        and path.rstrip("/").endswith("/activity")
+    ):
+        name = body.get("name")
+        if name:
+            get_key = f"GET:/activity?name={name}"
+            if get_key not in execution_state.created_entity_keys:
+                return {
+                    "rejected": True,
+                    "reason": f"Activity '{name}' may already exist — creating a duplicate causes 422.",
+                    "suggestion": f"GET /activity?name={name} first. Reuse if found.",
+                }
+
+    if method == "GET":
+        params = arguments.get("params") or {}
+        if "/product" in path and "number" in params:
+            execution_state.created_entity_keys.add(
+                f"GET:/product?number={params['number']}"
+            )
+        if "/employee" in path and "email" in params:
+            execution_state.created_entity_keys.add(
+                f"GET:/employee?email={params['email']}"
+            )
+        if "/activity" in path and "name" in params:
+            execution_state.created_entity_keys.add(
+                f"GET:/activity?name={params['name']}"
+            )
+
+    return None
 
 
 def _detect_blocking_issue(

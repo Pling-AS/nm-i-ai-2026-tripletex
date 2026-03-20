@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from tripletex_agent.config import get_settings
+from tripletex_agent.prompts import EXECUTOR_SYSTEM_PROMPT
 from tripletex_agent.trace import RunTrace, RUNS_DIR
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,9 @@ async def _get_cached_submissions() -> list[dict[str, Any]]:
 
     now = time.monotonic()
     active_count = len(RunTrace.get_active_runs())
-    has_pending = any(s.get("status") in ("in_progress", "pending") for s in _submissions_cache)
+    has_pending = any(
+        s.get("status") in ("in_progress", "pending") for s in _submissions_cache
+    )
     ttl = 15.0 if (active_count > 0 or has_pending) else 120.0
 
     if _submissions_cache and (now - _submissions_cache_ts) < ttl:
@@ -149,6 +152,9 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
 
     init_event = next((e for e in events if e["event_type"] == "init"), None)
     planner_event = next((e for e in events if e["event_type"] == "planner"), None)
+    execution_brief_event = next(
+        (e for e in events if e["event_type"] == "execution_brief"), None
+    )
     done_event = next((e for e in events if e["event_type"] == "done"), None)
     error_event = next((e for e in events if e["event_type"] == "error"), None)
     final_event = next((e for e in events if e["event_type"] == "final_payload"), None)
@@ -171,10 +177,16 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
 
     task_type = ""
     goal = ""
+    planner_payload: dict[str, Any] = {}
     if planner_event:
         payload = planner_event.get("payload", {})
         task_type = payload.get("task_type", "")
         goal = payload.get("goal", "")
+        planner_payload = payload
+
+    execution_brief: dict[str, Any] = {}
+    if execution_brief_event:
+        execution_brief = execution_brief_event.get("payload", {})
 
     # Determine status
     status = "unknown"
@@ -204,7 +216,8 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
         try:
             first_ts = datetime.fromisoformat(events[0]["timestamp"])
             actual_run_events = [
-                e for e in events 
+                e
+                for e in events
                 if e["event_type"] not in ("competition_scoring", "error_summary")
             ]
             if actual_run_events:
@@ -266,6 +279,18 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
     if error_event:
         error_message = error_event.get("payload", {}).get("message", "")
 
+    enforcer_rejections = [
+        e.get("payload", {}) for e in events if e["event_type"] == "enforcer_rejected"
+    ]
+    semantic_rejections = [
+        e.get("payload", {})
+        for e in events
+        if e["event_type"] == "semantic_enforcer_rejected"
+    ]
+    enforcer_overrides = [
+        e.get("payload", {}) for e in events if e["event_type"] == "enforcer_override"
+    ]
+
     return {
         "run_id": run_id,
         "filename": filename,
@@ -289,6 +314,12 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
         "preflight_rejections": preflight_rejections,
         "preflight_rejection_count": len(preflight_rejections),
         "auto_stripped": auto_stripped,
+        "enforcer_rejections": enforcer_rejections,
+        "semantic_rejections": semantic_rejections,
+        "enforcer_overrides": enforcer_overrides,
+        "planner_payload": planner_payload,
+        "execution_brief": execution_brief,
+        "executor_system_prompt": EXECUTOR_SYSTEM_PROMPT,
     }
 
 
@@ -364,14 +395,19 @@ async def list_runs() -> JSONResponse:
                 "status": match.get("status", "unknown"),
             }
         else:
-            run["competition_score"] = None
+            if "competition_score" not in run:
+                run["competition_score"] = None
 
     active_count = len(RunTrace.get_active_runs())
+    has_pending = any(
+        s.get("status") in ("in_progress", "pending") for s in submissions
+    )
     return JSONResponse(
         {
             "runs": runs,
             "active_count": active_count,
             "total_count": len(runs),
+            "has_pending_submissions": has_pending,
         }
     )
 
@@ -598,6 +634,192 @@ async def competition_submit(request_body: dict | None = None) -> JSONResponse:
     )
 
 
+_batch_runner_active = False
+_batch_runner_results: list[dict[str, Any]] = []
+_batch_runner_progress: dict[str, Any] = {
+    "total": 0,
+    "completed": 0,
+    "current": None,
+    "status": "idle",
+}
+
+
+@router.post("/api/competition/batch")
+async def competition_batch(request_body: dict | None = None) -> JSONResponse:
+    global _batch_runner_active, _batch_runner_results, _batch_runner_progress
+    body = request_body or {}
+    count = min(int(body.get("count", 5)), 50)
+    delay = int(body.get("delay_seconds", 5))
+
+    if _batch_runner_active:
+        return JSONResponse(
+            {
+                "error": "Batch runner already active",
+                "progress": _batch_runner_progress,
+            },
+            status_code=409,
+        )
+
+    import asyncio
+
+    asyncio.create_task(_run_batch(count, delay))
+    return JSONResponse({"started": True, "count": count, "delay_seconds": delay})
+
+
+@router.get("/api/competition/batch/status")
+async def competition_batch_status() -> JSONResponse:
+    return JSONResponse(
+        {
+            "active": _batch_runner_active,
+            "progress": _batch_runner_progress,
+            "results": _batch_runner_results[-20:],
+        }
+    )
+
+
+@router.post("/api/competition/batch/stop")
+async def competition_batch_stop() -> JSONResponse:
+    global _batch_runner_active
+    _batch_runner_active = False
+    return JSONResponse({"stopped": True, "progress": _batch_runner_progress})
+
+
+async def _run_batch(count: int, delay: int) -> None:
+    global _batch_runner_active, _batch_runner_results, _batch_runner_progress
+    _batch_runner_active = True
+    _batch_runner_results = []
+    _batch_runner_progress = {
+        "total": count,
+        "completed": 0,
+        "current": None,
+        "status": "running",
+    }
+
+    settings = get_settings()
+    token = settings.ainm_jwt_token
+    task_id = settings.ainm_tripletex_task_id
+    endpoint_api_key = settings.app_api_key
+
+    endpoint_url = None
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            ngrok_resp = await c.get("http://localhost:4040/api/tunnels")
+            tunnels = ngrok_resp.json().get("tunnels", [])
+            for t in tunnels:
+                if "ngrok" in t.get("public_url", ""):
+                    endpoint_url = t["public_url"] + "/solve"
+                    break
+    except Exception:
+        pass
+    if not endpoint_url:
+        endpoint_url = settings.local_solve_url
+
+    for i in range(count):
+        if not _batch_runner_active:
+            _batch_runner_progress["status"] = "stopped"
+            break
+
+        _batch_runner_progress["current"] = i + 1
+        _batch_runner_progress["status"] = f"submitting {i + 1}/{count}"
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"https://api.ainm.no/tasks/{task_id}/submissions",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "endpoint_url": endpoint_url,
+                        "endpoint_api_key": endpoint_api_key,
+                    },
+                )
+                resp.raise_for_status()
+                sub_data = resp.json()
+                sub_id = sub_data.get("id", "?")
+
+            global _submissions_cache_ts
+            _submissions_cache_ts = 0
+
+            _batch_runner_progress["status"] = (
+                f"waiting for run {i + 1}/{count} (submission {sub_id[:8]})"
+            )
+
+            run_completed = False
+            for _ in range(120):
+                await asyncio.sleep(5)
+                if not _batch_runner_active:
+                    break
+                latest_files = sorted(
+                    RUNS_DIR.glob("*.jsonl"),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                for f in latest_files[:3]:
+                    if f.name == "raw_requests.jsonl":
+                        continue
+                    events = _parse_trace_file(f)
+                    done_event = next(
+                        (e for e in events if e["event_type"] == "done"), None
+                    )
+                    if done_event:
+                        init_event = next(
+                            (e for e in events if e["event_type"] == "init"), None
+                        )
+                        src = (
+                            (init_event or {})
+                            .get("payload", {})
+                            .get("metadata", {})
+                            .get("source", "")
+                        )
+                        if src == "competition":
+                            dp = done_event["payload"]
+                            _batch_runner_results.append(
+                                {
+                                    "run": i + 1,
+                                    "file": f.name,
+                                    "calls": dp.get("tripletex_call_count", 0),
+                                    "errors": dp.get("tripletex_error_count", 0),
+                                    "submission_id": sub_id[:12],
+                                }
+                            )
+                            run_completed = True
+                            break
+                if run_completed:
+                    break
+
+            if not run_completed and _batch_runner_active:
+                _batch_runner_results.append(
+                    {
+                        "run": i + 1,
+                        "submission_id": sub_id[:12],
+                        "status": "timeout",
+                    }
+                )
+
+        except Exception as exc:
+            _batch_runner_results.append(
+                {
+                    "run": i + 1,
+                    "error": str(exc)[:200],
+                }
+            )
+
+        _batch_runner_progress["completed"] = i + 1
+
+        if i < count - 1 and _batch_runner_active:
+            _batch_runner_progress["status"] = (
+                f"waiting {delay}s before next submission"
+            )
+            await asyncio.sleep(delay)
+
+    _batch_runner_progress["status"] = (
+        "completed" if _batch_runner_active else "stopped"
+    )
+    _batch_runner_active = False
+
+
 def _enrich_run_file(
     path: Path,
     events: list[dict[str, Any]],
@@ -745,9 +967,7 @@ def _generate_overview() -> dict[str, Any]:
                     "api_calls": summary["tripletex_call_count"],
                     "api_errors": summary["tripletex_error_count"],
                     "tool_calls": summary["tool_call_count"],
-                    "preflight_rejections": summary.get(
-                        "preflight_rejection_count", 0
-                    ),
+                    "preflight_rejections": summary.get("preflight_rejection_count", 0),
                     "score_raw": scoring.get("score_raw"),
                     "score_max": scoring.get("score_max"),
                     "normalized_score": scoring.get("normalized_score"),
@@ -774,6 +994,7 @@ def _generate_overview() -> dict[str, Any]:
         json.dump(overview, f, ensure_ascii=False, indent=2)
 
     return overview
+
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
@@ -1126,6 +1347,8 @@ let soundEnabled = true;
 let lastCompetitionRefresh = 0;
 let competitionViewActive = false;
 let lastSubmissionCount = 0;
+let globalHasPendingSubmissions = false;
+let previousScoreStatuses = {};
 
 // --- Web Audio API Sound Engine ---
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1306,6 +1529,17 @@ const eventBadge = (type) => {
     error: 'badge-red',
     blocked_warning: 'badge-yellow',
     recovery: 'badge-yellow',
+    enforcer_rejected: 'badge-red',
+    semantic_enforcer_rejected: 'badge-red',
+    enforcer_override: 'badge-yellow',
+    enforcer_passed: 'badge-green',
+    thinking: 'badge-purple',
+    assistant_reasoning: 'badge-blue',
+    api_advisor_query: 'badge-blue',
+    api_advisor_response: 'badge-green',
+    execution_brief: 'badge-blue',
+    competition_scoring: 'badge-green',
+    error_summary: 'badge-red',
     attachments_prepared: 'badge-gray',
     metadata_update: 'badge-blue',
   };
@@ -1350,14 +1584,17 @@ function renderRunList() {
            <span class="badge badge-yellow" style="font-size:11px;">Evaluating...</span>
          </div>` :
         `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span class="badge" style="background:rgba(251,191,36,.15);color:var(--yellow);font-size:12px;font-weight:700;">${r.competition_score.score_raw}/${r.competition_score.score_max} pts</span>
-          <span style="font-size:11px;color:var(--text2);">${r.competition_score.checks_passed}/${r.competition_score.checks_total} checks</span>
+          <span class="badge" title="Leaderboard Points" style="background:rgba(251,191,36,.15);color:var(--yellow);font-size:12px;font-weight:700;">&#127942; ${(r.competition_score.normalized_score || 0).toFixed(2)} pts</span>
+          <span style="font-size:11px;color:var(--text2);">Checks: ${r.competition_score.score_raw}/${r.competition_score.score_max} pts (${r.competition_score.checks_passed}/${r.competition_score.checks_total})</span>
           ${r.competition_score.checks_total > 0 && r.competition_score.checks_passed === r.competition_score.checks_total ? '<span style="color:var(--green);font-size:11px;font-weight:600;">PERFECT</span>' : ''}
         </div>`) : ''}
       <div class="run-card-stats">
         <span>API: <span class="stat-value">${r.tripletex_call_count}</span></span>
         <span>Errors: <span class="stat-value ${r.tripletex_error_count > 0 ? 'stat-err' : ''}">${r.tripletex_error_count}</span></span>
         ${r.preflight_rejection_count > 0 ? `<span>Preflight: <span class="stat-value" style="color:var(--orange)">${r.preflight_rejection_count}</span></span>` : ''}
+        ${(r.enforcer_rejections || []).length > 0 ? `<span>🛡️ <span class="stat-value" style="color:var(--red)">${r.enforcer_rejections.length}</span></span>` : ''}
+        ${(r.semantic_rejections || []).length > 0 ? `<span>🧠 <span class="stat-value" style="color:var(--red)">${r.semantic_rejections.length}</span></span>` : ''}
+        ${(r.enforcer_overrides || []).length > 0 ? `<span>⚡ <span class="stat-value" style="color:var(--yellow)">${r.enforcer_overrides.length}</span></span>` : ''}
         <span>Tools: <span class="stat-value">${r.tool_call_count}</span></span>
         <span>Time: <span class="stat-value">${fmtDuration(r.duration_seconds)}</span></span>
       </div>
@@ -1401,6 +1638,61 @@ function renderDetail(data) {
     }</div>`;
   }
 
+  const brief = s.execution_brief || {};
+  const briefHtml = Object.keys(brief).length > 0 ? `
+    <details style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;">
+      <summary style="padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;background:var(--surface2);">
+        Execution Brief (${(brief.planned_endpoints||[]).length} endpoints, ${(brief.field_rules||[]).length} rule sets)
+      </summary>
+      <div style="padding:16px;font-size:13px;font-family:'SF Mono','Menlo',monospace;overflow-x:auto;">
+        <div style="margin-bottom:12px;">
+          <strong style="color:var(--blue);">Planned Endpoints:</strong><br>
+          ${(brief.planned_endpoints||[]).map(e => `<div>${e.method} ${e.path} <span style="color:var(--text2)">// ${e.summary}</span></div>`).join('')}
+        </div>
+        <div style="margin-bottom:12px;">
+          <strong style="color:var(--purple);">Prefetched Schemas:</strong> ${(brief.prefetched_schema_names||[]).join(', ')}
+        </div>
+        <div style="margin-bottom:12px;">
+          <strong style="color:var(--yellow);">Computed Dates:</strong> ${JSON.stringify(brief.computed_dates||{})}
+        </div>
+        ${brief.has_trace_example ? `<div style="margin-bottom:12px;"><strong style="color:var(--green);">Trace Example Injected:</strong> ${brief.trace_example_task}</div>` : ''}
+        ${(brief.field_rules||[]).length > 0 ? `
+          <div>
+            <strong style="color:var(--red);">Field Rules:</strong>
+            ${(brief.field_rules||[]).map(r => `
+              <div style="margin-left:12px;margin-top:4px;">
+                <div style="font-weight:600;">${r.endpoint}</div>
+                ${(r.rules||[]).map(rule => `<div style="color:var(--text2);margin-left:12px;">- ${rule}</div>`).join('')}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    </details>
+  ` : '';
+
+  const promptHtml = s.executor_system_prompt ? `
+    <details style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;">
+      <summary style="padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;background:var(--surface2);">
+        System Prompt
+      </summary>
+      <div style="padding:16px;background:var(--bg);max-height:400px;overflow:auto;">
+        <pre style="font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--text2);white-space:pre-wrap;">${s.executor_system_prompt}</pre>
+      </div>
+    </details>
+  ` : '';
+
+  const plannerHtml = s.planner_payload ? `
+    <details style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;">
+      <summary style="padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;background:var(--surface2);">
+        Planner Output
+      </summary>
+      <div style="padding:16px;background:var(--bg);max-height:500px;overflow:auto;">
+        <pre style="font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--text2);">${JSON.stringify(s.planner_payload, null, 2)}</pre>
+      </div>
+    </details>
+  ` : '';
+
   const metaHtml = s.metadata && Object.keys(s.metadata).length > 0
     ? Object.entries(s.metadata).map(([k,v]) =>
         `<div class="detail-stat"><div class="detail-stat-label">${k}</div><div class="detail-stat-value" style="font-size:13px;">${v}</div></div>`
@@ -1427,16 +1719,24 @@ function renderDetail(data) {
          </div>` :
         `<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:12px 16px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-          <span style="font-size:20px;font-weight:700;color:var(--yellow);">${s.competition_score.score_raw}/${s.competition_score.score_max} pts</span>
-          <span style="font-size:13px;color:var(--text2);">normalized: ${(s.competition_score.normalized_score || 0).toFixed(4)}</span>
-          ${s.competition_score.checks_total > 0 && s.competition_score.checks_passed === s.competition_score.checks_total ? '<span class="badge badge-green" style="font-size:12px;">PERFECT</span>' : ''}
+          <span title="Leaderboard Points = (Correctness × Tier) + Efficiency Bonus" style="cursor:help;font-size:24px;font-weight:700;color:var(--yellow);">&#127942; ${(s.competition_score.normalized_score || 0).toFixed(4)} <span style="font-size:14px;font-weight:600;color:var(--text2);text-transform:uppercase;">Leaderboard Pts</span></span>
+          ${s.competition_score.checks_total > 0 && s.competition_score.checks_passed === s.competition_score.checks_total ? '<span class="badge badge-green" style="font-size:12px;margin-left:auto;">PERFECT</span>' : ''}
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${s.competition_score.comment}</div>
-        <div class="check-pills">${(s.competition_score.checks||[]).map(c => {
-          const isPass = c.toLowerCase().includes('passed');
-          return '<span class="check-pill '+(isPass?'check-passed':'check-failed')+'">'+c+'</span>';
-        }).join('')}</div>
-        ${s.competition_score.submission_id ? '<div style="font-size:11px;color:var(--text2);margin-top:8px;font-family:monospace;">ID: '+s.competition_score.submission_id+'</div>' : ''}
+        <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:8px 12px;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;color:var(--text);">Check Correctness</span>
+            <span style="font-size:13px;font-weight:700;color:var(--text);">${s.competition_score.score_raw} / ${s.competition_score.score_max} pts</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${s.competition_score.comment}</div>
+          <div class="check-pills">${(s.competition_score.checks||[]).map(c => {
+            const isPass = c.toLowerCase().includes('passed');
+            return '<span class="check-pill '+(isPass?'check-passed':'check-failed')+'">'+c+'</span>';
+          }).join('')}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);font-style:italic;line-height:1.4;">
+          * Note: Leaderboard points include a dynamic Efficiency Bonus for perfect runs. The efficiency benchmark recalculates every 12h against global limits.
+        </div>
+        ${s.competition_score.submission_id ? '<div style="font-size:11px;color:var(--text2);margin-top:8px;font-family:monospace;">Submission ID: '+s.competition_score.submission_id+'</div>' : ''}
       </div>`) : ''}
     </div>
     <div class="detail-grid">
@@ -1449,7 +1749,11 @@ function renderDetail(data) {
       <div class="detail-stat"><div class="detail-stat-label">Files</div><div class="detail-stat-value">${s.file_count}</div></div>
       ${metaHtml}
     </div>
+    ${briefHtml}
+    ${promptHtml}
+    ${plannerHtml}
     ${callLogHtml}
+    ${renderEnforcerLog(s)}
     ${renderPreflightLog(s)}
     <div class="timeline">
       <h3>Event Timeline (${events.length} events)</h3>
@@ -1475,6 +1779,36 @@ function renderDetail(data) {
       panel.scrollTop = panel.scrollHeight;
     });
   }
+}
+
+function renderEnforcerLog(s) {
+  const det = s.enforcer_rejections || [];
+  const sem = s.semantic_rejections || [];
+  const ovr = s.enforcer_overrides || [];
+  if (det.length === 0 && sem.length === 0 && ovr.length === 0) return '';
+  let html = '<div class="call-log" style="margin-top:16px;"><h3>🛡️ Enforcer Activity</h3>';
+  for (const r of det) {
+    html += `<div class="call-log-entry">
+      <span class="call-method badge badge-red" style="font-size:10px;">BLOCKED</span>
+      <span class="call-path" style="margin-left:6px;">${r.tool_name || 'tripletex_request'}: ${r.reason || ''}</span>
+      <div style="font-size:11px;color:var(--text2);margin-left:72px;margin-top:2px;">→ ${r.suggestion || ''}</div>
+    </div>`;
+  }
+  for (const r of sem) {
+    html += `<div class="call-log-entry">
+      <span class="call-method badge badge-red" style="font-size:10px;">🧠 SEM</span>
+      <span class="call-path" style="margin-left:6px;">${r.reason || ''}</span>
+      <div style="font-size:11px;color:var(--text2);margin-left:72px;margin-top:2px;">→ ${r.suggestion || ''}</div>
+    </div>`;
+  }
+  for (const r of ovr) {
+    html += `<div class="call-log-entry">
+      <span class="call-method badge badge-yellow" style="font-size:10px;">⚡ OVRD</span>
+      <span class="call-path" style="margin-left:6px;">${r.reason || ''}</span>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
 }
 
 function renderPreflightLog(s) {
@@ -1511,6 +1845,17 @@ function eventSummary(e) {
     case 'error': return truncate(p.message || '', 80);
     case 'blocked_warning': return truncate(p.message || '', 80);
     case 'recovery': return 'Drift recovery triggered';
+    case 'enforcer_rejected': return `🛡️ BLOCKED: ${truncate(p.reason || '', 70)} → ${truncate(p.suggestion || '', 50)}`;
+    case 'semantic_enforcer_rejected': return `🧠 BLOCKED: ${truncate(p.reason || '', 80)}`;
+    case 'enforcer_override': return `⚡ Override: ${truncate(p.reason || '', 80)}`;
+    case 'enforcer_passed': return `🛡️✅ ${p.call || ''}`;
+    case 'thinking': return `🧠 ${truncate(p.text || '', 100)}`;
+    case 'assistant_reasoning': return `💬 ${truncate(p.text || '', 100)}`;
+    case 'api_advisor_query': return `🔍 Advisor: ${truncate(p.question || '', 80)}`;
+    case 'api_advisor_response': return `📋 Advisor: ${p.endpoints_found || 0} endpoints, ${truncate(p.response_preview || '', 60)}`;
+    case 'execution_brief': return `${(p.planned_endpoints || []).length} endpoints, ${p.field_rules_count || 0} rules, trace=${p.has_trace_example ? 'yes' : 'no'}`;
+    case 'competition_scoring': return `checks=${p.checks_passed || 0}/${p.checks_total || 0}`;
+    case 'error_summary': return `${(p.errors || []).length} error(s)`;
     case 'attachments_prepared': return `${(p.attachments || []).length} attachment(s)`;
     case 'metadata_update': return `tier=${p.task_tier || '?'} executor=${(p.executor_model || '').split('/').pop() || '?'}`;
     default: return JSON.stringify(p).slice(0, 60);
@@ -1580,7 +1925,7 @@ async function showRawRequests() {
 
 
 async function fetchCompetitionData(force) {
-  const isRunningOrPending = allRuns.some(r => r.status === 'running' || (r.competition_score && ['in_progress', 'pending'].includes(r.competition_score.status)));
+  const isRunningOrPending = allRuns.some(r => r.status === 'running') || globalHasPendingSubmissions;
   const ttl = isRunningOrPending ? 15000 : 120000;
   if (!force && Date.now() - lastCompetitionRefresh < ttl) return;
   try {
@@ -1710,7 +2055,18 @@ function renderCompetitionView(data) {
           ${allRuns.some(r => r.status === 'running') ? 'disabled style="background:var(--surface2);color:var(--text2);border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:not-allowed;white-space:nowrap;"' : 'style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;"'}>
           Submit Run
         </button>
+        <input type="number" id="batch-count" value="10" min="1" max="50" 
+          style="width:50px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;text-align:center;">
+        <button onclick="startBatch()" id="btn-batch"
+          style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;">
+          Batch Run
+        </button>
+        <button onclick="stopBatch()" id="btn-batch-stop"
+          style="background:var(--red);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;display:none;">
+          Stop
+        </button>
       </div>
+      <div id="batch-status" style="font-size:12px;margin-bottom:4px;display:none;color:var(--text2);"></div>
       <div id="submit-status" style="font-size:12px;margin-bottom:12px;display:none;"></div>
     </div>
     ${gridHtml}
@@ -1736,6 +2092,7 @@ async function refresh() {
 
     // --- Sound & flash triggers: detect state transitions ---
     const newStatuses = {};
+    const newScoreStatuses = {};
     for (const run of newRuns) {
       newStatuses[run.run_id] = run.status;
       const prev = previousRunStatuses[run.run_id];
@@ -1754,10 +2111,22 @@ async function refresh() {
         flashHeader('error');
         fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e));
       }
+
+      if (run.competition_score) {
+        newScoreStatuses[run.run_id] = run.competition_score.status;
+        const prevScore = previousScoreStatuses[run.run_id];
+        if (prevScore && ['in_progress', 'pending'].includes(prevScore) && run.competition_score.status === 'completed') {
+          playCompletionSound();
+          flashHeader('done');
+          fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e));
+        }
+      }
     }
     previousRunStatuses = newStatuses;
+    previousScoreStatuses = newScoreStatuses;
 
     allRuns = newRuns;
+    globalHasPendingSubmissions = runsData.has_pending_submissions || false;
     document.getElementById('hdr-active').textContent = runsData.active_count;
     document.getElementById('hdr-total').textContent = runsData.total_count;
     const shortModel = (m) => m ? m.split('/').pop().replace(':exacto','') : '-';
@@ -1782,7 +2151,7 @@ async function refresh() {
     // Auto-refresh active run detail (smooth — no loading flash)
     if (selectedRunId) {
       const selectedRun = allRuns.find(r => r.run_id === selectedRunId);
-      if (selectedRun && selectedRun.status === 'running') {
+      if (selectedRun && (selectedRun.status === 'running' || (selectedRun.competition_score && ['in_progress', 'pending'].includes(selectedRun.competition_score.status)))) {
         try {
           const res = await fetch(`/api/runs/${selectedRunId}`);
           const data = await res.json();
@@ -1798,6 +2167,62 @@ async function refresh() {
 refresh();
 setInterval(refresh, 4000);
 setInterval(() => { fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e)); }, 30000);
+
+let batchPollInterval = null;
+
+async function startBatch() {
+  const count = parseInt(document.getElementById('batch-count')?.value || '10');
+  const btn = document.getElementById('btn-batch');
+  const stopBtn = document.getElementById('btn-batch-stop');
+  const statusEl = document.getElementById('batch-status');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  stopBtn.style.display = 'inline-block';
+  statusEl.style.display = 'block';
+  statusEl.textContent = `Starting batch of ${count} runs...`;
+  try {
+    const res = await fetch('/api/competition/batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({count, delay_seconds: 5}),
+    });
+    const data = await res.json();
+    if (data.error) { statusEl.textContent = data.error; return; }
+    statusEl.textContent = `Batch started: ${count} runs`;
+    batchPollInterval = setInterval(pollBatchStatus, 3000);
+  } catch(e) { statusEl.textContent = 'Error: ' + e; }
+}
+
+async function stopBatch() {
+  try {
+    await fetch('/api/competition/batch/stop', {method: 'POST'});
+    document.getElementById('batch-status').textContent = 'Stopping...';
+  } catch(e) {}
+}
+
+async function pollBatchStatus() {
+  try {
+    const res = await fetch('/api/competition/batch/status');
+    const data = await res.json();
+    const p = data.progress;
+    const statusEl = document.getElementById('batch-status');
+    const btn = document.getElementById('btn-batch');
+    const stopBtn = document.getElementById('btn-batch-stop');
+    statusEl.style.display = 'block';
+    const results = data.results || [];
+    const totalErrors = results.reduce((s,r) => s + (r.errors || 0), 0);
+    const totalCalls = results.reduce((s,r) => s + (r.calls || 0), 0);
+    statusEl.textContent = `${p.status} | ${p.completed}/${p.total} done | ${totalCalls} API calls, ${totalErrors} errors`;
+    if (!data.active) {
+      clearInterval(batchPollInterval);
+      batchPollInterval = null;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      stopBtn.style.display = 'none';
+      statusEl.textContent += ' ✅';
+    }
+  } catch(e) {}
+}
 </script>
 </body>
 </html>"""

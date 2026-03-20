@@ -189,7 +189,7 @@ def test_off_target_drift_returns_recovery_signal_for_unrelated_family() -> None
         risk_notes=[],
         suggested_first_action="Inspect Kari Trå's user ID in the API",
     )
-    execution_state = ExecutionState(recent_endpoint_families=["employee", "employee"])
+    execution_state = ExecutionState(recent_endpoint_families=["employee"] * 7)
 
     blocked = _detect_off_target_drift(
         planner=planner,
@@ -475,23 +475,24 @@ def test_invoice_preflight_blocks_customer_id_and_invoice_lines() -> None:
     agent = TripletexAccountingAgent(Settings())
     execution_state = ExecutionState(inspected_schemas={"Invoice"})
 
+    request_body = {
+        "customerId": 123,
+        "invoiceLines": [{"description": "x"}],
+    }
+
     preflight_error, endpoint = agent._validate_tripletex_request(
         {
             "method": "POST",
             "path": "/invoice",
-            "json_body": {
-                "customerId": 123,
-                "invoiceLines": [{"description": "x"}],
-            },
+            "json_body": request_body,
         },
         execution_state,
     )
 
     assert endpoint is not None
-    assert preflight_error is not None
-    assert preflight_error["ok"] is False
-    assert "customerId" in preflight_error["error"]
-    assert "customer" in preflight_error["error"]
+    assert preflight_error is None
+    assert "customerId" not in request_body
+    assert "invoiceLines" not in request_body
 
 
 def test_order_preflight_suggests_count_for_quantity() -> None:

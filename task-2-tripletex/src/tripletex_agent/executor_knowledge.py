@@ -1,0 +1,1038 @@
+"""Deterministic knowledge base for the Tripletex executor.
+
+Contains field-level validation rules (accumulated from real competition runs)
+and compact successful trace examples (from best runs per task type).
+
+These are injected into the execution brief BEFORE execution starts, so the
+executor has complete tactical context without needing runtime API exploration.
+"""
+
+from __future__ import annotations
+
+# ---------------------------------------------------------------------------
+# FIELD_RULES: endpoint → list of validation gotchas
+#
+# Keyed by "METHOD /path". Selected based on planned endpoints.
+# Each rule should be a concrete, actionable instruction — not vague guidance.
+# ---------------------------------------------------------------------------
+
+FIELD_RULES: dict[str, list[str]] = {
+    # ---- Voucher / Posting ----
+    "POST /ledger/voucher": [
+        "ALWAYS set BOTH amountGross AND amountGrossCurrency to the SAME value on every posting.",
+        "Do NOT include postings with row=0 — row 0 is system-generated and will cause a 422.",
+        "When using vatType != 0 (e.g. VAT 25%), include ONLY the debit posting. Tripletex auto-generates VAT and credit postings.",
+        'For supplier invoices, set supplier={"id": supplier_id} on the debit posting.',
+        'For salary/payroll vouchers, set employee={"id": employee_id} on each posting.',
+        'Always resolve account numbers via GET /ledger/account?number=XXXX first, then use account={"id": resolved_id}.',
+        'Postings with vatType={"id":0} (exempt) can include both debit and credit lines manually.',
+    ],
+    "PUT /ledger/voucher/{id}/:reverse": [
+        "Method is PUT, not POST.",
+        "date is a QUERY PARAMETER: PUT /ledger/voucher/{id}/:reverse?date=YYYY-MM-DD",
+        "Do NOT send date in the request body.",
+    ],
+    # ---- Employee ----
+    "POST /employee": [
+        "ALWAYS search first: GET /employee?email=<email> — the sandbox often has pre-existing employees. Reuse if found.",
+        "Only POST /employee if GET returns 0 results.",
+        'When POSTing, ALWAYS include department={"id": dept_id}. Create department first if needed.',
+        "userType should be 'STANDARD' unless admin is explicitly requested.",
+    ],
+    # ---- Customer / Supplier ----
+    "POST /customer": [
+        "When email is provided, ALWAYS set BOTH email AND invoiceEmail to the same value.",
+        "Do NOT send isCustomer (it's readOnly and auto-set).",
+        "For addresses, use postalAddress={addressLine1, postalCode, city, country={id: 161}} for Norway.",
+    ],
+    "POST /supplier": [
+        "When email is provided, ALWAYS set BOTH email AND invoiceEmail to the same value.",
+        "Do NOT send isSupplier (it's readOnly).",
+    ],
+    # ---- Product ----
+    "POST /product": [
+        "ALWAYS search first if product_number is provided: GET /product?number=<number> — sandbox pre-seeds products.",
+        "Only POST /product if GET returns 0 results.",
+        "Use 'number' field for the product number (NOT productNumber).",
+        'priceExcludingVat sets the base price. Also set vatType={"id": 3|5|6}.',
+    ],
+    # ---- Order / Orderline ----
+    "POST /order": [
+        'Requires customer={"id": customer_id}.',
+        "Set orderDate and deliveryDate (use today_iso from execution_brief).",
+    ],
+    "POST /order/orderline": [
+        'When a product was created, ALWAYS include product={"id": product_id} on the orderline.',
+        "Use unitPriceExcludingVatCurrency for the price field.",
+        'Set vatType={"id": 3} for 25%, {"id": 5} for 15%, {"id": 6} for 0%.',
+        "For multiple lines, prefer POST /order/orderline/list for efficiency.",
+    ],
+    # ---- Invoice ----
+    "POST /invoice": [
+        'Pass orders=[{"id": order_id}] to link order.',
+        "Set invoiceDate and invoiceDueDate.",
+        "Bank account 1920 MUST be configured first (see bank account setup pattern).",
+    ],
+    "PUT /invoice/{id}/:payment": [
+        "Method is PUT, not POST.",
+        "All params are QUERY PARAMETERS: paymentDate, paymentTypeId, paidAmount or paidAmountCurrency.",
+        "Get paymentTypeId first via GET /invoice/paymentType.",
+    ],
+    "PUT /invoice/{id}/:createCreditNote": [
+        "Method is PUT, not POST.",
+        "date is a QUERY PARAMETER: PUT /invoice/{id}/:createCreditNote?date=YYYY-MM-DD",
+        "Do NOT send date in the request body.",
+    ],
+    "PUT /invoice/{id}/:send": [
+        "Use query parameter sendType=EMAIL.",
+    ],
+    # ---- Travel Expense ----
+    "POST /travelExpense": [
+        'Requires employee={"id": employee_id}.',
+        "Set title, departureDateTime, returnDateTime.",
+        "DateTime format: 'YYYY-MM-DDT08:00:00' (not just date).",
+    ],
+    "POST /travelExpense/cost": [
+        "Use amountCurrencyIncVat (NOT amount, NOT amountExcludingVat).",
+        'costCategory={"id": ...} and paymentType={"id": ...} are REQUIRED.',
+        "GET /travelExpense/costCategory and GET /travelExpense/paymentType first.",
+        "For per-diem/diet, use POST /travelExpense/perDiemCompensation instead.",
+    ],
+    # ---- Project ----
+    "POST /project": [
+        'Requires customer={"id": customer_id} and projectManager={"id": employee_id}.',
+        "startDate is REQUIRED — use today_iso from execution_brief if prompt doesn't specify a date.",
+        "For fixed-price projects: isFixedPrice=true, fixedprice=<amount>.",
+    ],
+    "POST /project/hourlyRates": [
+        "If a default hourly rate already exists (409 Duplicate entry), GET /project/hourlyRates?projectId=... then PUT to update it.",
+        "For fixed rate: hourlyRateModel='TYPE_FIXED_HOURLY_RATE', fixedRate=<rate>.",
+    ],
+    # ---- Department ----
+    "POST /department": [
+        "Requires name and departmentNumber.",
+    ],
+    # ---- Activity / Timesheet ----
+    "POST /activity": [
+        "If name already exists (422 'Navnet er i bruk'), use GET /activity?name=... and reuse.",
+        "For project activities, set activityType='PROJECT_GENERAL_ACTIVITY'.",
+    ],
+    "POST /timesheet/entry": [
+        "Only one entry per employee/date/activity/project combination.",
+        "Requires project, activity, date, hours, employee refs.",
+    ],
+    # ---- Ledger Account ----
+    "PUT /ledger/account/{id}": [
+        "For bank account setup: isBankAccount=true, bankAccountNumber='12345678903', bankAccountCountry={\"id\": 161}.",
+        "MUST include id and version from the GET response.",
+    ],
+    # ---- Custom Dimensions ----
+    "POST /ledger/accountingDimension": [
+        "Use POST /ledger/accountingDimensionName for creating named dimensions.",
+        "Use POST /ledger/accountingDimensionValue for adding values to a dimension.",
+        'Reference dimensions on postings via freeAccountingDimension1..10={"id": value_id}.',
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# TASK_ENDPOINT_CHAINS: task_type → ordered list of endpoints the executor
+# will likely need. Used for deterministic schema pre-fetching.
+# ---------------------------------------------------------------------------
+
+TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
+    "create_customer": [
+        "POST /customer",
+    ],
+    "create_supplier": [
+        "POST /supplier",
+    ],
+    "create_employee": [
+        "POST /department",
+        "POST /employee",
+    ],
+    "create_product": [
+        "POST /product",
+    ],
+    "create_department": [
+        "POST /department",
+    ],
+    "create_order": [
+        "POST /customer",
+        "POST /order",
+        "POST /order/orderline",
+    ],
+    "create_invoice": [
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /customer",
+        "GET /product",
+        "POST /product",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
+        "PUT /invoice/{id}/:send",
+        "PUT /invoice/{id}/:payment",
+        "GET /invoice/paymentType",
+    ],
+    "create_credit_note": [
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /customer",
+        "POST /product",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
+        "PUT /invoice/{id}/:createCreditNote",
+    ],
+    "register_payment": [
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /customer",
+        "GET /product",
+        "POST /product",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
+        "GET /invoice/paymentType",
+        "PUT /invoice/{id}/:payment",
+        "GET /ledger/voucher",
+        "PUT /ledger/voucher/{id}/:reverse",
+    ],
+    "register_supplier_invoice": [
+        "POST /supplier",
+        "GET /ledger/account",
+        "POST /ledger/voucher",
+    ],
+    "create_voucher": [
+        "GET /ledger/account",
+        "POST /ledger/voucher",
+        "POST /ledger/accountingDimensionName",
+        "POST /ledger/accountingDimensionValue",
+    ],
+    "reverse_voucher": [
+        "GET /ledger/voucher",
+        "PUT /ledger/voucher/{id}/:reverse",
+    ],
+    "create_project": [
+        "POST /customer",
+        "POST /department",
+        "POST /employee",
+        "POST /project",
+        "POST /project/projectActivity",
+        "POST /project/hourlyRates",
+    ],
+    "create_travel_expense": [
+        "POST /department",
+        "POST /employee",
+        "GET /travelExpense/costCategory",
+        "GET /travelExpense/paymentType",
+        "POST /travelExpense",
+        "POST /travelExpense/cost",
+        "POST /travelExpense/perDiemCompensation",
+    ],
+    "delete_travel_expense": [
+        "GET /travelExpense",
+        "DELETE /travelExpense/{id}",
+    ],
+    "delete_invoice": [
+        "GET /invoice",
+        "DELETE /invoice/{id}",
+    ],
+    "update_employee": [
+        "GET /employee",
+        "PUT /employee/{id}",
+    ],
+    "update_customer": [
+        "GET /customer",
+        "PUT /customer/{id}",
+    ],
+    "update_supplier": [
+        "GET /supplier",
+        "PUT /supplier/{id}",
+    ],
+    "update_contact": [
+        "GET /contact",
+        "PUT /contact/{id}",
+    ],
+    "enable_module": [
+        "GET /token/session/>whoAmI",
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# SUCCESSFUL_TRACES: task_type → compact API call sequence from best run.
+# Shows the executor the EXACT calls that achieved perfect/near-perfect scores.
+# ---------------------------------------------------------------------------
+
+SUCCESSFUL_TRACES: dict[str, dict] = {
+    "create_customer": {
+        "description": "Create customer with org number, address, and email (French prompt). 1 API call, 0 errors.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {
+                    "name": "str",
+                    "organizationNumber": "str",
+                    "email": "str",
+                    "invoiceEmail": "str (same as email)",
+                    "postalAddress": {
+                        "addressLine1": "str",
+                        "postalCode": "str",
+                        "city": "str",
+                        "country": {"id": 161},
+                    },
+                },
+            },
+        ],
+    },
+    "create_product": {
+        "description": "Create product with number, price, and VAT. 2 API calls, 0 errors.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/product",
+                "body_shape": {
+                    "name": "str",
+                    "number": "product_number_str",
+                    "priceExcludingVat": "number",
+                    "vatType": {"id": 3},
+                },
+            },
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/product/{id}",
+                "note": "Verify (optional, skip for efficiency)",
+            },
+        ],
+    },
+    "create_credit_note": {
+        "description": "Full credit note chain. 8 API calls, 0 errors. PERFECT score.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/account?number=1920",
+                "note": "Get bank account id+version",
+            },
+            {
+                "step": 2,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {"name": "str", "organizationNumber": "str"},
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/product",
+                "body_shape": {
+                    "name": "str",
+                    "priceExcludingVat": "number",
+                    "vatType": {"id": 3},
+                },
+            },
+            {
+                "step": 4,
+                "method": "PUT",
+                "path": "/ledger/account/{id}",
+                "body_shape": {
+                    "id": "from_step1",
+                    "version": "from_step1",
+                    "number": 1920,
+                    "name": "Bankinnskudd",
+                    "isBankAccount": True,
+                    "bankAccountNumber": "12345678903",
+                    "bankAccountCountry": {"id": 161},
+                },
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/order",
+                "body_shape": {
+                    "customer": {"id": "from_step2"},
+                    "orderDate": "today_iso",
+                    "deliveryDate": "today_iso",
+                },
+            },
+            {
+                "step": 6,
+                "method": "POST",
+                "path": "/order/orderline",
+                "body_shape": {
+                    "order": {"id": "from_step5"},
+                    "product": {"id": "from_step3"},
+                    "description": "str",
+                    "count": 1,
+                    "unitPriceExcludingVatCurrency": "number",
+                    "vatType": {"id": 3},
+                },
+            },
+            {
+                "step": 7,
+                "method": "POST",
+                "path": "/invoice",
+                "body_shape": {
+                    "orders": [{"id": "from_step5"}],
+                    "invoiceDate": "today_iso",
+                    "invoiceDueDate": "due_date_iso",
+                },
+            },
+            {
+                "step": 8,
+                "method": "PUT",
+                "path": "/invoice/{id}/:createCreditNote?date=today_iso",
+                "note": "date is QUERY PARAM",
+            },
+        ],
+    },
+    "create_invoice": {
+        "description": "Invoice with milestone/project. 9 API calls, 1 recoverable error.",
+        "calls": [
+            {"step": 1, "method": "GET", "path": "/ledger/account?number=1920"},
+            {
+                "step": 2,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {"name": "str", "organizationNumber": "str"},
+            },
+            {
+                "step": 3,
+                "method": "GET",
+                "path": "/employee?email=...",
+                "note": "Find existing employee for project manager",
+            },
+            {
+                "step": 4,
+                "method": "PUT",
+                "path": "/ledger/account/{id}",
+                "note": "Configure bank account",
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/project",
+                "body_shape": {
+                    "name": "str",
+                    "customer": {"id": "from_step2"},
+                    "projectManager": {"id": "from_step3"},
+                    "isFixedPrice": True,
+                    "fixedprice": "number",
+                },
+            },
+            {
+                "step": 6,
+                "method": "POST",
+                "path": "/order",
+                "body_shape": {
+                    "customer": {"id": "from_step2"},
+                    "project": {"id": "from_step5"},
+                    "orderDate": "today_iso",
+                    "deliveryDate": "today_iso",
+                },
+            },
+            {
+                "step": 7,
+                "method": "POST",
+                "path": "/order/orderline",
+                "body_shape": {
+                    "order": {"id": "from_step6"},
+                    "description": "str",
+                    "count": 1,
+                    "unitPriceExcludingVatCurrency": "number",
+                    "vatType": {"id": 3},
+                },
+            },
+            {
+                "step": 8,
+                "method": "POST",
+                "path": "/invoice",
+                "body_shape": {
+                    "orders": [{"id": "from_step6"}],
+                    "invoiceDate": "today_iso",
+                    "invoiceDueDate": "due_date_iso",
+                },
+            },
+        ],
+    },
+    "register_payment": {
+        "description": "Register payment then reverse it. 11 API calls, 1 error.",
+        "calls": [
+            {"step": 1, "method": "GET", "path": "/ledger/account?number=1920"},
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/invoice/paymentType",
+                "note": "Get payment type id",
+            },
+            {
+                "step": 3,
+                "method": "PUT",
+                "path": "/ledger/account/{id}",
+                "note": "Configure bank",
+            },
+            {"step": 4, "method": "POST", "path": "/customer"},
+            {"step": 5, "method": "POST", "path": "/order"},
+            {"step": 6, "method": "POST", "path": "/order/orderline"},
+            {"step": 7, "method": "POST", "path": "/invoice"},
+            {
+                "step": 8,
+                "method": "PUT",
+                "path": "/invoice/{id}/:payment?paymentDate=...&paymentTypeId=...&paidAmount=...",
+                "note": "All query params",
+            },
+            {
+                "step": 9,
+                "method": "GET",
+                "path": "/ledger/voucher?dateFrom=...&dateTo=...",
+                "note": "Find payment voucher for reversal",
+            },
+            {
+                "step": 10,
+                "method": "PUT",
+                "path": "/ledger/voucher/{id}/:reverse?date=today_iso",
+                "note": "date is QUERY PARAM",
+            },
+        ],
+    },
+    "create_voucher": {
+        "description": "Custom dimension + voucher. 7 optimal calls (actual was 9 with 2 retries).",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/account?number=XXXX",
+                "note": "Resolve expense account",
+            },
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/ledger/account?number=1920",
+                "note": "Resolve counter-account (bank)",
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/ledger/accountingDimensionName",
+                "note": "If custom dimension needed",
+            },
+            {
+                "step": 4,
+                "method": "POST",
+                "path": "/ledger/accountingDimensionValue",
+                "note": "Add each dimension value",
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/ledger/voucher",
+                "body_shape": {
+                    "date": "today_iso",
+                    "description": "str",
+                    "postings": [
+                        {
+                            "account": {"id": "from_step1"},
+                            "amountGross": "number",
+                            "amountGrossCurrency": "same_as_amountGross",
+                            "vatType": {"id": 0},
+                            "description": "str",
+                            "freeAccountingDimension1": {"id": "from_step4"},
+                            "row": 1,
+                        },
+                        {
+                            "account": {"id": "from_step2"},
+                            "amountGross": "-number",
+                            "amountGrossCurrency": "same_as_amountGross",
+                            "vatType": {"id": 0},
+                            "description": "counter-posting",
+                            "row": 2,
+                        },
+                    ],
+                },
+            },
+        ],
+    },
+    "create_travel_expense": {
+        "description": "Travel expense with costs. 10 optimal calls (actual was 14 with 4 retries).",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/employee?email=...",
+                "note": "Find or create employee",
+            },
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/travelExpense/costCategory",
+                "note": "Get available cost categories",
+            },
+            {
+                "step": 3,
+                "method": "GET",
+                "path": "/travelExpense/paymentType",
+                "note": "Get payment types",
+            },
+            {
+                "step": 4,
+                "method": "POST",
+                "path": "/travelExpense",
+                "body_shape": {
+                    "employee": {"id": "from_step1"},
+                    "title": "str",
+                    "departureDateTime": "YYYY-MM-DDT08:00:00",
+                    "returnDateTime": "YYYY-MM-DDT17:00:00",
+                },
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/travelExpense/cost",
+                "body_shape": {
+                    "travelExpense": {"id": "from_step4"},
+                    "costCategory": {"id": "from_step2"},
+                    "paymentType": {"id": "from_step3"},
+                    "comments": "str",
+                    "amountCurrencyIncVat": "number",
+                    "date": "YYYY-MM-DD",
+                },
+                "note": "Repeat for each cost line. ALWAYS use amountCurrencyIncVat.",
+            },
+        ],
+    },
+    "create_employee": {
+        "description": "Create employee — GET first to check if exists. 2-4 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/employee?email=<email>",
+                "note": "Check if employee already exists — sandbox often pre-seeds employees",
+            },
+            {
+                "step": 2,
+                "method": "POST",
+                "path": "/department",
+                "body_shape": {"name": "Avdeling", "departmentNumber": "1"},
+                "note": "Only if employee not found AND no department exists",
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/employee",
+                "body_shape": {
+                    "firstName": "str",
+                    "lastName": "str",
+                    "email": "str",
+                    "dateOfBirth": "YYYY-MM-DD or null",
+                    "userType": "STANDARD",
+                    "department": {"id": "from_step2"},
+                },
+                "note": "Only if GET returned 0 results",
+            },
+        ],
+    },
+    "create_project": {
+        "description": "Create project with customer and project manager. 3-5 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {"name": "str", "organizationNumber": "str"},
+            },
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/employee?email=<email>",
+                "note": "Check if employee exists first — sandbox pre-seeds employees",
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/department",
+                "note": "Only if employee not found — create dept before employee",
+            },
+            {
+                "step": 4,
+                "method": "POST",
+                "path": "/employee",
+                "note": "Only if GET returned 0 results",
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/project",
+                "body_shape": {
+                    "name": "str",
+                    "customer": {"id": "from_step1"},
+                    "projectManager": {"id": "from_step2_or_4"},
+                    "isInternal": False,
+                    "startDate": "today_iso",
+                },
+                "note": "startDate is REQUIRED",
+            },
+        ],
+    },
+    "create_order": {
+        "description": "Create order with customer, products, and orderlines. 5-8 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/account?number=1920",
+                "note": "Get bank account for setup",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/ledger/account/{id}",
+                "note": "Configure bank account",
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {
+                    "name": "str",
+                    "organizationNumber": "str",
+                    "email": "str",
+                    "invoiceEmail": "str (same as email)",
+                },
+            },
+            {
+                "step": 4,
+                "method": "GET",
+                "path": "/product?number=<num>",
+                "note": "Check if product exists first",
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/product",
+                "body_shape": {
+                    "name": "str",
+                    "number": "str",
+                    "priceExcludingVat": "number",
+                    "vatType": {"id": 3},
+                },
+                "note": "Only if GET returned 0 results",
+            },
+            {
+                "step": 6,
+                "method": "POST",
+                "path": "/order",
+                "body_shape": {
+                    "customer": {"id": "from_step3"},
+                    "orderDate": "today_iso",
+                    "deliveryDate": "today_iso",
+                },
+            },
+            {
+                "step": 7,
+                "method": "POST",
+                "path": "/order/orderline",
+                "body_shape": {
+                    "order": {"id": "from_step6"},
+                    "product": {"id": "from_step4_or_5"},
+                    "count": 1,
+                    "unitPriceExcludingVatCurrency": "number",
+                    "vatType": {"id": 3},
+                },
+                "note": "Repeat for each line item",
+            },
+        ],
+    },
+    "create_supplier": {
+        "description": "Create supplier with org number and email. 1 API call.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/supplier",
+                "body_shape": {
+                    "name": "str",
+                    "organizationNumber": "str",
+                    "email": "str",
+                    "invoiceEmail": "str (same as email)",
+                    "phoneNumber": "str if provided",
+                    "postalAddress": {
+                        "addressLine1": "str",
+                        "postalCode": "str",
+                        "city": "str",
+                        "country": {"id": 161},
+                    },
+                },
+            },
+        ],
+    },
+    "update_employee": {
+        "description": "Find employee then update fields. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/employee?email=<email>",
+                "note": "Find by email or name. Use fields=* to get all fields including version",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/employee/{id}",
+                "body_shape": {
+                    "id": "from_step1",
+                    "version": "from_step1",
+                    "firstName": "str",
+                    "lastName": "str",
+                },
+                "note": "Include id and version from GET. Only change the fields the prompt asks to update.",
+            },
+        ],
+    },
+    "update_customer": {
+        "description": "Find customer then update fields. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/customer?name=<name>",
+                "note": "Find by name or org number. Use fields=* to get version",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/customer/{id}",
+                "body_shape": {
+                    "id": "from_step1",
+                    "version": "from_step1",
+                    "name": "str",
+                    "email": "str",
+                    "invoiceEmail": "str",
+                },
+                "note": "Include id and version. Only update what prompt asks.",
+            },
+        ],
+    },
+    "update_supplier": {
+        "description": "Find supplier then update fields. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/supplier?name=<name>",
+                "note": "Find by name or org number",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/supplier/{id}",
+                "body_shape": {"id": "from_step1", "version": "from_step1"},
+                "note": "Include id and version. Only update what prompt asks.",
+            },
+        ],
+    },
+    "update_contact": {
+        "description": "Find contact then update fields. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/contact?email=<email>",
+                "note": "Find by email or name",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/contact/{id}",
+                "body_shape": {"id": "from_step1", "version": "from_step1"},
+                "note": "Include id and version. Only update what prompt asks.",
+            },
+        ],
+    },
+    "delete_invoice": {
+        "description": "Find invoice then delete. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/invoice?invoiceDateFrom=<date>&invoiceDateTo=<date>",
+                "note": "Find invoice by date, customer, or number",
+            },
+            {
+                "step": 2,
+                "method": "DELETE",
+                "path": "/invoice/{id}",
+                "note": "Delete the found invoice",
+            },
+        ],
+    },
+    "delete_travel_expense": {
+        "description": "Find travel expense then delete. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/travelExpense?employeeId=<id>",
+                "note": "Find by employee or date range",
+            },
+            {
+                "step": 2,
+                "method": "DELETE",
+                "path": "/travelExpense/{id}",
+                "note": "Delete the found travel expense",
+            },
+        ],
+    },
+    "reverse_voucher": {
+        "description": "Find voucher then reverse it. 2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/voucher?dateFrom=<date>&dateTo=<date>",
+                "note": "Find by date range. Use broad range.",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/ledger/voucher/{id}/:reverse?date=today_iso",
+                "note": "Method is PUT. date is QUERY PARAM.",
+            },
+        ],
+    },
+    "enable_module": {
+        "description": "Enable a Tripletex module. 1-2 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/token/session/>whoAmI",
+                "note": "Get company and employee context",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/company/settings/altinn",
+                "note": "Enable relevant module via settings endpoint. Check prompt for which module.",
+            },
+        ],
+    },
+    "create_department": {
+        "description": "Create department. 1 API call.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/department",
+                "body_shape": {"name": "str", "departmentNumber": "str or number"},
+            },
+        ],
+    },
+    "register_supplier_invoice": {
+        "description": "Create supplier then register invoice via /incomingInvoice or /ledger/voucher. 3-5 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "POST",
+                "path": "/supplier",
+                "body_shape": {
+                    "name": "str",
+                    "organizationNumber": "str",
+                    "email": "str",
+                    "invoiceEmail": "str",
+                },
+            },
+            {
+                "step": 2,
+                "method": "GET",
+                "path": "/ledger/account?number=<expense_account>",
+                "note": "Resolve expense account number to ID",
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/ledger/voucher",
+                "body_shape": {
+                    "date": "today_iso",
+                    "description": "str",
+                    "postings": [
+                        {
+                            "account": {"id": "from_step2"},
+                            "amountGross": "total_incl_vat",
+                            "amountGrossCurrency": "same",
+                            "vatType": {"id": 3},
+                            "supplier": {"id": "from_step1"},
+                            "row": 1,
+                        }
+                    ],
+                },
+                "note": "Only debit posting. Tripletex auto-generates VAT + credit.",
+            },
+        ],
+    },
+}
+
+
+def select_field_rules(planned_endpoints: list[str]) -> list[dict[str, object]]:
+    """Select field rules relevant to the planned endpoints.
+
+    Args:
+        planned_endpoints: List of "METHOD /path" strings.
+
+    Returns:
+        List of {"endpoint": str, "rules": list[str]} dicts.
+    """
+    selected: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for endpoint_key in planned_endpoints:
+        # Exact match first
+        if endpoint_key in FIELD_RULES and endpoint_key not in seen:
+            selected.append(
+                {"endpoint": endpoint_key, "rules": FIELD_RULES[endpoint_key]}
+            )
+            seen.add(endpoint_key)
+            continue
+        # Try matching by path pattern (e.g., "PUT /ledger/account/123" → "PUT /ledger/account/{id}")
+        parts = endpoint_key.split(" ", 1)
+        if len(parts) == 2:
+            method, path = parts
+            for rule_key, rules in FIELD_RULES.items():
+                if rule_key in seen:
+                    continue
+                rule_parts = rule_key.split(" ", 1)
+                if len(rule_parts) == 2 and rule_parts[0] == method:
+                    # Check if the path pattern matches (strip IDs)
+                    rule_path = rule_parts[1]
+                    if _path_matches(path, rule_path):
+                        selected.append({"endpoint": rule_key, "rules": rules})
+                        seen.add(rule_key)
+    return selected
+
+
+def select_successful_trace(task_type: str) -> dict | None:
+    """Select a successful trace example for the given task type."""
+    return SUCCESSFUL_TRACES.get(task_type)
+
+
+def get_endpoint_chain(task_type: str) -> list[str]:
+    """Get the expected endpoint chain for a task type."""
+    return TASK_ENDPOINT_CHAINS.get(task_type, [])
+
+
+def _path_matches(actual_path: str, pattern_path: str) -> bool:
+    """Check if an actual path matches a pattern path with {id} placeholders."""
+    actual_segments = actual_path.strip("/").split("/")
+    pattern_segments = pattern_path.strip("/").split("/")
+    if len(actual_segments) != len(pattern_segments):
+        return False
+    for actual, pattern in zip(actual_segments, pattern_segments):
+        if pattern.startswith("{") and pattern.endswith("}"):
+            continue  # Wildcard match
+        if actual != pattern:
+            return False
+    return True

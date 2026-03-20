@@ -198,11 +198,14 @@ def _openai_messages_to_anthropic(
 def _anthropic_response_to_openai(response_data: dict[str, Any]) -> dict[str, Any]:
     content_blocks = response_data.get("content", [])
     text_parts: list[str] = []
+    thinking_parts: list[str] = []
     tool_calls: list[dict[str, Any]] = []
 
     for block in content_blocks:
         btype = block.get("type", "")
-        if btype == "text":
+        if btype == "thinking":
+            thinking_parts.append(block.get("thinking", ""))
+        elif btype == "text":
             text_parts.append(block.get("text", ""))
         elif btype == "tool_use":
             tool_calls.append(
@@ -222,6 +225,8 @@ def _anthropic_response_to_openai(response_data: dict[str, Any]) -> dict[str, An
         "role": "assistant",
         "content": "\n".join(text_parts) if text_parts else "",
     }
+    if thinking_parts:
+        message["thinking"] = "\n".join(thinking_parts)
     if tool_calls:
         message["tool_calls"] = tool_calls
     return message
@@ -346,6 +351,7 @@ class OpenRouterClient:
         temperature: float | None = None,
         max_tokens: int = 1500,
         model_override: str | None = None,
+        enable_thinking: bool = False,
     ) -> dict[str, Any]:
         model = model_override or self._settings.openrouter_model
         temp = (
@@ -361,6 +367,7 @@ class OpenRouterClient:
                 tools=tools,
                 temperature=temp,
                 max_tokens=max_tokens,
+                enable_thinking=enable_thinking,
             )
         return await self._openai_chat_completion(
             model=model,
@@ -422,6 +429,7 @@ class OpenRouterClient:
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        enable_thinking: bool = False,
     ) -> dict[str, Any]:
         vertex_model = _normalize_claude_model_for_vertex(model)
         vertex_available = self._vertex_client is not None and vertex_model is not None
@@ -436,6 +444,7 @@ class OpenRouterClient:
                     tools=tools,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    enable_thinking=enable_thinking,
                 )
             except OpenRouterError as vertex_exc:
                 sc = vertex_exc.status_code
@@ -451,6 +460,7 @@ class OpenRouterClient:
                             temperature=temperature,
                             max_tokens=max_tokens,
                             force_token_refresh=True,
+                            enable_thinking=enable_thinking,
                         )
                     except Exception:
                         pass
@@ -467,6 +477,7 @@ class OpenRouterClient:
                         tools=tools,
                         temperature=temperature,
                         max_tokens=max_tokens,
+                        enable_thinking=enable_thinking,
                     )
                 raise
 
@@ -482,6 +493,7 @@ class OpenRouterClient:
                         tools=tools,
                         temperature=temperature,
                         max_tokens=max_tokens,
+                        enable_thinking=enable_thinking,
                     )
                 raise OpenRouterError(
                     f"Vertex AI transport error: {vertex_exc}"
@@ -494,6 +506,7 @@ class OpenRouterClient:
                 tools=tools,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                enable_thinking=enable_thinking,
             )
 
         raise OpenRouterError(
@@ -511,6 +524,7 @@ class OpenRouterClient:
         temperature: float = 0.0,
         max_tokens: int = 4096,
         force_token_refresh: bool = False,
+        enable_thinking: bool = False,
     ) -> dict[str, Any]:
         if not self._vertex_client:
             raise OpenRouterError("Vertex AI client not configured")
@@ -521,12 +535,21 @@ class OpenRouterClient:
 
         system_prompt, anthropic_messages = _openai_messages_to_anthropic(messages)
 
+        thinking_budget = 0
+        if enable_thinking:
+            thinking_budget = min(max_tokens - 2048, 50000)
+            if thinking_budget < 1024:
+                thinking_budget = 1024
+                max_tokens = max(max_tokens, 4096)
+
         payload: dict[str, Any] = {
             "anthropic_version": "vertex-2023-10-16",
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
-            "temperature": temperature,
+            "temperature": 1 if enable_thinking else temperature,
         }
+        if enable_thinking:
+            payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         if system_prompt:
             payload["system"] = system_prompt
         if tools:
@@ -569,18 +592,28 @@ class OpenRouterClient:
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        enable_thinking: bool = False,
     ) -> dict[str, Any]:
         if not self._azure_anthropic_client:
             raise OpenRouterError("Azure Anthropic client not configured")
 
         system_prompt, anthropic_messages = _openai_messages_to_anthropic(messages)
 
+        thinking_budget = 0
+        if enable_thinking:
+            thinking_budget = min(max_tokens - 2048, 50000)
+            if thinking_budget < 1024:
+                thinking_budget = 1024
+                max_tokens = max(max_tokens, 4096)
+
         payload: dict[str, Any] = {
             "model": model,
             "max_tokens": max_tokens,
             "messages": anthropic_messages,
-            "temperature": temperature,
+            "temperature": 1 if enable_thinking else temperature,
         }
+        if enable_thinking:
+            payload["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         if system_prompt:
             payload["system"] = system_prompt
         if tools:

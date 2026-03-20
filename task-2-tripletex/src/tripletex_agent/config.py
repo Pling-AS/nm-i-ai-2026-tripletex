@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     tier1_executor_model: str = "claude-sonnet-4-6"
     tier2_executor_model: str = "claude-opus-4-6"
     tier3_executor_model: str = "gpt-5.4"
+    enforcer_model: str = "claude-sonnet-4-6"
     openrouter_site_url: str | None = None
     openrouter_app_name: str = "Tripletex Accounting Agent"
     tripletex_sandbox_login_email: str | None = None
