@@ -1,0 +1,2857 @@
+
+Tripletex API
+
+ 2.74.00 
+
+OAS3
+
+/v2/openapi.json
+
+[ Base URL: https://kkpqfuj-amager.tripletex.dev/v2 ]
+
+Usage
+
+    Download the spec openapi.json file, it is a OpenAPI Specification.
+https://kkpqfuj-amager.tripletex.dev/v2/openapi.json
+    Generating a client can easily be done using tools like openapi-generator or swagger-codegen or other that accepts OpenAPI Specification specs.
+        For swagger codegen it is recommended to use the flag: --removeOperationIdPrefix. Unique operation ids are about to be introduced to the spec, and this ensures forward compatibility - and results in less verbose generated code.
+
+    Please note that Tripletex offers several packages. Some endpoints are only supported in certain packages. You can see the Tripletex packages here.
+
+Overview
+
+    Partial resource updating is done using the PUT method with optional fields instead of the PATCH method.
+
+    Actions or commands are represented in our RESTful path with a prefixed :. Example: /hours/123/:approve.
+
+    Summaries or aggregated results are represented in our RESTful path with a prefixed >. Example: /hours/>thisWeeksBillables.
+
+    Request ID is a key found in all responses in the header with the name x-tlx-request-id. For validation and error responses it is also in the response body. If additional log information is absolutely necessary, our support division can locate the key value.
+
+    version This is a revision number found on all persisted resources. If included, it will prevent your PUT/POST from overriding any updates to the resource since your GET.
+
+    Date follows the ISO 8601 standard, meaning the format YYYY-MM-DD.
+
+    DateTime follows the ISO 8601 standard, meaning the format YYYY-MM-DDThh:mm:ss.
+
+    Searching is done by entering values in the optional fields for each API call. The values fall into the following categories: range, in, exact and like.
+
+    Missing fields or even no response data can occur because result objects and fields are filtered on authorization.
+
+    See GitHub for more documentation, code examples, changelog and more.
+
+    See Tripletex for developers for more practical information, support, updates and access form
+
+Authentication
+
+Read more here
+
+    Tokens: The Tripletex API uses 3 different tokens
+
+        consumerToken is a token provided to the consumer by Tripletex after the API 2.0 registration is completed.
+
+        employeeToken is a token created by an administrator in your Tripletex account via the user settings and the tab "API access". Each employee token must be given a set of entitlements.
+
+        sessionToken is the token from /token/session/:create which requires a consumerToken and an employeeToken created with the same consumer token, but not an authentication header.
+
+    Authentication is done via Basic access authentication
+
+        username is used to specify what company to access.
+
+            0 or blank means the company of the employee.
+
+            Any other value means accountant clients. Use /company/>withLoginAccess to get a list of those.
+
+        password is the sessionToken.
+
+        If you need to create the header yourself use Authorization: Basic <encoded token> where encoded token is the string <target company id or 0>:<your session token> Base64 encoded.
+
+Tags
+
+    [BETA] This is a beta endpoint and can be subject to change.
+    [DEPRECATED] Deprecated means that we intend to remove/change this feature or capability in a future "major" API release. We therefore discourage all use of this feature/capability.
+
+Fields
+
+Use the fields parameter to specify which fields should be returned. This also supports fields from sub elements, done via <field>(<subResourceFields>). * means all fields for that resource. Example values:
+
+    project,activity,hours returns {project:..., activity:...., hours:...}.
+    just project returns "project" : { "id": 12345, "url": "tripletex.no/v2/projects/12345" }.
+    project(*) returns "project" : { "id": 12345 "name":"ProjectName" "number.....startDate": "2013-01-07" }.
+    project(name) returns "project" : { "name":"ProjectName" }.
+    All resources and some subResources : *,activity(name),employee(*).
+
+Sorting
+
+Use the sorting parameter to specify sorting. It takes a comma separated list, where a - prefix denotes descending. You can sort by sub object with the following format: <field>.<subObjectField>. Example values:
+
+    date
+    project.name
+    project.name, -date
+
+Changes
+
+To get the changes for a resource, changes have to be explicitly specified as part of the fields parameter, e.g. *,changes. There are currently two types of change available:
+
+    CREATE for when the resource was created
+    UPDATE for when the resource was updated
+
+NOTE
+
+    For objects created prior to October 24th 2018 the list may be incomplete, but will always contain the CREATE and the last change (if the object has been changed after creation).
+
+Rate limiting
+
+Rate limiting is performed on the API calls for an employee for each API consumer. Status regarding the rate limit is returned as headers:
+
+    X-Rate-Limit-Limit - The number of allowed requests in the current period.
+    X-Rate-Limit-Remaining - The number of remaining requests.
+    X-Rate-Limit-Reset - The number of seconds left in the current period.
+
+Once the rate limit is hit, all requests will return HTTP status code 429 for the remainder of the current period.
+Response envelope
+Multiple values
+
+{
+  "fullResultSize": ###, // {number} [DEPRECATED]
+  "from": ###, // {number} Paging starting from
+  "count": ###, // {number} Paging count
+  "versionDigest": "###", // {string} Hash of full result, null if no result
+  "values": [...{...object...},{...object...},{...object...}...]
+}
+
+Single value
+
+{
+  "value": {...single object...}
+}
+
+WebHook envelope
+
+{
+  "subscriptionId": ###, // Subscription id
+  "event": "object.verb", // As listed from /v2/event/
+  "id": ###, // Id of object this event is for
+  "value": {... single object, null if object.deleted ...}
+}
+
+Error/warning envelope
+
+{
+  "status": ###, // {number} HTTP status code
+  "code": #####, // {number} internal status code of event
+  "message": "###", // {string} Basic feedback message in your language
+  "link": "###", // {string} Link to doc
+  "developerMessage": "###", // {string} More technical message
+  "validationMessages": [ // {array} List of validation messages, can be null
+    {
+      "field": "###", // {string} Name of field
+      "message": "###" // {string} Validation message for field
+    }
+  ],
+  "requestId": "###" // {string} Same as x-tlx-request-id
+}
+
+Status codes / Error codes
+
+    200 OK
+    201 Created - From POSTs that create something new.
+    204 No Content - When there is no answer, ex: "/:anAction" or DELETE.
+    400 Bad request -
+        4000 Bad Request Exception
+        11000 Illegal Filter Exception
+        12000 Path Param Exception
+        24000 Cryptography Exception
+    401 Unauthorized - When authentication is required and has failed or has not yet been provided
+        3000 Authentication Exception
+    403 Forbidden - When AuthorisationManager says no.
+        9000 Security Exception
+    404 Not Found - For resources that does not exist.
+        6000 Not Found Exception
+    409 Conflict - Such as an edit conflict between multiple simultaneous updates
+        7000 Object Exists Exception
+        8000 Revision Exception
+        10000 Locked Exception
+        14000 Duplicate entry
+    422 Bad Request - For Required fields or things like malformed payload.
+        15000 Value Validation Exception
+        16000 Mapping Exception
+        17000 Sorting Exception
+        18000 Validation Exception
+        21000 Param Exception
+        22000 Invalid JSON Exception
+        23000 Result Set Too Large Exception
+    429 Too Many Requests - Request rate limit hit
+    500 Internal Error - Unexpected condition was encountered and no more specific message is suitable
+        1000 Exception
+
+tripletex-api2 on GitHub - Website
+Servers
+accountantDashboard/news
+GET
+​/accountantDashboard​/news
+Get public news articles
+GET
+​/accountantDashboard​/news​/tags
+Get all existing news tags
+accountingDimensionName
+DELETE
+​/ledger​/accountingDimensionName​/{id}
+Delete an accounting dimension name by ID
+GET
+​/ledger​/accountingDimensionName​/{id}
+Get a single accounting dimension name by ID
+GET
+​/ledger​/accountingDimensionName
+Get all accounting dimension names.
+GET
+​/ledger​/accountingDimensionName​/search
+Search for accounting dimension names according to criteria.
+POST
+​/ledger​/accountingDimensionName
+Create a new free (aka 'user defined') accounting dimension
+PUT
+​/ledger​/accountingDimensionName​/{id}
+Update an accounting dimension
+accountingDimensionValue
+DELETE
+​/ledger​/accountingDimensionValue​/{id}
+Delete an accounting dimension value. Values that have been used in postings can not be deleted.
+GET
+​/ledger​/accountingDimensionValue​/{id}
+Find accounting dimension values by ID.
+GET
+​/ledger​/accountingDimensionValue​/search
+Search for accounting dimension values according to criteria.
+POST
+​/ledger​/accountingDimensionValue
+Create a new value for one of the free (aka 'user defined') accounting dimensions
+PUT
+​/ledger​/accountingDimensionValue​/list
+Update accounting dimension values
+accountingOffice/reconciliations
+
+API for managing reconciliation controls
+GET
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control
+Returns a list of reconciliation controls with the given reconciliationId
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:controlReconciliation
+Mark a reconciliation as controlled
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:reconcile
+Mark a reconciliation as reconciled
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:requestControl
+Request control of a reconciliation
+accountingOffice/reconciliations/{reconciliationId}/control
+GET
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control
+Returns a list of reconciliation controls with the given reconciliationId
+accountingOffice/reconciliations/{reconciliationId}/control/:controlReconciliation
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:controlReconciliation
+Mark a reconciliation as controlled
+accountingOffice/reconciliations/{reconciliationId}/control/:reconcile
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:reconcile
+Mark a reconciliation as reconciled
+accountingOffice/reconciliations/{reconciliationId}/control/:requestControl
+PUT
+​/accountingOffice​/reconciliations​/{reconciliationId}​/control​/:requestControl
+Request control of a reconciliation
+activity
+GET
+​/activity​/{id}
+Find activity by ID.
+GET
+​/activity​/>forTimeSheet
+Find applicable time sheet activities for an employee on a specific day.
+GET
+​/activity
+Find activities corresponding with sent data.
+POST
+​/activity​/list
+Add multiple activities.
+POST
+​/activity
+Add activity.
+asset
+DELETE
+​/asset​/{id}
+Delete asset.
+DELETE
+​/asset​/deleteImport
+[BETA] Delete most recent assets import.
+DELETE
+​/asset​/deleteStartingBalance
+[BETA] Delete the asset starting balance.
+GET
+​/asset​/balanceAccountsSum
+Get balanceAccountsSum.
+GET
+​/asset​/canDelete​/{id}
+Validate delete asset
+GET
+​/asset​/{id}
+Get asset by ID.
+GET
+​/asset​/assetsExist
+Get if AssetOverview details is empty.
+GET
+​/asset​/{id}​/postings
+Get postings associated with asset
+GET
+​/asset
+Find assets corresponding with sent data.
+POST
+​/asset​/list
+Create several assets.
+POST
+​/asset
+Create one asset.
+POST
+​/asset​/duplicate​/{id}
+Create copy of one asset
+POST
+​/asset​/upload
+[BETA] Upload Excel file with Assets in the standard Tripletex defined format.
+PUT
+​/asset​/{id}
+Update asset.
+attestation
+GET
+​/attestation​/addApproverPermission
+PUT
+​/attestation​/:addApprover
+attestation_company_modules
+GET
+​/attestation​/companyModules
+Get attestation company modules
+balance/reconciliation
+GET
+​/balance​/reconciliation​/attachment​/{attachmentId}​/pdf
+GET
+​/balance​/reconciliation​/{reconciliationId}​/account​/{accountId}​/vouchers
+POST
+​/balance​/reconciliation​/annual​/context
+Create a annualBalance reconciliation context for a customer
+balanceSheet
+GET
+​/balanceSheet
+Get balance sheet (saldobalanse).
+bank
+GET
+​/bank​/{id}
+Get bank.
+GET
+​/bank
+Find bank corresponding with sent data.
+bank/reconciliation
+DELETE
+​/bank​/reconciliation​/{id}
+Delete bank reconciliation by ID.
+GET
+​/bank​/reconciliation​/closedWithUnmatchedTransactions
+Get the last closed reconciliation with unmached transactions by account ID.
+GET
+​/bank​/reconciliation​/{id}
+Get bank reconciliation.
+GET
+​/bank​/reconciliation​/>last
+Get the last created reconciliation by account ID.
+GET
+​/bank​/reconciliation​/>lastClosed
+Get last closed reconciliation by account ID.
+GET
+​/bank​/reconciliation
+Find bank reconciliation corresponding with sent data.
+POST
+​/bank​/reconciliation
+Post a bank reconciliation.
+PUT
+​/bank​/reconciliation​/{id}​/:adjustment
+Add an adjustment to reconciliation by ID.
+PUT
+​/bank​/reconciliation​/transactions​/unmatched:csv
+Get all unmatched transactions in csv format
+PUT
+​/bank​/reconciliation​/{id}
+Update a bank reconciliation.
+bank/reconciliation/match
+DELETE
+​/bank​/reconciliation​/match​/{id}
+Delete a bank reconciliation match by ID.
+GET
+​/bank​/reconciliation​/match​/count
+Get the total number of matches
+GET
+​/bank​/reconciliation​/match​/{id}
+Get bank reconciliation match by ID.
+GET
+​/bank​/reconciliation​/match
+Find bank reconciliation match corresponding with sent data.
+GET
+​/bank​/reconciliation​/match​/query
+[INTERNAL] Wildcard search.
+GET
+​/bank​/reconciliation​/matches​/counter
+[BETA] Get number of matches since last page access.
+POST
+​/bank​/reconciliation​/match
+Create a bank reconciliation match.
+POST
+​/bank​/reconciliation​/matches​/counter
+[BETA] Reset the number of matches after the page has been accessed.
+PUT
+​/bank​/reconciliation​/match​/{id}
+Update a bank reconciliation match by ID.
+PUT
+​/bank​/reconciliation​/match​/:suggest
+Suggest matches for a bank reconciliation by ID.
+bank/reconciliation/matches/counter
+GET
+​/bank​/reconciliation​/matches​/counter
+[BETA] Get number of matches since last page access.
+POST
+​/bank​/reconciliation​/matches​/counter
+[BETA] Reset the number of matches after the page has been accessed.
+bank/reconciliation/paymentType
+GET
+​/bank​/reconciliation​/paymentType​/{id}
+Get payment type by ID.
+GET
+​/bank​/reconciliation​/paymentType
+Find payment type corresponding with sent data.
+bank/reconciliation/settings
+GET
+​/bank​/reconciliation​/settings
+Get bank reconciliation settings.
+POST
+​/bank​/reconciliation​/settings
+Post bank reconciliation settings.
+PUT
+​/bank​/reconciliation​/settings​/{id}
+Update bank reconciliation settings.
+bank/statement
+DELETE
+​/bank​/statement​/{id}
+Delete bank statement by ID.
+GET
+​/bank​/statement​/{id}
+Get bank statement.
+GET
+​/bank​/statement
+Find bank statement corresponding with sent data.
+POST
+​/bank​/statement​/import
+Upload bank statement file.
+bank/statement/transaction
+GET
+​/bank​/statement​/transaction​/{id}
+Get bank transaction by ID.
+GET
+​/bank​/statement​/transaction​/{id}​/details
+Get additional details about transaction by ID.
+GET
+​/bank​/statement​/transaction
+Find bank transaction corresponding with sent data.
+company
+GET
+​/company​/>withLoginAccess
+Returns client customers (with accountant/auditor relation) where the current user has login access (proxy login).
+GET
+​/company​/{id}
+Find company by ID.
+GET
+​/company​/divisions
+[DEPRECATED] Find divisions.
+PUT
+​/company
+Update company information.
+company/altinn
+GET
+​/company​/settings​/altinn
+Find Altinn id for login in company.
+PUT
+​/company​/settings​/altinn
+Update AltInn id and password.
+company/salesmodules
+GET
+​/company​/salesmodules
+[BETA] Get active sales modules.
+POST
+​/company​/salesmodules
+[BETA] Add (activate) a new sales module.
+company/settings/altinn
+GET
+​/company​/settings​/altinn
+Find Altinn id for login in company.
+PUT
+​/company​/settings​/altinn
+Update AltInn id and password.
+contact
+DELETE
+​/contact​/list
+[BETA] Delete multiple contacts.
+GET
+​/contact​/{id}
+Get contact by ID.
+GET
+​/contact
+Find contacts corresponding with sent data.
+POST
+​/contact​/list
+Create multiple contacts.
+POST
+​/contact
+Create contact.
+PUT
+​/contact​/{id}
+Update contact.
+country
+GET
+​/country​/{id}
+Get country by ID.
+GET
+​/country
+Find countries corresponding with sent data.
+crm/prospect
+GET
+​/crm​/prospect​/{id}
+Get prospect by ID.
+GET
+​/crm​/prospect
+Find prospects corresponding with sent data.
+currency
+GET
+​/currency​/{id}
+Get currency by ID.
+GET
+​/currency
+Find currencies corresponding with sent data.
+GET
+​/currency​/{fromCurrencyID}​/{toCurrencyID}​/exchangeRate
+Returns the amount in the specified currency, where the input amount is in fromCurrency, using the newest exchange rate available for the given date
+GET
+​/currency​/{fromCurrencyID}​/exchangeRate
+Returns the amount in the company currency, where the input amount is in fromCurrency, using the newest exchange rate available for the given date
+GET
+​/currency​/{id}​/rate
+Find currency exchange rate corresponding with sent data.
+customer
+DELETE
+​/customer​/{id}
+[BETA] Delete customer by ID
+GET
+​/customer​/{id}
+Get customer by ID.
+GET
+​/customer
+Find customers corresponding with sent data.
+POST
+​/customer
+Create customer. Related customer addresses may also be created.
+POST
+​/customer​/list
+[BETA] Create multiple customers. Related supplier addresses may also be created.
+PUT
+​/customer​/{id}
+Update customer.
+PUT
+​/customer​/list
+[BETA] Update multiple customers. Addresses can also be updated.
+customer/category
+GET
+​/customer​/category​/{id}
+Find customer/supplier category by ID.
+GET
+​/customer​/category
+Find customer/supplier categories corresponding with sent data.
+POST
+​/customer​/category
+Add new customer/supplier category.
+PUT
+​/customer​/category​/{id}
+Update customer/supplier category.
+debtCollector/internal
+DELETE
+​/internal​/debtCollector​/deactivate
+Deactivate debt collector relation
+GET
+​/internal​/debtCollector
+Get last select debt collector
+deliveryAddress
+GET
+​/deliveryAddress​/{id}
+Get address by ID.
+GET
+​/deliveryAddress
+Find addresses corresponding with sent data.
+PUT
+​/deliveryAddress​/{id}
+Update address.
+department
+DELETE
+​/department​/{id}
+Delete department by ID
+GET
+​/department​/{id}
+Get department by ID.
+GET
+​/department
+Find department corresponding with sent data.
+GET
+​/department​/query
+Wildcard search.
+POST
+​/department
+Add new department.
+POST
+​/department​/list
+Register new departments.
+PUT
+​/department​/{id}
+Update department.
+PUT
+​/department​/list
+Update multiple departments.
+division
+GET
+​/division
+Get divisions.
+POST
+​/division
+Create division.
+POST
+​/division​/list
+Create divisions.
+PUT
+​/division​/list
+Update multiple divisions.
+PUT
+​/division​/{id}
+Update division information.
+document
+GET
+​/document​/{id}​/content
+[BETA] Get content of document given by ID.
+GET
+​/document​/{id}
+[BETA] Get document by ID.
+documentArchive
+DELETE
+​/documentArchive​/{id}
+[BETA] Delete document archive.
+GET
+​/documentArchive​/account​/{id}
+[BETA] Find documents archived associated with account object type.
+GET
+​/documentArchive​/customer​/{id}
+[BETA] Find documents archived associated with customer object type.
+GET
+​/documentArchive​/dynamicControlForm​/{id}
+[BETA] Find documents archived associated with control form object type.
+GET
+​/documentArchive​/employee​/{id}
+[BETA] Find documents archived associated with employee object type.
+GET
+​/documentArchive​/product​/{id}
+[BETA] Find documents archived associated with product object type.
+GET
+​/documentArchive​/project​/{id}
+[BETA] Find documents archived associated with project object type.
+GET
+​/documentArchive​/supplier​/{id}
+[BETA] Find documents archived associated with supplier object type.
+POST
+​/documentArchive​/account​/{id}
+[BETA] Upload file to Account Document Archive.
+POST
+​/documentArchive​/customer​/{id}
+[BETA] Upload file to Customer Document Archive.
+POST
+​/documentArchive​/dynamicControlForm​/{id}
+[BETA] Upload file to Control Form Document Archive.
+POST
+​/documentArchive​/employee​/{id}
+[BETA] Upload file to Employee Document Archive.
+POST
+​/documentArchive​/product​/{id}
+[BETA] Upload file to Product Document Archive.
+POST
+​/documentArchive​/project​/{id}
+[BETA] Upload file to Project Document Archive.
+POST
+​/documentArchive​/supplier​/{id}
+[BETA] Upload file to Supplier Document Archive.
+POST
+​/documentArchive​/reception
+[BETA] Upload a file to the document archive reception. Send as multipart form.
+PUT
+​/documentArchive​/{id}
+[BETA] Update document archive.
+employee
+GET
+​/employee​/{id}
+Get employee by ID.
+GET
+​/employee
+Find employees corresponding with sent data.
+GET
+​/employee​/searchForEmployeesAndContacts
+Get employees and contacts by parameters. Include contacts by default.
+POST
+​/employee​/list
+Create several employees.
+POST
+​/employee
+Create one employee.
+PUT
+​/employee​/{id}
+Update employee.
+employee/category
+DELETE
+​/employee​/category​/{id}
+Delete employee category by ID
+DELETE
+​/employee​/category​/list
+Delete multiple employee categories
+GET
+​/employee​/category​/{id}
+Get employee category by ID.
+GET
+​/employee​/category
+Find employee category corresponding with sent data.
+POST
+​/employee​/category​/list
+Create new employee categories.
+POST
+​/employee​/category
+Create a new employee category.
+PUT
+​/employee​/category​/{id}
+Update employee category information.
+PUT
+​/employee​/category​/list
+Update multiple employee categories.
+employee/employment
+GET
+​/employee​/employment​/{id}
+Find employment by ID.
+GET
+​/employee​/employment
+Find all employments for employee.
+POST
+​/employee​/employment
+Create employment.
+PUT
+​/employee​/employment​/{id}
+Update employemnt.
+employee/employment/details
+GET
+​/employee​/employment​/details​/{id}
+Find employment details by ID.
+GET
+​/employee​/employment​/details
+Find all employmentdetails for employment.
+POST
+​/employee​/employment​/details
+Create employment details.
+PUT
+​/employee​/employment​/details​/{id}
+Update employment details.
+employee/employment/employmentType
+GET
+​/employee​/employment​/employmentType​/employmentEndReasonType
+Find all employment end reason type IDs.
+GET
+​/employee​/employment​/employmentType​/employmentFormType
+Find all employment form type IDs.
+GET
+​/employee​/employment​/employmentType​/maritimeEmploymentType
+Find all maritime employment type IDs.
+GET
+​/employee​/employment​/employmentType​/salaryType
+Find all salary type IDs.
+GET
+​/employee​/employment​/employmentType​/scheduleType
+Find all schedule type IDs.
+GET
+​/employee​/employment​/employmentType
+Find all employment type IDs.
+employee/employment/leaveOfAbsence
+GET
+​/employee​/employment​/leaveOfAbsence​/{id}
+Find leave of absence by ID.
+GET
+​/employee​/employment​/leaveOfAbsence
+Find all leave of absence corresponding with the sent data.
+POST
+​/employee​/employment​/leaveOfAbsence
+Create leave of absence.
+POST
+​/employee​/employment​/leaveOfAbsence​/list
+Create multiple leave of absences.
+PUT
+​/employee​/employment​/leaveOfAbsence​/{id}
+Update leave of absence.
+employee/employment/leaveOfAbsenceType
+GET
+​/employee​/employment​/leaveOfAbsenceType
+Find all leave of absence type IDs.
+employee/employment/occupationCode
+GET
+​/employee​/employment​/occupationCode​/{id}
+Get occupation by ID.
+GET
+​/employee​/employment​/occupationCode
+Find all profession codes.
+employee/employment/remunerationType
+GET
+​/employee​/employment​/remunerationType
+Find all remuneration type IDs.
+employee/employment/workingHoursScheme
+GET
+​/employee​/employment​/workingHoursScheme
+Find working hours scheme ID.
+employee/entitlement
+GET
+​/employee​/entitlement​/client
+[BETA] Find all entitlements at client for user.
+GET
+​/employee​/entitlement​/{id}
+Get entitlement by ID.
+GET
+​/employee​/entitlement
+Find all entitlements for user.
+PUT
+​/employee​/entitlement​/:grantClientEntitlementsByTemplate
+[BETA] Update employee entitlements in client account.
+PUT
+​/employee​/entitlement​/:grantEntitlementsByTemplate
+[BETA] Update employee entitlements.
+employee/hourlyCostAndRate
+GET
+​/employee​/hourlyCostAndRate​/{id}
+Find hourly cost and rate by ID.
+GET
+​/employee​/hourlyCostAndRate
+Find all hourly cost and rates for employee.
+POST
+​/employee​/hourlyCostAndRate
+Create hourly cost and rate.
+PUT
+​/employee​/hourlyCostAndRate​/{id}
+Update hourly cost and rate.
+employee/nextOfKin
+GET
+​/employee​/nextOfKin​/{id}
+Find next of kin by ID.
+GET
+​/employee​/nextOfKin
+Find all next of kin for employee.
+POST
+​/employee​/nextOfKin
+Create next of kin.
+PUT
+​/employee​/nextOfKin​/{id}
+Update next of kin.
+employee/preferences
+GET
+​/employee​/preferences​/>loggedInEmployeePreferences
+Get employee preferences for current user
+GET
+​/employee​/preferences
+Find employee preferences corresponding with sent data.
+PUT
+​/employee​/preferences​/:changeLanguage
+Change current employees language to the given language
+PUT
+​/employee​/preferences​/{id}
+Update employee preferences information.
+PUT
+​/employee​/preferences​/list
+Update multiple employee preferences.
+employee/standardTime
+GET
+​/employee​/standardTime​/{id}
+Find standard time by ID.
+GET
+​/employee​/standardTime​/byDate
+Find standard time for employee by date.
+GET
+​/employee​/standardTime
+Find all standard times for employee.
+POST
+​/employee​/standardTime
+Create standard time.
+PUT
+​/employee​/standardTime​/{id}
+Update standard time.
+event
+GET
+​/event​/{eventType}
+[BETA] Get example webhook payload
+GET
+​/event
+[BETA] Get all (WebHook) event keys.
+event/subscription
+DELETE
+​/event​/subscription​/{id}
+[BETA] Delete the given subscription.
+DELETE
+​/event​/subscription​/list
+[BETA] Delete multiple subscriptions.
+GET
+​/event​/subscription​/{id}
+[BETA] Get subscription by ID.
+GET
+​/event​/subscription
+[BETA] Find all ongoing subscriptions.
+POST
+​/event​/subscription​/list
+[BETA] Create multiple subscriptions for current EmployeeToken.
+POST
+​/event​/subscription
+[BETA] Create a new subscription for current EmployeeToken.
+PUT
+​/event​/subscription​/{id}
+[BETA] Change a current subscription, based on id.
+PUT
+​/event​/subscription​/list
+[BETA] Update multiple subscription.
+financeTax/reconciliation
+GET
+​/salary​/financeTax​/reconciliation​/{reconciliationId}​/overview
+Get finance tax overview for a specific reconciliation term
+GET
+​/salary​/financeTax​/reconciliation​/{reconciliationId}​/paymentsOverview
+Get finance tax payment overview from start of year to the current reconciliation term
+POST
+​/salary​/financeTax​/reconciliation​/context
+Create a financeTax reconciliation context for a customer
+incomingInvoice
+GET
+​/incomingInvoice​/{voucherId}
+[BETA] Get an invoice by voucherId
+GET
+​/incomingInvoice​/search
+[BETA] Get a list of invoices
+POST
+​/incomingInvoice​/{voucherId}​/addPayment
+[BETA] create a payment for voucher/invoice
+POST
+​/incomingInvoice
+[BETA] create an invoice
+PUT
+​/incomingInvoice​/{voucherId}
+[BETA] update an invoice by voucherId
+internal
+DELETE
+​/yearEnd​/researchAndDevelopment2024
+Delete ResearchAndDevelopment 2024
+GET
+​/yearEnd​/{yearEndReportId}​/researchAndDevelopment2024
+Get ResearchAndDevelopment by corresponding data 2024
+POST
+​/yearEnd​/researchAndDevelopment2024
+Create ResearchAndDevelopment 2024
+PUT
+​/yearEnd​/researchAndDevelopment2024
+Update ResearchAndDevelopment 2024
+internal/debtCollector
+DELETE
+​/internal​/debtCollector​/deactivate
+Deactivate debt collector relation
+GET
+​/internal​/debtCollector
+Get last select debt collector
+internal/nhoAdmin
+PUT
+​/internal​/nhoAdmin​/:abort
+Aborts all scheduled NHO membership events
+inventory
+DELETE
+​/inventory​/{id}
+Delete inventory.
+GET
+​/inventory​/{id}
+Get inventory by ID.
+GET
+​/inventory
+Find inventory corresponding with sent data.
+POST
+​/inventory
+Create new inventory.
+PUT
+​/inventory​/{id}
+Update inventory.
+inventory/inventories
+GET
+​/inventory​/inventories
+Find inventories corresponding with sent data.
+inventory/location
+DELETE
+​/inventory​/location​/{id}
+Delete inventory location. Only available for Logistics Basic.
+DELETE
+​/inventory​/location​/list
+Delete inventory location. Only available for Logistics Basic.
+GET
+​/inventory​/location​/{id}
+Get inventory location by ID. Only available for Logistics Basic.
+GET
+​/inventory​/location
+Find inventory locations by inventory ID. Only available for Logistics Basic.
+POST
+​/inventory​/location​/list
+Add multiple inventory locations. Only available for Logistics Basic.
+POST
+​/inventory​/location
+Create new inventory location. Only available for Logistics Basic.
+PUT
+​/inventory​/location​/{id}
+Update inventory location. Only available for Logistics Basic.
+PUT
+​/inventory​/location​/list
+Update multiple inventory locations. Only available for Logistics Basic.
+inventory/stocktaking
+DELETE
+​/inventory​/stocktaking​/{id}
+Delete stocktaking.
+GET
+​/inventory​/stocktaking​/{id}
+Get stocktaking by ID.
+GET
+​/inventory​/stocktaking
+Find stocktaking corresponding with sent data.
+POST
+​/inventory​/stocktaking
+Create new stocktaking.
+PUT
+​/inventory​/stocktaking​/{id}
+Update stocktaking.
+inventory/stocktaking/productline
+DELETE
+​/inventory​/stocktaking​/productline​/{id}
+Delete order line.
+GET
+​/inventory​/stocktaking​/productline​/{id}
+Get order line by ID.
+GET
+​/inventory​/stocktaking​/productline
+Find all order lines by stocktaking ID.
+POST
+​/inventory​/stocktaking​/productline
+Create order line. When creating several order lines, use /list for better performance.
+PUT
+​/inventory​/stocktaking​/productline​/{id}​/:changeLocation
+[Beta] Change location on order line.
+PUT
+​/inventory​/stocktaking​/productline​/{id}
+Update order line.
+invoice
+GET
+​/invoice​/{id}
+Get invoice by ID.
+GET
+​/invoice​/{invoiceId}​/pdf
+Get invoice document by invoice ID.
+GET
+​/invoice
+Find invoices corresponding with sent data. Includes charged outgoing invoices only.
+POST
+​/invoice
+Create invoice. Related Order and OrderLines can be created first, or included as new objects inside the Invoice.
+POST
+​/invoice​/list
+[BETA] Create multiple invoices. Max 100 at a time.
+PUT
+​/invoice​/{id}​/:createCreditNote
+Creates a new Invoice representing a credit memo that nullifies the given invoice. Updates this invoice and any pre-existing inverse invoice.
+PUT
+​/invoice​/{id}​/:createReminder
+Create invoice reminder and sends it by the given dispatch type. Supports the reminder types SOFT_REMINDER, REMINDER and NOTICE_OF_DEBT_COLLECTION. DispatchType NETS_PRINT must have type NOTICE_OF_DEBT_COLLECTION. SMS and NETS_PRINT must be activated prior to usage in the API.
+PUT
+​/invoice​/{id}​/:payment
+Update invoice. The invoice is updated with payment information. The amount is in the invoice’s currency.
+PUT
+​/invoice​/{id}​/:send
+Send invoice by ID and sendType. Optionally override email recipient.
+invoice/details
+GET
+​/invoice​/details​/{id}
+Get ProjectInvoiceDetails by ID.
+GET
+​/invoice​/details
+Find ProjectInvoiceDetails corresponding with sent data.
+invoice/paymentType
+GET
+​/invoice​/paymentType​/{id}
+Get payment type by ID.
+GET
+​/invoice​/paymentType
+Find payment type corresponding with sent data.
+invoiceRemark
+GET
+​/invoiceRemark​/{id}
+Get invoice remark by ID.
+ledger
+GET
+​/ledger​/openPost
+Find open posts corresponding with sent data.
+GET
+​/ledger
+Get ledger (hovedbok).
+ledger/account
+DELETE
+​/ledger​/account​/{id}
+Delete account.
+DELETE
+​/ledger​/account​/list
+Delete multiple accounts.
+GET
+​/ledger​/account​/{id}
+Get account by ID.
+GET
+​/ledger​/account
+Find accounts corresponding with sent data.
+POST
+​/ledger​/account​/list
+Create several accounts.
+POST
+​/ledger​/account
+Create a new account.
+PUT
+​/ledger​/account​/{id}
+Update account.
+PUT
+​/ledger​/account​/list
+Update multiple accounts.
+ledger/accountingDimensionName
+DELETE
+​/ledger​/accountingDimensionName​/{id}
+Delete an accounting dimension name by ID
+GET
+​/ledger​/accountingDimensionName​/{id}
+Get a single accounting dimension name by ID
+GET
+​/ledger​/accountingDimensionName
+Get all accounting dimension names.
+GET
+​/ledger​/accountingDimensionName​/search
+Search for accounting dimension names according to criteria.
+POST
+​/ledger​/accountingDimensionName
+Create a new free (aka 'user defined') accounting dimension
+PUT
+​/ledger​/accountingDimensionName​/{id}
+Update an accounting dimension
+ledger/accountingDimensionValue
+DELETE
+​/ledger​/accountingDimensionValue​/{id}
+Delete an accounting dimension value. Values that have been used in postings can not be deleted.
+GET
+​/ledger​/accountingDimensionValue​/{id}
+Find accounting dimension values by ID.
+GET
+​/ledger​/accountingDimensionValue​/search
+Search for accounting dimension values according to criteria.
+POST
+​/ledger​/accountingDimensionValue
+Create a new value for one of the free (aka 'user defined') accounting dimensions
+PUT
+​/ledger​/accountingDimensionValue​/list
+Update accounting dimension values
+ledger/accountingPeriod
+GET
+​/ledger​/accountingPeriod​/{id}
+Get accounting period by ID.
+GET
+​/ledger​/accountingPeriod
+Find accounting periods corresponding with sent data.
+ledger/annualAccount
+GET
+​/ledger​/annualAccount​/{id}
+Get annual account by ID.
+GET
+​/ledger​/annualAccount
+Find annual accounts corresponding with sent data.
+ledger/closeGroup
+GET
+​/ledger​/closeGroup​/{id}
+Get close group by ID.
+GET
+​/ledger​/closeGroup
+Find close groups corresponding with sent data.
+ledger/paymentTypeOut
+DELETE
+​/ledger​/paymentTypeOut​/{id}
+[BETA] Delete payment type for outgoing payments by ID.
+GET
+​/ledger​/paymentTypeOut​/{id}
+[BETA] Get payment type for outgoing payments by ID.
+GET
+​/ledger​/paymentTypeOut
+[BETA] Gets payment types for outgoing payments
+POST
+​/ledger​/paymentTypeOut
+[BETA] Create new payment type for outgoing payments
+POST
+​/ledger​/paymentTypeOut​/list
+[BETA] Create multiple payment types for outgoing payments at once
+PUT
+​/ledger​/paymentTypeOut​/{id}
+[BETA] Update existing payment type for outgoing payments
+PUT
+​/ledger​/paymentTypeOut​/list
+[BETA] Update multiple payment types for outgoing payments at once
+ledger/posting
+GET
+​/ledger​/posting​/{id}
+Find postings by ID.
+GET
+​/ledger​/posting​/openPost
+Find open posts corresponding with sent data.
+GET
+​/ledger​/posting
+Find postings corresponding with sent data.
+PUT
+​/ledger​/posting​/:closePostings
+Close postings.
+ledger/postingByDate
+GET
+​/ledger​/postingByDate
+Get postings by date range with pagination. Returns the same PostingDTO as /ledger/posting. Simplified endpoint for better performance. Fields and Changes are not supported. Token must have access to all vouchers in the company, otherwise a validation error is returned. If access control for salary information is activated, the token must have access to salary information as well.
+ledger/postingRules
+GET
+​/ledger​/postingRules
+Get posting rules for current company. The posting rules defined which accounts from the chart of accounts that are used for postings when the system creates postings.
+ledger/vatSettings
+GET
+​/ledger​/vatSettings
+Get VAT settings for the logged in company.
+PUT
+​/ledger​/vatSettings
+Update VAT settings for the logged in company.
+ledger/vatType
+GET
+​/ledger​/vatType​/{id}
+Get vat type by ID.
+GET
+​/ledger​/vatType
+Find vat types corresponding with sent data.
+PUT
+​/ledger​/vatType​/createRelativeVatType
+Create a new relative VAT Type. These are used if the company has 'forholdsmessig fradrag for inngående MVA'.
+ledger/voucher
+DELETE
+​/ledger​/voucher​/{id}
+Delete voucher by ID.
+DELETE
+​/ledger​/voucher​/{voucherId}​/attachment
+Delete attachment.
+GET
+​/ledger​/voucher​/{id}
+Get voucher by ID.
+GET
+​/ledger​/voucher​/{voucherId}​/pdf
+Get PDF representation of voucher by ID.
+GET
+​/ledger​/voucher​/>externalVoucherNumber
+Find vouchers based on the external voucher number.
+GET
+​/ledger​/voucher​/>nonPosted
+Find non-posted vouchers.
+GET
+​/ledger​/voucher​/{id}​/options
+Returns a data structure containing meta information about operations that are available for this voucher. Currently only implemented for DELETE: It is possible to check if the voucher is deletable.
+GET
+​/ledger​/voucher
+Find vouchers corresponding with sent data.
+GET
+​/ledger​/voucher​/>voucherReception
+Find vouchers in voucher reception.
+POST
+​/ledger​/voucher​/{voucherId}​/attachment
+Upload attachment to voucher. If the voucher already has an attachment the content will be appended to the existing attachment as new PDF page(s). Valid document formats are PDF, PNG, JPEG and TIFF. Non PDF formats will be converted to PDF. Send as multipart form.
+POST
+​/ledger​/voucher​/importDocument
+Upload a document to create one or more vouchers. Valid document formats are PDF, PNG, JPEG and TIFF. EHF/XML is possible with agreement with Tripletex. Send as multipart form.
+POST
+​/ledger​/voucher​/importGbat10
+Import GBAT10. Send as multipart form.
+POST
+​/ledger​/voucher
+Add new voucher. IMPORTANT: Also creates postings. Only the gross amounts will be used. Amounts should be rounded to 2 decimals.
+POST
+​/ledger​/voucher​/{voucherId}​/pdf​/{fileName}
+[DEPRECATED] Use POST ledger/voucher/{voucherId}/attachment instead.
+PUT
+​/ledger​/voucher​/{id}
+Update voucher. Postings with guiRow==0 will be deleted and regenerated.
+PUT
+​/ledger​/voucher​/list
+Update multiple vouchers. Postings with guiRow==0 will be deleted and regenerated.
+PUT
+​/ledger​/voucher​/{id}​/:reverse
+Reverses the voucher, and returns the reversed voucher. Supports reversing most voucher types, except salary transactions.
+PUT
+​/ledger​/voucher​/{id}​/:sendToInbox
+Send voucher to inbox.
+PUT
+​/ledger​/voucher​/{id}​/:sendToLedger
+Send voucher to ledger.
+ledger/voucher/historical
+POST
+​/ledger​/voucher​/historical​/employee
+[BETA] Create one employee, based on import from external system. Validation is less strict, ie. employee department isn't required.
+POST
+​/ledger​/voucher​/historical​/historical
+API endpoint for creating historical vouchers. These are vouchers created outside Tripletex, and should be from closed accounting years. The intended usage is to get access to historical transcations in Tripletex. Also creates postings. All amount fields in postings will be used. VAT postings must be included, these are not generated automatically like they are for normal vouchers in Tripletex. Requires the \"All vouchers\" and \"Advanced Voucher\" permissions.
+POST
+​/ledger​/voucher​/historical​/{voucherId}​/attachment
+Upload attachment to voucher. If the voucher already has an attachment the content will be appended to the existing attachment as new PDF page(s). Valid document formats are PDF, PNG, JPEG and TIFF. Non PDF formats will be converted to PDF. Send as multipart form.
+PUT
+​/ledger​/voucher​/historical​/:closePostings
+[BETA] Close postings.
+PUT
+​/ledger​/voucher​/historical​/:reverseHistoricalVouchers
+[BETA] Deletes all historical vouchers. Requires the "All vouchers" and "Advanced Voucher" permissions.
+ledger/voucher/openingBalance
+DELETE
+​/ledger​/voucher​/openingBalance
+[BETA] Delete the opening balance. The correction voucher will also be deleted
+GET
+​/ledger​/voucher​/openingBalance​/>correctionVoucher
+[BETA] Get the correction voucher for the opening balance.
+GET
+​/ledger​/voucher​/openingBalance
+[BETA] Get the voucher for the opening balance.
+POST
+​/ledger​/voucher​/openingBalance
+[BETA] Add an opening balance on the given date. All movements before this date will be 'zeroed out' in a separate correction voucher. The opening balance must have the first day of a month as the date, and it's also recommended to have the first day of the year as the date. If the postings provided don't balance the voucher, the difference will automatically be posted to a help account
+ledger/voucherType
+GET
+​/ledger​/voucherType​/{id}
+Get voucher type by ID.
+GET
+​/ledger​/voucherType
+Find voucher types corresponding with sent data.
+municipality
+GET
+​/municipality​/query
+[BETA] Wildcard search.
+GET
+​/municipality
+Get municipalities.
+order
+DELETE
+​/order​/{id}
+Delete order.
+GET
+​/order​/{id}
+Get order by ID.
+GET
+​/order​/packingNote​/{orderId}​/pdf
+Get PDF representation of packing note by ID.
+GET
+​/order​/orderConfirmation​/{orderId}​/pdf
+Get PDF representation of order by ID.
+GET
+​/order
+Find orders corresponding with sent data.
+POST
+​/order
+Create order.
+POST
+​/order​/list
+[BETA] Create multiple Orders with OrderLines. Max 100 at a time.
+PUT
+​/order​/{id}​/:approveSubscriptionInvoice
+To create a subscription invoice, first create a order with the subscription enabled, then approve it with this method. This approves the order for subscription invoicing.
+PUT
+​/order​/{id}​/:attach
+Attach document to specified order ID.
+PUT
+​/order​/{id}
+Update order.
+PUT
+​/order​/{id}​/:invoice
+Create new invoice or subscription invoice from order.
+PUT
+​/order​/:invoiceMultipleOrders
+[BETA] Charges a single customer invoice from multiple orders. The orders must be to the same customer, currency, due date, receiver email, attn. and smsNotificationNumber
+PUT
+​/order​/sendInvoicePreview​/{orderId}
+Send Invoice Preview to customer by email.
+PUT
+​/order​/sendOrderConfirmation​/{orderId}
+Send Order Confirmation to customer by email.
+PUT
+​/order​/sendPackingNote​/{orderId}
+Send Packing Note to customer by email.
+PUT
+​/order​/{id}​/:unApproveSubscriptionInvoice
+Unapproves the order for subscription invoicing.
+order/orderGroup
+DELETE
+​/order​/orderGroup​/{id}
+Delete orderGroup by ID.
+GET
+​/order​/orderGroup​/{id}
+Get orderGroup by ID. A orderGroup is a way to group orderLines, and add comments and subtotals
+GET
+​/order​/orderGroup
+Find orderGroups corresponding with sent data.
+POST
+​/order​/orderGroup
+[Beta] Post orderGroup.
+PUT
+​/order​/orderGroup
+[Beta] Put orderGroup.
+order/orderline
+DELETE
+​/order​/orderline​/{id}
+[BETA] Delete order line by ID.
+GET
+​/order​/orderline​/{id}
+Get order line by ID.
+GET
+​/order​/orderline​/orderLineTemplate
+[BETA] Get order line template from order and product
+POST
+​/order​/orderline​/list
+Create multiple order lines.
+POST
+​/order​/orderline
+Create order line. When creating several order lines, use /list for better performance.
+PUT
+​/order​/orderline​/{id}
+[BETA] Put order line
+PUT
+​/order​/orderline​/{id}​/:pickLine
+[BETA] Pick order line. This is only available for customers who have Logistics and who activated the available inventory functionality.
+PUT
+​/order​/orderline​/{id}​/:unpickLine
+[BETA] Unpick order line.This is only available for customers who have Logistics and who activated the available inventory functionality.
+penneo
+
+Penneo Digital Signature API
+DELETE
+​/yearEnd​/penneo​/casefiles​/{caseFileId}
+Delete a case file from Penneo
+DELETE
+​/yearEnd​/penneo​/documents​/{documentId}
+Delete a document from a case file
+DELETE
+​/yearEnd​/penneo​/recipients​/{id}
+Delete a recipient from a case file
+DELETE
+​/yearEnd​/penneo​/casefiles​/{caseFileId}​/signers​/{signerId}
+Delete a signer from a case file
+GET
+​/yearEnd​/penneo​/session
+Authenticate and get case files from Penneo for a specific year
+GET
+​/yearEnd​/penneo​/casefiles
+Get case files from Penneo for a specific year
+GET
+​/yearEnd​/penneo​/documents​/{documentId}​/download
+Download a document from Penneo
+GET
+​/yearEnd​/penneo​/recipients
+Get all recipients for a case file
+POST
+​/yearEnd​/penneo​/casefiles​/{caseFileId}​/activate
+Fully activate a case file for signing (links signers, configures emails, and activates)
+POST
+​/yearEnd​/penneo​/signature-lines
+Create signature line, link signer, and configure email in one operation
+POST
+​/yearEnd​/penneo​/casefiles
+Create a new case file in Penneo
+POST
+​/yearEnd​/penneo​/documents
+Add a document to an existing case file
+POST
+​/yearEnd​/penneo​/recipients
+Add a copy recipient to a case file
+POST
+​/yearEnd​/penneo​/casefiles​/{caseFileId}​/signers​/{signerId}​/reactivate
+Reactivate a signer in a case file
+POST
+​/yearEnd​/penneo​/casefiles​/{caseFileId}​/signers​/{signerId}​/resend
+Resend a sign link to a specific signer
+POST
+​/yearEnd​/penneo​/sync
+Synchronize database with current Penneo casefile state
+POST
+​/yearEnd​/penneo​/updateCompletedStatus
+Update completed status for current company's casefiles from global API
+PUT
+​/yearEnd​/penneo​/documents​/{documentId}
+Update an existing document in a case file
+pension
+GET
+​/pension
+Find countries corresponding with sent data.
+pickupPoint
+GET
+​/pickupPoint​/{id}
+[DEPRECATED] Find pickup point by ID.
+GET
+​/pickupPoint
+[DEPRECATED] Search pickup points.
+platformAgnostic/bank/onboarding
+GET
+​/platformAgnostic​/bank​/onboarding​/fetchOdpCustomerId
+product
+DELETE
+​/product​/{id}
+Delete product.
+DELETE
+​/product​/{id}​/image
+Delete image.
+GET
+​/product​/{id}
+Get product by ID.
+GET
+​/product
+Find products corresponding with sent data.
+POST
+​/product​/{id}​/image
+Upload image to product. Existing image on product will be replaced if exists
+POST
+​/product​/list
+Add multiple products.
+POST
+​/product
+Create new product.
+PUT
+​/product​/{id}
+Update product.
+PUT
+​/product​/list
+Update a list of products.
+product/discountGroup
+GET
+​/product​/discountGroup​/{id}
+Get discount group by ID.
+GET
+​/product​/discountGroup
+Find discount groups corresponding with sent data.
+product/external
+GET
+​/product​/external​/{id}
+[BETA] Get external product by ID.
+GET
+​/product​/external
+[BETA] Find external products corresponding with sent data. The sorting-field is not in use on this endpoint.
+product/group
+DELETE
+​/product​/group​/{id}
+Delete product group. Only available for Logistics Basic.
+DELETE
+​/product​/group​/list
+Delete multiple product groups. Only available for Logistics Basic.
+GET
+​/product​/group​/{id}
+Find product group by ID. Only available for Logistics Basic.
+GET
+​/product​/group
+Find product group with sent data. Only available for Logistics Basic.
+GET
+​/product​/group​/query
+Wildcard search. Only available for Logistics Basic.
+POST
+​/product​/group​/list
+Add multiple products groups. Only available for Logistics Basic.
+POST
+​/product​/group
+Create new product group. Only available for Logistics Basic.
+PUT
+​/product​/group​/{id}
+Update product group. Only available for Logistics Basic.
+PUT
+​/product​/group​/list
+Update a list of product groups. Only available for Logistics Basic.
+product/groupRelation
+DELETE
+​/product​/groupRelation​/{id}
+Delete product group relation. Only available for Logistics Basic.
+DELETE
+​/product​/groupRelation​/list
+Delete multiple product group relations. Only available for Logistics Basic.
+GET
+​/product​/groupRelation​/{id}
+Find product group relation by ID. Only available for Logistics Basic.
+GET
+​/product​/groupRelation
+Find product group relation with sent data. Only available for Logistics Basic.
+POST
+​/product​/groupRelation​/list
+Add multiple products group relations. Only available for Logistics Basic.
+POST
+​/product​/groupRelation
+Create new product group relation. Only available for Logistics Basic.
+product/inventoryLocation
+DELETE
+​/product​/inventoryLocation​/{id}
+Delete product inventory location. Only available for Logistics Basic.
+GET
+​/product​/inventoryLocation​/{id}
+Get inventory location by ID. Only available for Logistics Basic.
+GET
+​/product​/inventoryLocation
+Find inventory locations by product ID. Only available for Logistics Basic.
+POST
+​/product​/inventoryLocation
+Create new product inventory location. Only available for Logistics Basic.
+POST
+​/product​/inventoryLocation​/list
+Add multiple product inventory locations. Only available for Logistics Basic.
+PUT
+​/product​/inventoryLocation​/{id}
+Update product inventory location. Only available for Logistics Basic.
+PUT
+​/product​/inventoryLocation​/list
+Update multiple product inventory locations. Only available for Logistics Basic.
+product/logisticsSettings
+GET
+​/product​/logisticsSettings
+Get logistics settings for the logged in company.
+PUT
+​/product​/logisticsSettings
+Update logistics settings for the logged in company.
+product/productPrice
+GET
+​/product​/productPrice
+Find prices for a product. Only available for Logistics Basic.
+product/supplierProduct
+DELETE
+​/product​/supplierProduct​/{id}
+Delete supplierProduct.
+GET
+​/product​/supplierProduct​/{id}
+Get supplierProduct by ID.
+GET
+​/product​/supplierProduct
+Find products corresponding with sent data.
+POST
+​/product​/supplierProduct​/getSupplierProductsByIds
+Find the products by ids. Method was added as a POST because GET request header has a maximum size that we can exceed with customers that a lot of products.
+POST
+​/product​/supplierProduct
+Create new supplierProduct.
+POST
+​/product​/supplierProduct​/list
+Create list of new supplierProduct.
+PUT
+​/product​/supplierProduct​/{id}
+Update supplierProduct.
+PUT
+​/product​/supplierProduct​/list
+Update a list of supplierProduct.
+product/unit
+DELETE
+​/product​/unit​/{id}
+Delete product unit by ID.
+GET
+​/product​/unit​/{id}
+Get product unit by ID.
+GET
+​/product​/unit
+Find product units corresponding with sent data.
+GET
+​/product​/unit​/query
+Wildcard search.
+POST
+​/product​/unit
+Create new product unit.
+POST
+​/product​/unit​/list
+Create multiple product units.
+PUT
+​/product​/unit​/{id}
+Update product unit.
+PUT
+​/product​/unit​/list
+Update list of product units.
+product/unit/master
+GET
+​/product​/unit​/master​/{id}
+Get product unit master by ID.
+GET
+​/product​/unit​/master
+Find product units master corresponding with sent data.
+project
+DELETE
+​/project​/{id}
+[BETA] Delete project.
+DELETE
+​/project​/list
+[BETA] Delete projects.
+DELETE
+​/project
+[BETA] Delete multiple projects.
+GET
+​/project​/{id}
+Find project by ID.
+GET
+​/project
+Find projects corresponding with sent data.
+GET
+​/project​/number​/{number}
+Find project by number.
+GET
+​/project​/>forTimeSheet
+Find projects applicable for time sheet registration on a specific day.
+POST
+​/project​/list
+[BETA] Register new projects. Multiple projects for different users can be sent in the same request.
+POST
+​/project
+Add new project.
+POST
+​/project​/import
+Upload project import file.
+PUT
+​/project​/{id}
+[BETA] Update project.
+PUT
+​/project​/list
+[BETA] Update multiple projects.
+project/{id}/period
+GET
+​/project​/{id}​/period​/budgetStatus
+Get the budget status for the project period
+GET
+​/project​/{id}​/period​/hourlistReport
+Find hourlist report by project period.
+GET
+​/project​/{id}​/period​/invoiced
+Find invoiced info by project period.
+GET
+​/project​/{id}​/period​/invoicingReserve
+Find invoicing reserve by project period.
+GET
+​/project​/{id}​/period​/monthlyStatus
+Find overall status by project period.
+GET
+​/project​/{id}​/period​/overallStatus
+Find overall status by project period.
+project/batchPeriod
+GET
+​/project​/batchPeriod​/budgetStatusByProjectIds
+Get the budget status for the projects in the specific period.
+GET
+​/project​/batchPeriod​/invoicingReserveByProjectIds
+Get the invoicing reserve for the projects in the specific period.
+project/category
+GET
+​/project​/category​/{id}
+Find project category by ID.
+GET
+​/project​/category
+Find project categories corresponding with sent data.
+POST
+​/project​/category
+Add new project category.
+PUT
+​/project​/category​/{id}
+Update project category.
+project/controlForm
+GET
+​/project​/controlForm​/{id}
+[BETA] Get project control form by ID.
+GET
+​/project​/controlForm
+[BETA] Get project control forms by project ID.
+project/controlFormType
+GET
+​/project​/controlFormType​/{id}
+[BETA] Get project control form type by ID.
+GET
+​/project​/controlFormType
+[BETA] Get project control form types
+project/dynamicControlForm
+PUT
+​/project​/dynamicControlForm​/{id}​/:copyFieldValuesFromLastEditedForm
+Into each section in the specified form that only has empty or default values, and copyFieldValuesByDefault set as true in the form's template, copy field values from the equivalent section in the most recently edited control form. Signed or completed forms will not be affected.
+project/hourlyRates
+DELETE
+​/project​/hourlyRates​/{id}
+Delete Project Hourly Rate
+DELETE
+​/project​/hourlyRates​/list
+Delete project hourly rates.
+DELETE
+​/project​/hourlyRates​/deleteByProjectIds
+Delete project hourly rates by project id.
+GET
+​/project​/hourlyRates​/{id}
+Find project hourly rate by ID.
+GET
+​/project​/hourlyRates
+Find project hourly rates corresponding with sent data.
+POST
+​/project​/hourlyRates​/list
+Create multiple project hourly rates.
+POST
+​/project​/hourlyRates
+Create a project hourly rate.
+PUT
+​/project​/hourlyRates​/{id}
+Update a project hourly rate.
+PUT
+​/project​/hourlyRates​/list
+Update multiple project hourly rates.
+PUT
+​/project​/hourlyRates​/updateOrAddHourRates
+Update or add the same project hourly rate from project overview.
+project/hourlyRates/projectSpecificRates
+DELETE
+​/project​/hourlyRates​/projectSpecificRates​/{id}
+Delete project specific rate
+DELETE
+​/project​/hourlyRates​/projectSpecificRates​/list
+Delete project specific rates.
+GET
+​/project​/hourlyRates​/projectSpecificRates​/{id}
+Find project specific rate by ID.
+GET
+​/project​/hourlyRates​/projectSpecificRates
+Find project specific rates corresponding with sent data.
+POST
+​/project​/hourlyRates​/projectSpecificRates​/list
+Create multiple new project specific rates.
+POST
+​/project​/hourlyRates​/projectSpecificRates
+Create new project specific rate.
+PUT
+​/project​/hourlyRates​/projectSpecificRates​/{id}
+Update a project specific rate.
+PUT
+​/project​/hourlyRates​/projectSpecificRates​/list
+Update multiple project specific rates.
+project/import
+POST
+​/project​/import
+Upload project import file.
+project/orderline
+DELETE
+​/project​/orderline​/{id}
+Delete order line by ID.
+GET
+​/project​/orderline​/{id}
+[BETA] Get order line by ID.
+GET
+​/project​/orderline​/orderLineTemplate
+[BETA] Get order line template from project and product
+GET
+​/project​/orderline
+[BETA] Find all order lines for project.
+GET
+​/project​/orderline​/query
+[BETA] Wildcard search.
+POST
+​/project​/orderline​/list
+[BETA] Create multiple order lines.
+POST
+​/project​/orderline
+[BETA] Create order line. When creating several order lines, use /list for better performance.
+PUT
+​/project​/orderline​/{id}
+[BETA] Update project orderline.
+project/participant
+DELETE
+​/project​/participant​/list
+[BETA] Delete project participants.
+GET
+​/project​/participant​/{id}
+[BETA] Find project participant by ID.
+POST
+​/project​/participant​/list
+[BETA] Add new project participant. Multiple project participants can be sent in the same request.
+POST
+​/project​/participant
+[BETA] Add new project participant.
+PUT
+​/project​/participant​/{id}
+[BETA] Update project participant.
+project/period
+GET
+​/project​/{id}​/period​/budgetStatus
+Get the budget status for the project period
+GET
+​/project​/{id}​/period​/hourlistReport
+Find hourlist report by project period.
+GET
+​/project​/{id}​/period​/invoiced
+Find invoiced info by project period.
+GET
+​/project​/{id}​/period​/invoicingReserve
+Find invoicing reserve by project period.
+GET
+​/project​/{id}​/period​/monthlyStatus
+Find overall status by project period.
+GET
+​/project​/{id}​/period​/overallStatus
+Find overall status by project period.
+project/projectActivity
+DELETE
+​/project​/projectActivity​/{id}
+Delete project activity
+DELETE
+​/project​/projectActivity​/list
+Delete project activities
+GET
+​/project​/projectActivity​/{id}
+Find project activity by id
+POST
+​/project​/projectActivity
+Add project activity.
+project/resourceplan
+GET
+​/project​/resourcePlanBudget
+Get resource plan entries in the specified period.
+project/resourcePlanBudget
+GET
+​/project​/resourcePlanBudget
+Get resource plan entries in the specified period.
+project/settings
+GET
+​/project​/settings
+Get project settings of logged in company.
+PUT
+​/project​/settings
+Update project settings for company
+project/subcontract
+DELETE
+​/project​/subcontract​/{id}
+Delete project sub-contract by ID.
+GET
+​/project​/subcontract​/{id}
+Find project sub-contract by ID.
+GET
+​/project​/subcontract
+Find project sub-contracts corresponding with sent data.
+GET
+​/project​/subcontract​/query
+Wildcard search.
+POST
+​/project​/subcontract
+Add new project sub-contract.
+PUT
+​/project​/subcontract​/{id}
+Update project sub-contract.
+project/task
+GET
+​/project​/task
+Find all tasks for project.
+project/template
+GET
+​/project​/template​/{id}
+Get project template by ID.
+purchaseOrder
+DELETE
+​/purchaseOrder​/{id}
+Delete purchase order. Only available for Logistics Basic.
+DELETE
+​/purchaseOrder​/{id}​/attachment
+Delete attachment. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/{id}
+Find purchase order by ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder
+Find purchase orders with send data. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/{id}​/attachment
+Upload attachment to purchase order. Only available for Logistics Basic.
+POST
+​/purchaseOrder
+Creates a new purchase order. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/{id}​/attachment​/list
+Upload multiple attachments to Purchase Order. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/{id}
+Update purchase order. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/{id}​/:send
+Send purchase order by ID and sendType. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/{id}​/:sendByEmail
+Send purchase order by customisable email. Only available for Logistics Basic.
+purchaseOrder/deviation
+purchaseOrder/goodsReceipt
+DELETE
+​/purchaseOrder​/goodsReceipt​/{id}
+Delete goods receipt by ID. Only available for Logistics Basic.
+DELETE
+​/purchaseOrder​/goodsReceipt​/list
+Delete multiple goods receipts by ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/goodsReceipt​/{id}
+Get goods receipt by purchase order ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/goodsReceipt
+Get goods receipt. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/goodsReceipt​/list
+Register multiple goods receipts without an existing purchase order. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/goodsReceipt
+Register goods receipt without an existing purchase order. When registration of several goods receipt, use /list for better performance. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceipt​/{id}​/:confirm
+Confirm goods receipt. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceipt​/{id}
+Update goods receipt. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceipt​/{id}​/:receiveAndConfirm
+Receive all ordered products and approve goods receipt. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceipt​/{id}​/:registerGoodsReceipt
+Register goods receipt. Quantity received on the products is set to the same as quantity ordered. To update the quantity received, use PUT /purchaseOrder/goodsReceiptLine/{id}. Only available for Logistics Basic.
+purchaseOrder/goodsReceiptLine
+DELETE
+​/purchaseOrder​/goodsReceiptLine​/{id}
+Delete goods receipt line by ID. Only available for Logistics Basic.
+DELETE
+​/purchaseOrder​/goodsReceiptLine​/list
+Delete goods receipt lines by ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/goodsReceiptLine​/{id}
+Get goods receipt line by purchase order line ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/goodsReceiptLine
+Find goods receipt lines for purchase order. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/goodsReceiptLine​/list
+Register multiple new goods receipts on an existing purchase order. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/goodsReceiptLine
+Register new goods receipt; new product on an existing purchase order. When registration of several goods receipts, use /list for better performance. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceiptLine​/{id}
+Update a goods receipt line on a goods receipt. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/goodsReceiptLine​/list
+Update goods receipt lines on a goods receipt. Only available for Logistics Basic.
+purchaseOrder/orderline
+DELETE
+​/purchaseOrder​/orderline​/{id}
+Delete purchase order line. Only available for Logistics Basic.
+DELETE
+​/purchaseOrder​/orderline​/list
+Delete purchase order lines by ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/orderline​/{id}
+Find purchase order line by ID. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/orderline​/list
+Create list of new purchase order lines. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/orderline
+Creates purchase order line. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/orderline​/{id}
+Updates purchase order line. Only available for Logistics Basic.
+PUT
+​/purchaseOrder​/orderline​/list
+Update a list of purchase order lines. Only available for Logistics Basic.
+purchaseOrder/purchaseOrderIncomingInvoiceRelation
+DELETE
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation​/{id}
+Delete purchase order voucher relation. Only available for Logistics Basic.
+DELETE
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation​/list
+Delete multiple purchase order voucher relations. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation​/{id}
+Find purchase order relation to voucher by ID. Only available for Logistics Basic.
+GET
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation
+Find purchase order relation to voucher with sent data. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation​/list
+Create a new list of relations between purchase order and voucher. Only available for Logistics Basic.
+POST
+​/purchaseOrder​/purchaseOrderIncomingInvoiceRelation
+Create new relation between purchase order and a voucher. Only available for Logistics Basic.
+reminder
+GET
+​/reminder​/{reminderId}​/pdf
+Get reminder document by reminder ID.
+GET
+​/reminder​/{id}
+Get reminder by ID.
+GET
+​/reminder
+Find reminders corresponding with sent data.
+researchAndDevelopment2024
+DELETE
+​/yearEnd​/researchAndDevelopment2024
+Delete ResearchAndDevelopment 2024
+GET
+​/yearEnd​/{yearEndReportId}​/researchAndDevelopment2024
+Get ResearchAndDevelopment by corresponding data 2024
+POST
+​/yearEnd​/researchAndDevelopment2024
+Create ResearchAndDevelopment 2024
+PUT
+​/yearEnd​/researchAndDevelopment2024
+Update ResearchAndDevelopment 2024
+resultbudget
+GET
+​/resultbudget​/company
+Get result budget for company
+GET
+​/resultbudget​/department​/{id}
+Get result budget associated with a departmentId
+GET
+​/resultbudget​/employee​/{id}
+Get result budget associated with an employeeId
+GET
+​/resultbudget​/product​/{id}
+Get result budget associated with a productId
+GET
+​/resultbudget​/project​/{id}
+Get result budget associated with a projectId
+GET
+​/resultbudget
+Find result budgets corresponding with sent data. Either specify the ids of the departments, projects, products or employees to return result budgets for, or use the boolean parameters includeAll***ResultBudgets to get all results budgets.
+saft
+GET
+​/saft​/exportSAFT
+[BETA] Create SAF-T export for the Tripletex account.
+POST
+​/saft​/importSAFT
+[BETA] Import SAF-T. Send XML file as multipart form.
+salary/compilation
+GET
+​/salary​/compilation​/pdf
+Find salary compilation (PDF document) by employee.
+GET
+​/salary​/compilation
+Find salary compilation by employee.
+salary/holidayAllowance/reconciliation
+GET
+​/salary​/holidayAllowance​/reconciliation​/{reconciliationId}​/holidayAllowanceDetails
+Get a holiday allowance details for the current reconciliation term
+GET
+​/salary​/holidayAllowance​/reconciliation​/{reconciliationId}​/holidayAllowanceSummary
+Salary holiday allowance reconciliation summary
+POST
+​/salary​/holidayAllowance​/reconciliation​/context
+Create a holiday allowance reconciliation context for a customer
+salary/mandatoryDeduction/reconciliation
+GET
+​/salary​/mandatoryDeduction​/reconciliation​/{reconciliationId}​/overview
+Salary mandatory deduction reconciliation overview
+GET
+​/salary​/mandatoryDeduction​/reconciliation​/{reconciliationId}​/paymentsOverview
+Get mandatory deduction payments overview from start of year to the current reconciliation term
+POST
+​/salary​/mandatoryDeduction​/reconciliation​/context
+Create a mandatoryDeduction reconciliation context for a customer
+salary/payrollTax/reconciliation
+GET
+​/salary​/payrollTax​/reconciliation​/{reconciliationId}​/overview
+Salary payroll tax reconciliation overview
+GET
+​/salary​/payrollTax​/reconciliation​/{reconciliationId}​/paymentsOverview
+Get a payroll tax payments from start of year to the current reconciliation term
+POST
+​/salary​/payrollTax​/reconciliation​/context
+Create a payroll tax reconciliation context for a customer
+salary/payslip
+GET
+​/salary​/payslip​/{id}​/pdf
+Find payslip (PDF document) by ID.
+GET
+​/salary​/payslip​/{id}
+Find payslip by ID.
+GET
+​/salary​/payslip
+Find payslips corresponding with sent data.
+salary/reconciliation/tax-deduction
+GET
+​/salary​/taxDeduction​/reconciliation​/{reconciliationId}​/balanceAndOwedAmount
+Get tax deduction details for a reconciliation
+salary/settings
+GET
+​/salary​/settings
+Get salary settings of logged in company.
+PUT
+​/salary​/settings
+Update settings of logged in company.
+salary/settings/holiday
+DELETE
+​/salary​/settings​/holiday​/list
+Delete multiple holiday settings of current logged in company.
+GET
+​/salary​/settings​/holiday
+Find holiday settings of current logged in company.
+POST
+​/salary​/settings​/holiday​/list
+Create multiple holiday settings of current logged in company.
+POST
+​/salary​/settings​/holiday
+Create a holiday setting of current logged in company.
+PUT
+​/salary​/settings​/holiday​/list
+Update multiple holiday settings of current logged in company.
+PUT
+​/salary​/settings​/holiday​/{id}
+Update a holiday setting of current logged in company.
+salary/settings/pensionScheme
+DELETE
+​/salary​/settings​/pensionScheme​/{id}
+Delete a Pension Scheme
+DELETE
+​/salary​/settings​/pensionScheme​/list
+Delete multiple Pension Schemes.
+GET
+​/salary​/settings​/pensionScheme​/{id}
+Get Pension Scheme for a specific ID
+GET
+​/salary​/settings​/pensionScheme
+Find pension schemes.
+POST
+​/salary​/settings​/pensionScheme​/list
+Create multiple Pension Schemes.
+POST
+​/salary​/settings​/pensionScheme
+Create a Pension Scheme.
+PUT
+​/salary​/settings​/pensionScheme​/{id}
+Update a Pension Scheme
+PUT
+​/salary​/settings​/pensionScheme​/list
+Update multiple Pension Schemes.
+salary/settings/standardTime
+GET
+​/salary​/settings​/standardTime​/{id}
+Find standard time by ID.
+GET
+​/salary​/settings​/standardTime​/byDate
+Find standard time by date
+GET
+​/salary​/settings​/standardTime
+Get all standard times.
+POST
+​/salary​/settings​/standardTime
+Create standard time.
+PUT
+​/salary​/settings​/standardTime​/{id}
+Update standard time.
+salary/taxDeduction/reconciliation
+GET
+​/salary​/taxDeduction​/reconciliation​/{reconciliationId}​/overview
+Get salary tax deduction data for the reconciliation table
+GET
+​/salary​/taxDeduction​/reconciliation​/{reconciliationId}​/paymentsOverview
+Get salary tax deduction payment overview from start of year to the current reconciliation term
+GET
+​/salary​/taxDeduction​/reconciliation​/{reconciliationId}​/balanceAndOwedAmount
+Get tax deduction details for a reconciliation
+POST
+​/salary​/taxDeduction​/reconciliation​/context
+Create a taxDeduction reconciliation context for a customer
+salary/transaction
+DELETE
+​/salary​/transaction​/{id}
+Delete salary transaction by ID.
+GET
+​/salary​/transaction​/{id}
+Find salary transaction by ID.
+POST
+​/salary​/transaction
+Create a new salary transaction.
+POST
+​/salary​/transaction​/{id}​/attachment
+Upload an attachment to a salary transaction
+POST
+​/salary​/transaction​/{id}​/attachment​/list
+Upload multiple attachments to a salary transaction
+PUT
+​/salary​/transaction​/{id}​/deleteAttachment
+Delete attachment.
+salary/type
+GET
+​/salary​/type​/{id}
+Find salary type by ID.
+GET
+​/salary​/type
+Find salary type corresponding with sent data.
+subscription
+GET
+​/subscription​/packages
+Returns the packages that can exist for an account.
+PUT
+​/subscription​/cancel
+Close account with/without read access
+PUT
+​/subscription​/reactivate
+Reopen account with previous modules
+supplier
+DELETE
+​/supplier​/{id}
+Delete supplier by ID
+GET
+​/supplier​/{id}
+Get supplier by ID.
+GET
+​/supplier
+Find suppliers corresponding with sent data.
+POST
+​/supplier
+Create supplier. Related supplier addresses may also be created.
+POST
+​/supplier​/list
+Create multiple suppliers. Related supplier addresses may also be created.
+PUT
+​/supplier​/{id}
+Update supplier.
+PUT
+​/supplier​/list
+Update multiple suppliers. Addresses can also be updated.
+supplierCustomer
+GET
+​/supplierCustomer​/search
+Find all active suppliers and customers.
+supplierInvoice
+GET
+​/supplierInvoice​/{invoiceId}​/pdf
+Get supplierInvoice document by invoice ID.
+GET
+​/supplierInvoice​/{id}
+Get supplierInvoice by ID.
+GET
+​/supplierInvoice​/forApproval
+Get supplierInvoices for approval
+GET
+​/supplierInvoice
+Find supplierInvoices corresponding with sent data.
+POST
+​/supplierInvoice​/{invoiceId}​/:addPayment
+Register payment, paymentType == 0 finds the last paymentType for this vendor.Use of this method requires setup done by Tripletex.
+PUT
+​/supplierInvoice​/{invoiceId}​/:addRecipient
+Add recipient to supplier invoices.
+PUT
+​/supplierInvoice​/:addRecipient
+Add recipient.
+PUT
+​/supplierInvoice​/{invoiceId}​/:approve
+Approve supplier invoice.
+PUT
+​/supplierInvoice​/:approve
+Approve supplier invoices.
+PUT
+​/supplierInvoice​/{invoiceId}​/:changeDimension
+Change dimension on a supplier invoice.
+PUT
+​/supplierInvoice​/voucher​/{id}​/postings
+[BETA] Put debit postings.
+PUT
+​/supplierInvoice​/{invoiceId}​/:reject
+reject supplier invoice.
+PUT
+​/supplierInvoice​/:reject
+reject supplier invoices.
+supportDashboard
+GET
+​/supportDashboard​/export
+Export the customers table to a specific format
+GET
+​/supportDashboard​/bankruptAndExcludedCustomers
+Returns the customers for support dashboard.
+timesheet/allocated
+DELETE
+​/timesheet​/allocated​/{id}
+Delete allocated hour entry by ID.
+GET
+​/timesheet​/allocated​/{id}
+Find allocated hour entry by ID.
+GET
+​/timesheet​/allocated
+Find allocated hour entries corresponding with sent data.
+POST
+​/timesheet​/allocated​/list
+Add new allocated hour entry. Multiple objects for several users can be sent in the same request. Only holiday/vacation hours can receive comments. Notifications will be sent to the entries' employees if the entries have comments.
+POST
+​/timesheet​/allocated
+Add new allocated hour entry. Only one entry per employee/date/activity/project combination is supported. Only holiday/vacation hours can receive comments. A notification will be sent to the entry's employee if the entry has a comment.
+PUT
+​/timesheet​/allocated​/{id}​/:approve
+Only for allocated hours on the company's internal holiday/vacation activity. Mark the allocated hour entry as approved. The hours will be copied to the time sheet if the relevant week/month is not approved, and there are no interfering time clocks that are active. A notification will be sent to the entry's employee if the entry's approval status or comment has changed.
+PUT
+​/timesheet​/allocated​/:approveList
+Only for allocated hours on the company's internal holiday/vacation activity. Mark the allocated hour entry/entries as approved. The hours will be copied to the time sheet if the relevant weeks/months are not approved, and there are no interfering time clocks that are active. Notifications will be sent to the entries' employees if the entries' approval statuses or comments have changed. If IDs are provided, the other args are ignored.
+PUT
+​/timesheet​/allocated​/{id}
+Update allocated hour entry by ID. Note: Allocated hour entry object fields which are present but not set, or set to 0, will be nulled. Only holiday/vacation hours can receive comments. A notification will be sent to the entry's employee if the entry's comment has changed.
+PUT
+​/timesheet​/allocated​/list
+Update allocated hour entry. Multiple objects for different users can be sent in the same request. Note: Allocated hour entry object fields which are present but not set, or set to 0, will be nulled. Only holiday/vacation hours can receive comments. Notifications will be sent to the entries' employees if the entries' comments have changed.
+PUT
+​/timesheet​/allocated​/{id}​/:unapprove
+Only for allocated hours on the company's internal holiday/vacation activity. Mark the allocated hour entry as unapproved. A notification will be sent to the entry's employee if the entry's approval status or comment has changed.
+PUT
+​/timesheet​/allocated​/:unapproveList
+Only for allocated hours on the company's internal holiday/vacation activity. Mark the allocated hour entry/entries as unapproved. Notifications will be sent to the entries' employees if the entries' approval statuses or comments have changed. If IDs are provided, the other args are ignored.
+timesheet/companyHoliday
+DELETE
+​/timesheet​/companyHoliday​/{id}
+[BETA] Delete a company holiday
+GET
+​/timesheet​/companyHoliday​/{id}
+[BETA] Get company holiday by its ID
+GET
+​/timesheet​/companyHoliday
+[BETA] Search for company holidays by id or year.
+POST
+​/timesheet​/companyHoliday
+[BETA] Create a company holiday
+PUT
+​/timesheet​/companyHoliday​/{id}
+[BETA] Update a company holiday
+timesheet/entry
+DELETE
+​/timesheet​/entry​/{id}
+Delete timesheet entry by ID.
+GET
+​/timesheet​/entry​/{id}
+Find timesheet entry by ID.
+GET
+​/timesheet​/entry
+Find timesheet entry corresponding with sent data.
+GET
+​/timesheet​/entry​/>recentActivities
+Find recently used timesheet activities.
+GET
+​/timesheet​/entry​/>recentProjects
+Find projects with recent activities (timesheet entry registered).
+GET
+​/timesheet​/entry​/>totalHours
+Find total hours registered on an employee in a specific period.
+POST
+​/timesheet​/entry​/list
+Add new timesheet entry. Multiple objects for several users can be sent in the same request.
+POST
+​/timesheet​/entry
+Add new timesheet entry. Only one entry per employee/date/activity/project combination is supported.
+PUT
+​/timesheet​/entry​/{id}
+Update timesheet entry by ID. Note: Timesheet entry object fields which are present but not set, or set to 0, will be nulled.
+PUT
+​/timesheet​/entry​/list
+Update timesheet entry. Multiple objects for different users can be sent in the same request.
+timesheet/month
+GET
+​/timesheet​/month​/{id}
+Find monthly status entry by ID.
+GET
+​/timesheet​/month​/byMonthNumber
+Find monthly status for given month.
+GET
+​/timesheet​/month​/byMonthNumberList
+Find monthly status for given month list.
+PUT
+​/timesheet​/month​/:approve
+approve month(s). If id is provided the other args are ignored
+PUT
+​/timesheet​/month​/:complete
+complete month(s). If id is provided the other args are ignored
+PUT
+​/timesheet​/month​/:reopen
+reopen month(s). If id is provided the other args are ignored
+PUT
+​/timesheet​/month​/:unapprove
+unapprove month(s). If id is provided the other args are ignored
+timesheet/salaryProjectTypeSpecification
+DELETE
+​/timesheet​/salaryProjectTypeSpecification​/{id}
+Delete a timesheet SalaryType specification
+GET
+​/timesheet​/salaryProjectTypeSpecification​/{id}
+Get timesheet ProjectSalaryType specification for a specific ID
+GET
+​/timesheet​/salaryProjectTypeSpecification
+Get list of time sheet ProjectSalaryType specifications
+POST
+​/timesheet​/salaryProjectTypeSpecification
+Create a timesheet ProjectSalaryType specification
+PUT
+​/timesheet​/salaryProjectTypeSpecification​/{id}
+Update a timesheet ProjectSalaryType specification
+timesheet/salaryTypeSpecification
+DELETE
+​/timesheet​/salaryTypeSpecification​/{id}
+[BETA] Delete a timesheet SalaryType Specification
+GET
+​/timesheet​/salaryTypeSpecification​/{id}
+[BETA] Get timesheet SalaryType Specification for a specific ID
+GET
+​/timesheet​/salaryTypeSpecification
+[BETA] Get list of timesheet SalaryType Specifications
+POST
+​/timesheet​/salaryTypeSpecification
+[BETA] Create a timesheet SalaryType Specification. Only one entry per employee/date/SalaryType
+PUT
+​/timesheet​/salaryTypeSpecification​/{id}
+[BETA] Update a timesheet SalaryType Specification
+timesheet/settings
+GET
+​/timesheet​/settings
+[BETA] Get timesheet settings of logged in company.
+timesheet/timeClock
+GET
+​/timesheet​/timeClock​/{id}
+Find time clock entry by ID.
+GET
+​/timesheet​/timeClock
+Find time clock entries corresponding with sent data.
+GET
+​/timesheet​/timeClock​/present
+Find a user’s present running time clock.
+PUT
+​/timesheet​/timeClock​/{id}
+Update time clock by ID.
+PUT
+​/timesheet​/timeClock​/:start
+Start time clock.
+PUT
+​/timesheet​/timeClock​/{id}​/:stop
+Stop time clock.
+timesheet/week
+GET
+​/timesheet​/week
+Find weekly status By ID, week/year combination, employeeId or an approver
+PUT
+​/timesheet​/week​/:approve
+Approve week. By ID or (ISO-8601 week and employeeId combination).
+PUT
+​/timesheet​/week​/:complete
+Complete week. By ID or (ISO-8601 week and employeeId combination).
+PUT
+​/timesheet​/week​/:reopen
+Reopen week. By ID or (ISO-8601 week and employeeId combination).
+PUT
+​/timesheet​/week​/:unapprove
+Unapprove week. By ID or (ISO-8601 week and employeeId combination).
+token/consumer
+GET
+​/token​/consumer​/byToken
+Get consumer token by token string.
+token/employee
+PUT
+​/token​/employee​/:create
+Create an employee token. Only selected consumers are allowed
+token/session
+DELETE
+​/token​/session​/{token}
+Delete session token.
+GET
+​/token​/session​/>whoAmI
+Find information about the current user.
+POST
+​/token​/session​/:create
+Create session token.
+PUT
+​/token​/session​/:create
+Create session token.
+transportType
+travelExpense
+DELETE
+​/travelExpense​/{id}
+Delete travel expense.
+DELETE
+​/travelExpense​/{travelExpenseId}​/attachment
+Delete attachment.
+GET
+​/travelExpense​/{id}
+Get travel expense by ID.
+GET
+​/travelExpense​/{travelExpenseId}​/attachment
+Get attachment by travel expense ID.
+GET
+​/travelExpense
+Find travel expenses corresponding with sent data.
+POST
+​/travelExpense​/{travelExpenseId}​/attachment
+Upload attachment to travel expense.
+POST
+​/travelExpense
+Create travel expense.
+POST
+​/travelExpense​/{travelExpenseId}​/attachment​/list
+Upload multiple attachments to travel expense.
+PUT
+​/travelExpense​/:approve
+Approve travel expenses.
+PUT
+​/travelExpense​/{id}​/convert
+Convert travel to/from employee expense.
+PUT
+​/travelExpense​/:copy
+Copy travel expense.
+PUT
+​/travelExpense​/:createVouchers
+Create vouchers
+PUT
+​/travelExpense​/{id}
+Update travel expense.
+PUT
+​/travelExpense​/:deliver
+Deliver travel expenses.
+PUT
+​/travelExpense​/:unapprove
+Unapprove travel expenses.
+PUT
+​/travelExpense​/:undeliver
+Undeliver travel expenses.
+travelExpense/accommodationAllowance
+DELETE
+​/travelExpense​/accommodationAllowance​/{id}
+Delete accommodation allowance.
+GET
+​/travelExpense​/accommodationAllowance​/{id}
+Get travel accommodation allowance by ID.
+GET
+​/travelExpense​/accommodationAllowance
+Find accommodation allowances corresponding with sent data.
+POST
+​/travelExpense​/accommodationAllowance
+Create accommodation allowance.
+PUT
+​/travelExpense​/accommodationAllowance​/{id}
+Update accommodation allowance.
+travelExpense/cost
+DELETE
+​/travelExpense​/cost​/{id}
+Delete cost.
+GET
+​/travelExpense​/cost​/{id}
+Get cost by ID.
+GET
+​/travelExpense​/cost
+Find costs corresponding with sent data.
+POST
+​/travelExpense​/cost
+Create cost.
+PUT
+​/travelExpense​/cost​/{id}
+Update cost.
+PUT
+​/travelExpense​/cost​/list
+Update costs.
+travelExpense/costCategory
+GET
+​/travelExpense​/costCategory​/{id}
+Get cost category by ID.
+GET
+​/travelExpense​/costCategory
+Find cost category corresponding with sent data.
+travelExpense/costParticipant
+DELETE
+​/travelExpense​/costParticipant​/{id}
+Delete cost participant.
+DELETE
+​/travelExpense​/costParticipant​/list
+Delete cost participants.
+GET
+​/travelExpense​/costParticipant​/{id}
+Get cost participant by ID.
+GET
+​/travelExpense​/costParticipant​/{costId}​/costParticipants
+Get cost's participants by costId.
+POST
+​/travelExpense​/costParticipant​/createCostParticipantAdvanced
+Create participant on cost using explicit parameters
+POST
+​/travelExpense​/costParticipant​/list
+Create participants on cost.
+POST
+​/travelExpense​/costParticipant
+Create participant on cost.
+travelExpense/drivingStop
+DELETE
+​/travelExpense​/drivingStop​/{id}
+Delete mileage allowance stops.
+GET
+​/travelExpense​/drivingStop​/{id}
+Get driving stop by ID.
+POST
+​/travelExpense​/drivingStop
+Create mileage allowance driving stop.
+travelExpense/mileageAllowance
+DELETE
+​/travelExpense​/mileageAllowance​/{id}
+Delete mileage allowance.
+GET
+​/travelExpense​/mileageAllowance​/{id}
+Get mileage allowance by ID.
+GET
+​/travelExpense​/mileageAllowance
+Find mileage allowances corresponding with sent data.
+POST
+​/travelExpense​/mileageAllowance
+Create mileage allowance.
+PUT
+​/travelExpense​/mileageAllowance​/{id}
+Update mileage allowance.
+travelExpense/passenger
+DELETE
+​/travelExpense​/passenger​/{id}
+Delete passenger.
+DELETE
+​/travelExpense​/passenger​/list
+Delete passengers.
+GET
+​/travelExpense​/passenger​/{id}
+Get passenger by ID.
+GET
+​/travelExpense​/passenger
+Find passengers corresponding with sent data.
+POST
+​/travelExpense​/passenger​/list
+Create passengers.
+POST
+​/travelExpense​/passenger
+Create passenger.
+PUT
+​/travelExpense​/passenger​/{id}
+Update passenger.
+travelExpense/paymentType
+GET
+​/travelExpense​/paymentType​/{id}
+Get payment type by ID.
+GET
+​/travelExpense​/paymentType
+Find payment type corresponding with sent data.
+travelExpense/perDiemCompensation
+DELETE
+​/travelExpense​/perDiemCompensation​/{id}
+Delete per diem compensation.
+GET
+​/travelExpense​/perDiemCompensation​/{id}
+Get per diem compensation by ID.
+GET
+​/travelExpense​/perDiemCompensation
+Find per diem compensations corresponding with sent data.
+POST
+​/travelExpense​/perDiemCompensation
+Create per diem compensation.
+PUT
+​/travelExpense​/perDiemCompensation​/{id}
+Update per diem compensation.
+travelExpense/rate
+GET
+​/travelExpense​/rate​/{id}
+Get travel expense rate by ID.
+GET
+​/travelExpense​/rate
+Find rates corresponding with sent data.
+travelExpense/rateCategory
+GET
+​/travelExpense​/rateCategory​/{id}
+Get travel expense rate category by ID.
+GET
+​/travelExpense​/rateCategory
+Find rate categories corresponding with sent data.
+travelExpense/rateCategoryGroup
+GET
+​/travelExpense​/rateCategoryGroup​/{id}
+Get travel report rate category group by ID.
+GET
+​/travelExpense​/rateCategoryGroup
+Find rate categoriy groups corresponding with sent data.
+travelExpense/settings
+GET
+​/travelExpense​/settings
+Get travel expense settings of logged in company.
+travelExpense/zone
+GET
+​/travelExpense​/zone​/{id}
+Get travel expense zone by ID.
+GET
+​/travelExpense​/zone
+Find travel expense zones corresponding with sent data.
+userLicense
+POST
+​/userLicense​/export
+Export the user licenses table to a specific format
+vatReturns/comment
+GET
+​/vatReturns​/comment​/>all
+[BETA] - Get all structured comments available
+GET
+​/vatReturns​/comment
+[BETA] - Get all structured comments related to a given vatCode
+vatTermSizeSettings
+DELETE
+​/vatTermSizeSettings​/{id}
+Delete VatTermSizeSettings
+GET
+​/vatTermSizeSettings​/{id}
+Get VatTermSizeSettings by ID. VatTermSizeSettings is used to define VAT term lengths.
+GET
+​/vatTermSizeSettings
+Search for VatTermSizeSettings
+POST
+​/vatTermSizeSettings
+Create VatTermSizeSettings
+PUT
+​/vatTermSizeSettings​/{id}
+Update VatTermSizeSettings.
+voucherApprovalListElement
+GET
+​/voucherApprovalListElement​/{id}
+Get by ID.
+voucherInbox
+GET
+​/voucherInbox​/inboxCount
+Get count of items in the Voucher Inbox
+voucherMessage
+GET
+​/voucherMessage
+[BETA] Find voucherMessage (or a comment) put on a voucher by inputting voucher ids
+POST
+​/voucherMessage
+[BETA] Post new voucherMessage.
+voucherStatus
+GET
+​/voucherStatus​/{id}
+Get voucherStatus by ID.
+GET
+​/voucherStatus
+Find voucherStatus corresponding with sent data. The voucherStatus is used to coordinate integration processes. Requires setup done by Tripletex, currently supports debt collection.
+POST
+​/voucherStatus
+Post new voucherStatus.
+yearEnd
+DELETE
+​/yearEnd​/researchAndDevelopment2024
+Delete ResearchAndDevelopment 2024
+GET
+​/yearEnd​/{yearEndReportId}​/researchAndDevelopment2024
+Get ResearchAndDevelopment by corresponding data 2024
+POST
+​/yearEnd​/researchAndDevelopment2024
+Create ResearchAndDevelopment 2024
+PUT
+​/yearEnd​/researchAndDevelopment2024
+Update ResearchAndDevelopment 2024
+yearEnd/enumType
+GET
+​/yearEnd​/enumType​/businessActivityTypes
+Get business activity types
+Schemas
