@@ -2,8 +2,7 @@
 """Simulate a full round using Round 2 ground truth as the oracle.
 
 Tests the entire pipeline: tiling → query → observe → predict → score.
-Validates that the new predictor (τ=15, archetype backoff, entropy-aware
-tiling, updated calibration) works end-to-end.
+Validates that the new predictor works end-to-end.
 """
 
 from __future__ import annotations
@@ -18,8 +17,9 @@ load_dotenv()
 from client import AstarClient
 from features import SeedAnalysis
 from observation_store import ObservationStore
-from predictor import (
+from solution_spatial import (
     compute_round_tau,
+    estimate_round_tilts,
     predict_full_grid_vectorized,
     set_round_tau,
     TAU,
@@ -147,6 +147,7 @@ def main() -> None:
 
     tau = compute_round_tau(seed_analyses, store)
     set_round_tau(tau)
+    estimate_round_tilts(seed_analyses, store)
 
     print(f"[{ts()}] Phase 3: Generating predictions...")
     scores = []
@@ -170,7 +171,7 @@ def main() -> None:
     avg = np.mean(scores)
     print(f"\n[{ts()}] === RESULTS ===")
     print(f"  Simulated score: {avg:.2f}")
-    print(f"  Round 2 actual:  74.40 (OLD predictor)")
+    print(f"  Round 2 baseline: 74.40")
     print(f"  Improvement:     {avg - 74.40:+.2f} points")
     print(f"  Top team R2:     ~98.8")
     print(f"\n  Pipeline validation: PASSED ✓")

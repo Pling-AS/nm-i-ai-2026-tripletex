@@ -181,7 +181,7 @@ def generate_calibrated_priors(
 ) -> dict[str, Any]:
     """Aggregate ground truth distributions across all seeds by archetype.
 
-    Returns calibration data that predictor.py can load.
+    Returns calibration data that solution_spatial.py can load.
     """
     # Pool archetype stats across all seeds
     pooled_archetypes: dict[str, dict[str, Any]] = defaultdict(

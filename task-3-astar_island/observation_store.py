@@ -6,6 +6,7 @@ Supports save/load to disk for resubmission without re-querying.
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -180,6 +181,32 @@ class ObservationStore:
         json_path.write_text(json.dumps(meta, indent=2))
         print(f"[obs_store] Saved to {path.with_suffix('.npz')} + {json_path}")
 
+    @staticmethod
+    def _parse_archetype_key(key: str) -> CellArchetype:
+        """Parse CellArchetype string representation safely."""
+        # Clean up legacy fields if present
+        if "has_adjacent_ruin" in key:
+            key = key.replace(", has_adjacent_ruin=True", "").replace(
+                ", has_adjacent_ruin=False", ""
+            )
+
+        # Regex to extract fields
+        # pattern: initial_terrain=(\d+), is_coastal=(True|False), dist_settlement_bucket=(\d+), has_adjacent_settlement=(True|False)
+        m = re.search(
+            r"initial_terrain=(\d+).*is_coastal=(True|False).*dist_settlement_bucket=(\d+).*has_adjacent_settlement=(True|False)",
+            key,
+        )
+        if not m:
+            # Fallback for empty/malformed keys (should not happen in valid saves)
+            raise ValueError(f"Could not parse archetype key: {key}")
+
+        return CellArchetype(
+            initial_terrain=int(m.group(1)),
+            is_coastal=m.group(2) == "True",
+            dist_settlement_bucket=int(m.group(3)),
+            has_adjacent_settlement=m.group(4) == "True",
+        )
+
     @classmethod
     def load(cls, path: str | Path) -> "ObservationStore":
         """Load observation data from disk."""
@@ -197,11 +224,7 @@ class ObservationStore:
         store._obs_count = data["obs_count"]
 
         for key_str, pool in meta["archetype_pools"].items():
-            if "has_adjacent_ruin" in key_str:
-                key_str = key_str.replace(", has_adjacent_ruin=True", "").replace(
-                    ", has_adjacent_ruin=False", ""
-                )
-            arch = eval(key_str)
+            arch = cls._parse_archetype_key(key_str)
             store._archetype_counts[arch] += np.array(pool["counts"], dtype=np.int32)
             store._archetype_obs_count[arch] += pool["obs_count"]
 

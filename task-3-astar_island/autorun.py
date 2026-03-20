@@ -12,12 +12,17 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from client import AstarClient
+
+PAUSE_FILE = Path.home() / "astar" / "PAUSE"
+PAUSE_TIMEOUT_SECONDS = 30 * 60
 
 
 def ts() -> str:
@@ -145,6 +150,42 @@ def resubmit_active_if_needed(client: AstarClient) -> None:
         )
 
 
+def check_pause(round_info: dict) -> None:
+    """Wait if PAUSE file exists (Magnus is at the computer).
+
+    If PAUSE file is older than PAUSE_TIMEOUT_SECONDS, auto-proceed
+    (Magnus is asleep or stepped away). Poll every 15s while paused.
+    """
+    if not PAUSE_FILE.exists():
+        return
+
+    pause_age = time.time() - PAUSE_FILE.stat().st_mtime
+    if pause_age > PAUSE_TIMEOUT_SECONDS:
+        log(
+            f"PAUSE file exists but is {pause_age / 60:.0f}min old "
+            f"(>{PAUSE_TIMEOUT_SECONDS // 60}min) — auto-proceeding"
+        )
+        return
+
+    round_num = round_info.get("round_number", "?")
+    closes_at = round_info.get("closes_at", "unknown")
+    log(
+        f"⏸  PAUSE file detected — waiting for Magnus. "
+        f"Round {round_num} closes at {closes_at}. "
+        f"Remove ~/astar/PAUSE to proceed, or auto-proceeds in "
+        f"{(PAUSE_TIMEOUT_SECONDS - pause_age) / 60:.0f}min."
+    )
+
+    while PAUSE_FILE.exists():
+        pause_age = time.time() - PAUSE_FILE.stat().st_mtime
+        if pause_age > PAUSE_TIMEOUT_SECONDS:
+            log(f"PAUSE timeout ({PAUSE_TIMEOUT_SECONDS // 60}min) — auto-proceeding")
+            return
+        time.sleep(15)
+
+    log("▶  PAUSE file removed — proceeding with pipeline")
+
+
 def find_active_round(client: AstarClient) -> dict | None:
     """Find the current active round."""
     try:
@@ -209,6 +250,7 @@ def main() -> None:
         next_round = wait_for_next_round(client)
         round_id = next_round["id"]
 
+        check_pause(next_round)
         run_pipeline(round_id)
 
         if args.once:

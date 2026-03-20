@@ -126,6 +126,18 @@ def build_class_masks(
     return masks
 
 
+def build_port_mask(
+    grid: NDArray[np.int_], coastal_mask: NDArray[np.bool_]
+) -> NDArray[np.bool_]:
+    """Build mask of cells where PORT is a valid class.
+
+    Rule: Ports must be coastal OR already be a port.
+    """
+    is_port = grid == TERRAIN_PORT
+    # Allow port if it's coastal or already a port
+    return coastal_mask | is_port
+
+
 # ---------------------------------------------------------------------------
 # Priority masks — which cells are worth observing?
 # ---------------------------------------------------------------------------
@@ -154,8 +166,13 @@ class SeedAnalysis:
         # Coastal mask (adjacent to ocean)
         self.coastal_mask = self._compute_coastal_mask()
 
+        # Port mask (where ports are valid)
+        self.port_mask = build_port_mask(self.grid, self.coastal_mask)
+
         # Class masks
         self.class_masks = build_class_masks(self.grid)
+        # Enforce: PORT class only allowed where port_mask is True
+        self.class_masks[~self.port_mask, CLASS_PORT] = False
 
         # Archetypes
         self.archetypes = self._compute_archetypes()
@@ -165,18 +182,25 @@ class SeedAnalysis:
 
     def _compute_coastal_mask(self) -> NDArray[np.bool_]:
         """True for cells adjacent (8-connected) to ocean."""
-        ocean = self.grid == TERRAIN_OCEAN
-        h, w = self.height, self.width
+        grid = self.grid
+        h, w = grid.shape
+        is_ocean = grid == TERRAIN_OCEAN
+
+        padded_ocean = np.pad(
+            is_ocean, ((1, 1), (1, 1)), mode="constant", constant_values=False
+        )
+
         coastal = np.zeros((h, w), dtype=bool)
+
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 if dy == 0 and dx == 0:
                     continue
-                shifted = np.roll(np.roll(ocean, dy, axis=0), dx, axis=1)
+                shifted = padded_ocean[1 + dy : h + 1 + dy, 1 + dx : w + 1 + dx]
                 coastal |= shifted
-        # Only non-ocean cells can be coastal
-        coastal &= ~ocean
-        return coastal
+
+        is_land = ~is_ocean & (grid != TERRAIN_MOUNTAIN)
+        return coastal & is_land
 
     def _compute_priority_mask(self) -> NDArray[np.bool_]:
         """Cells worth observing (non-static, potentially dynamic).
