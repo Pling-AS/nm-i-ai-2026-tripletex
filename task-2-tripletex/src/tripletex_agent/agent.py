@@ -2,9 +2,15 @@ from difflib import get_close_matches
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Any
 
-from pydantic import ValidationError
+import httpx  # pyright: ignore[reportMissingImports]
+from pydantic import ValidationError  # pyright: ignore[reportMissingImports]
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 from tripletex_agent.config import Settings
 from tripletex_agent.files import prepare_attachments
@@ -41,13 +47,33 @@ class TripletexAccountingAgent:
 
     async def solve(self, request: SolveRequest) -> AgentRunResult:
         execution_state = ExecutionState()
-        trace = RunTrace()
+        credentials = request.tripletex_credentials
+        if credentials is None:
+            raise OpenRouterError("Missing Tripletex credentials in solve request")
+
+        base_url = str(credentials.base_url)
+        is_competition = "tx-proxy" in base_url
+
+        # Build model chains
+        planner_chain = _build_planner_model_chain(self._settings)
+
+        metadata = {
+            "model": self._settings.openrouter_model,
+            "planner_model": planner_chain[0],
+            "max_steps": self._settings.agent_max_steps,
+            "temperature": self._settings.agent_model_temperature,
+            "http_timeout": self._settings.http_timeout_seconds,
+            "max_attachment_chars": self._settings.max_attachment_text_chars,
+            "source": "competition" if is_competition else "simulation",
+        }
+        trace = RunTrace(metadata=metadata, prompt=request.prompt)
         trace.write(
             "init",
             {
                 "prompt": request.prompt,
                 "file_count": len(request.files),
-                "base_url": str(request.tripletex_credentials.base_url),
+                "base_url": base_url,
+                "metadata": metadata,
             },
         )
         attachments = prepare_attachments(
@@ -64,13 +90,40 @@ class TripletexAccountingAgent:
         )
         openrouter = OpenRouterClient(self._settings)
         tripletex = TripletexClient(
-            base_url=str(request.tripletex_credentials.base_url),
-            session_token=request.tripletex_credentials.session_token,
+            base_url=str(credentials.base_url),
+            session_token=credentials.session_token,
             timeout=self._settings.http_timeout_seconds,
         )
         try:
-            planner = await self._plan(openrouter, request, attachments.summaries)
+            planner = await self._plan(
+                openrouter,
+                request,
+                attachments.summaries,
+                model_chain=planner_chain,
+            )
             trace.write("planner", planner.model_dump())
+
+            # Classify task tier and build executor model chain
+            task_tier = _classify_task_tier(planner.task_type)
+            executor_chain = _build_executor_model_chain(self._settings, task_tier)
+            logger.info(
+                "Routing: task_type=%s tier=%d planner=%s executor=%s",
+                planner.task_type,
+                task_tier,
+                planner_chain[0],
+                executor_chain[0],
+            )
+
+            # Update trace metadata with routing decisions
+            trace.update_metadata(
+                {
+                    "task_tier": task_tier,
+                    "executor_model": executor_chain[0],
+                    "executor_chain": executor_chain,
+                    "planner_chain": planner_chain,
+                }
+            )
+
             await self._execute(
                 openrouter,
                 tripletex,
@@ -79,6 +132,7 @@ class TripletexAccountingAgent:
                 attachments.executor_content_parts,
                 execution_state,
                 trace,
+                model_chain=executor_chain,
             )
             trace.write(
                 "done",
@@ -99,27 +153,96 @@ class TripletexAccountingAgent:
             trace.write("error", {"message": str(exc)})
             raise
         finally:
+            trace.close()
             await openrouter.close()
             await tripletex.close()
+            _refresh_overview_json()
+
+    async def _complete_json_with_fallback(
+        self,
+        openrouter: OpenRouterClient,
+        *,
+        messages: list[dict[str, Any]],
+        model_chain: list[str],
+    ) -> dict[str, Any]:
+        """Call complete_json trying each model in chain on retryable failures."""
+        last_exc: Exception | None = None
+        for model in model_chain:
+            try:
+                return await openrouter.complete_json(
+                    messages=messages,
+                    model_override=model,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if _should_fallback_on_error(exc) and model != model_chain[-1]:
+                    logger.warning(
+                        "Model %s failed (%s), falling back to next in chain",
+                        model,
+                        exc,
+                    )
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise OpenRouterError("Empty model chain")
+
+    async def _chat_completion_with_fallback(
+        self,
+        openrouter: OpenRouterClient,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int = 4096,
+        model_chain: list[str],
+    ) -> dict[str, Any]:
+        """Call chat_completion trying each model in chain on retryable failures."""
+        last_exc: Exception | None = None
+        for model in model_chain:
+            try:
+                return await openrouter.chat_completion(
+                    messages=messages,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    model_override=model,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if _should_fallback_on_error(exc) and model != model_chain[-1]:
+                    logger.warning(
+                        "Model %s failed (%s), falling back to next in chain",
+                        model,
+                        exc,
+                    )
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise OpenRouterError("Empty model chain")
 
     async def _plan(
         self,
         openrouter: OpenRouterClient,
         request: SolveRequest,
         attachment_summaries: list[Any],
+        *,
+        model_chain: list[str] | None = None,
     ) -> PlannerOutput:
         plan_prompt = {
             "prompt": request.prompt,
             "attachments": [summary.model_dump() for summary in attachment_summaries],
         }
-        result = await openrouter.complete_json(
-            messages=[
-                {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": json.dumps(plan_prompt, ensure_ascii=False),
-                },
-            ]
+        messages = [
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps(plan_prompt, ensure_ascii=False),
+            },
+        ]
+        result = await self._complete_json_with_fallback(
+            openrouter,
+            messages=messages,
+            model_chain=model_chain or [],
         )
         try:
             return PlannerOutput.model_validate(result)
@@ -131,6 +254,15 @@ class TripletexAccountingAgent:
         planner: PlannerOutput,
         request_prompt: str,
     ) -> dict[str, Any]:
+        today = date.today()
+        computed_dates = {
+            "today_iso": today.isoformat(),
+            "due_date_iso": (today + timedelta(days=30)).isoformat(),
+        }
+        computed_dates = {
+            **computed_dates,
+            **planner.extracted_dates,
+        }
         primary_resource, linked_resources = _infer_task_resources(
             planner=planner,
             request_prompt=request_prompt,
@@ -198,6 +330,11 @@ class TripletexAccountingAgent:
             "risk_notes": planner.risk_notes[:5],
             "candidate_queries": queries,
             "candidate_endpoints": candidate_endpoints,
+            "computed_dates": computed_dates,
+            "entities": [entity.model_dump() for entity in planner.entities],
+            "line_items": [line_item.model_dump() for line_item in planner.line_items],
+            "actions": planner.actions,
+            "ordered_steps": planner.ordered_steps,
             "working_rules": [
                 (
                     "Preserve explicit facts from the prompt, such as names, emails, "
@@ -277,6 +414,8 @@ class TripletexAccountingAgent:
         attachment_parts: list[dict[str, Any]],
         execution_state: ExecutionState,
         trace: RunTrace,
+        *,
+        model_chain: list[str] | None = None,
     ) -> None:
         tools = build_tool_definitions(
             planner_task_type=planner.task_type,
@@ -289,6 +428,9 @@ class TripletexAccountingAgent:
             planner=planner,
             request_prompt=request.prompt,
         )
+        computed_dates = execution_brief.get("computed_dates") or {}
+        today_iso = computed_dates.get("today_iso")
+        due_date_iso = computed_dates.get("due_date_iso")
         user_parts = [
             {
                 "type": "text",
@@ -298,18 +440,49 @@ class TripletexAccountingAgent:
                         "planner": planner.model_dump(),
                         "execution_brief": execution_brief,
                         "instructions": [
-                            "Use the fewest Tripletex calls possible.",
                             (
-                                "Prefer execution_brief candidate_endpoints before "
-                                "issuing fresh broad search queries."
+                                "ACT FIRST: Use candidate_endpoints from the execution_brief "
+                                "to make API calls IMMEDIATELY. Do NOT search or inspect "
+                                "before your first write unless you truly don't know the endpoint."
                             ),
-                            "Use inspect_tripletex_endpoint before risky writes when possible.",
+                            "Use the fewest Tripletex API calls possible — every call counts against your efficiency score.",
+                            "ZERO 4xx errors is the target. Read playbooks and schemas carefully before calling.",
+                            (
+                                "TRACK SUCCESSES: After each successful POST, note the resource_id. "
+                                "Never re-create an entity you already created successfully."
+                            ),
+                            (
+                                "If a validation error suggests a correct field name, "
+                                "USE THAT EXACT SUGGESTION on your next attempt."
+                            ),
                             "Do not retry identical failed mutations unchanged.",
-                            (
-                                "Do not repeat the same search or endpoint inspection "
-                                "unchanged when prior results were unhelpful."
-                            ),
                             "Return completion JSON only when the task is actually done.",
+                            (
+                                "DETERMINISTIC DATES: "
+                                f"today={today_iso}, due_date={due_date_iso}. "
+                                "Use these for any date fields not explicitly specified "
+                                "in the prompt."
+                            ),
+                            (
+                                "STRUCTURED DATA: The execution_brief contains pre-extracted "
+                                "entities, line_items, and actions from the prompt. Use "
+                                "these instead of re-interpreting the multilingual prompt."
+                            ),
+                            (
+                                "PRODUCT RULE: If line_items have product_number set, you MUST "
+                                "create Product entities with POST /product BEFORE creating "
+                                'orderlines. Each orderline must reference product={"id": '
+                                "product_id}."
+                            ),
+                            (
+                                "EMAIL RULE: When creating customer or supplier with an email, "
+                                "ALWAYS set BOTH email AND invoiceEmail to the same value."
+                            ),
+                            (
+                                "PAYMENT RULE: Payment registration is PUT /invoice/{id}/:payment "
+                                "(NOT POST). Use query params: paymentDate, paymentTypeId, "
+                                "paidAmount."
+                            ),
                         ],
                     },
                     ensure_ascii=False,
@@ -319,12 +492,19 @@ class TripletexAccountingAgent:
         user_parts.extend(attachment_parts)
         messages.append({"role": "user", "content": user_parts})
 
+        executor_model_chain = model_chain or [self._settings.openrouter_model]
         max_steps = max(self._settings.agent_max_steps, 28)
+        # Tier 3 tasks need more room — bank reconciliation and year-end are long chains
+        task_tier = _classify_task_tier(planner.task_type)
+        if task_tier == 3:
+            max_steps = max(max_steps, 50)
         for _ in range(max_steps):
-            message = await openrouter.chat_completion(
+            message = await self._chat_completion_with_fallback(
+                openrouter,
                 messages=messages,
                 tools=tools,
-                max_tokens=1800,
+                max_tokens=4096,
+                model_chain=executor_model_chain,
             )
             tool_calls = message.get("tool_calls") or []
             if tool_calls:
@@ -371,8 +551,12 @@ class TripletexAccountingAgent:
                         tool_result=tool_result,
                     )
                     if blocking_issue is not None:
-                        trace.write("blocked", blocking_issue)
-                        raise OpenRouterError(blocking_issue["message"])
+                        trace.write("blocked_warning", blocking_issue)
+                        tool_result["warning"] = blocking_issue["message"]
+                        tool_result["hint"] = (
+                            "This may indicate an external prerequisite. "
+                            "Try completing what you can or find an alternative approach."
+                        )
                     drift_issue = _detect_off_target_drift(
                         planner=planner,
                         request_prompt=request.prompt,
@@ -421,32 +605,33 @@ class TripletexAccountingAgent:
                             ),
                         }
                     )
-                    completion_payload = _build_deterministic_completion_payload(
-                        planner=planner,
-                        request_prompt=request.prompt,
-                        tool_name=tool_name,
-                        arguments=arguments,
-                        tool_result=tool_result,
-                    )
-                    if completion_payload is not None:
-                        trace.write("final_payload", completion_payload)
-                        return
                 continue
 
             content = message.get("content") or ""
             if isinstance(content, list):
                 content = "\n".join(str(part) for part in content)
-            try:
-                final_payload = json.loads(content)
-            except json.JSONDecodeError as exc:
-                raise OpenRouterError(
-                    f"Executor did not return JSON completion payload: {content}"
-                ) from exc
-            if final_payload.get("status") == "completed":
+            final_payload = _extract_completion_json(content)
+            if final_payload is not None and final_payload.get("status") == "completed":
                 trace.write("final_payload", final_payload)
                 return
-            raise OpenRouterError(
-                f"Executor returned unexpected final payload: {final_payload}"
+            # Model returned text without completion JSON — treat as reasoning
+            # and continue the loop so it can make more tool calls
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": content,
+                }
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "You returned text instead of a tool call or completion JSON. "
+                        "If the task is complete, respond with ONLY: "
+                        '{"status": "completed", "summary": "..."} '
+                        "If more work is needed, use the available tools."
+                    ),
+                }
             )
 
         raise OpenRouterError("Agent reached max steps before completing the task")
@@ -631,31 +816,10 @@ class TripletexAccountingAgent:
 
         if method in {"POST", "PUT"} and arguments.get("json_body") is not None:
             request_schema = endpoint.get("requestSchema")
-            if (
-                request_schema
-                and request_schema not in execution_state.inspected_schemas
-            ):
-                request_schema_summary = self._spec_index.get_schema(request_schema)
-                execution_state.inspected_schemas.add(request_schema)
-                return (
-                    {
-                        "ok": False,
-                        "error": (
-                            "Schema inspection required before JSON mutation "
-                            "requests"
-                        ),
-                        "required_schema": request_schema,
-                        "endpoint": endpoint,
-                        "request_schema_summary": request_schema_summary,
-                        "hint": (
-                            "Use the attached request_schema_summary or call "
-                            "inspect_tripletex_endpoint before retrying this write."
-                        ),
-                    },
-                    endpoint,
-                )
-
             if request_schema:
+                # Auto-register schema as inspected without blocking
+                execution_state.inspected_schemas.add(request_schema)
+
                 payload_error = self._validate_json_body_against_schema(
                     request_schema,
                     arguments.get("json_body"),
@@ -679,15 +843,49 @@ class TripletexAccountingAgent:
         if not problems:
             return None
 
-        primary_problem = problems[0]
-        return {
-            "ok": False,
-            "error": primary_problem["message"],
-            "schema_validation_errors": problems[:5],
-            "hint": (
-                "Adjust the JSON body to match the inspected request schema before retrying this write."
-            ),
-        }
+        strippable: list[dict[str, Any]] = []
+        structural: list[dict[str, Any]] = []
+        for p in problems:
+            if p.get("auto_strip"):
+                strippable.append(p)
+            else:
+                structural.append(p)
+
+        if strippable and isinstance(payload, dict):
+            for p in strippable:
+                field = p.get("field_name")
+                if field and field in payload:
+                    del payload[field]
+                    logger.warning(
+                        "Auto-stripped field '%s' from %s payload: %s",
+                        field,
+                        schema_name,
+                        p["message"],
+                    )
+
+        if structural:
+            primary_problem = structural[0]
+            return {
+                "ok": False,
+                "error": primary_problem["message"],
+                "schema_validation_errors": structural[:5],
+                "stripped_fields": [
+                    p.get("field_name") for p in strippable if p.get("field_name")
+                ],
+                "hint": (
+                    "Adjust the JSON body to match the inspected request schema before retrying this write."
+                ),
+            }
+
+        if strippable:
+            logger.info(
+                "Auto-stripped %d field(s) from %s payload: %s",
+                len(strippable),
+                schema_name,
+                ", ".join(p.get("field_name", "?") for p in strippable),
+            )
+
+        return None
 
 
 def build_tool_definitions(
@@ -864,12 +1062,47 @@ def _build_tool_call_key(tool_name: str, arguments: dict[str, Any]) -> str:
     )
 
 
+def _extract_completion_json(content: str) -> dict[str, Any] | None:
+    """Extract completion JSON from executor response, even if mixed with text."""
+    stripped = content.strip()
+    if not stripped:
+        return None
+
+    # Direct JSON parse
+    try:
+        result = json.loads(stripped)
+        if isinstance(result, dict):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # Find JSON with "status" key anywhere in the text
+    for match in re.finditer(r'\{[^{}]*"status"\s*:\s*"completed"[^{}]*\}', stripped):
+        try:
+            result = json.loads(match.group(0))
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            continue
+
+    # Find any {...} block that looks like completion JSON
+    for match in re.finditer(r"\{[^{}]+\}", stripped):
+        try:
+            result = json.loads(match.group(0))
+            if isinstance(result, dict) and result.get("status") == "completed":
+                return result
+        except json.JSONDecodeError:
+            continue
+
+    return None
+
+
 def _compact_tool_result_for_model(tool_result: dict[str, Any]) -> dict[str, Any]:
     compacted = compact_response(
         tool_result,
-        max_depth=4,
-        max_items=6,
-        max_string=250,
+        max_depth=6,
+        max_items=20,
+        max_string=800,
     )
     if isinstance(compacted, dict):
         return compacted
@@ -925,6 +1158,8 @@ def _find_schema_payload_problems(
                 {
                     "path": field_path,
                     "message": message,
+                    "auto_strip": depth == 0,
+                    "field_name": field_name,
                 }
             )
             continue
@@ -937,6 +1172,8 @@ def _find_schema_payload_problems(
                         f"`{field_path}` is read-only in schema `{schema_name}` "
                         "and should not be sent in write payloads."
                     ),
+                    "auto_strip": depth == 0,
+                    "field_name": field_name,
                 }
             )
             continue
@@ -1283,37 +1520,177 @@ def _infer_task_resources(
         ]
     ).lower()
 
+    # Aliases for all 7 competition languages:
+    # English, Norwegian (Bokmål), Nynorsk, Spanish, Portuguese, German, French
     resource_aliases = {
-        "project": ["project", "prosjekt"],
-        "customer": ["customer", "kunde"],
-        "invoice": ["invoice", "regning", "faktura"],
-        "order": ["order", "ordre"],
-        "product": ["product", "produkt"],
-        "employee": ["employee", "ansatt"],
-        "department": ["department", "avdeling"],
-        "payment": ["payment", "betaling"],
-        "travel_expense": ["travel expense", "reiseregning"],
+        "project": [
+            "project",
+            "prosjekt",  # en, nb/nn
+            "proyecto",
+            "projeto",
+            "projekt",
+            "projet",  # es, pt, de, fr
+        ],
+        "customer": [
+            "customer",
+            "kunde",
+            "klient",  # en, nb/nn
+            "cliente",
+            "client",  # es/pt, fr
+        ],
+        "invoice": [
+            "invoice",
+            "faktura",
+            "regning",  # en, nb/nn
+            "factura",
+            "fatura",
+            "rechnung",
+            "facture",  # es, pt, de, fr
+        ],
+        "order": [
+            "order",
+            "ordre",  # en, nb/nn/fr
+            "orden",
+            "pedido",
+            "ordem",  # es, pt
+            "bestellung",
+            "auftrag",  # de
+            "commande",  # fr
+        ],
+        "product": [
+            "product",
+            "produkt",  # en, nb/nn/de
+            "producto",
+            "produto",
+            "produit",  # es, pt, fr
+        ],
+        "employee": [
+            "employee",
+            "ansatt",
+            "medarbeider",  # en, nb
+            "tilsett",
+            "tilsatt",  # nn
+            "empleado",
+            "empregado",  # es, pt
+            "mitarbeiter",
+            "angestellter",  # de
+            "employé",
+            "salarié",  # fr
+        ],
+        "department": [
+            "department",
+            "avdeling",  # en, nb/nn
+            "departamento",  # es/pt
+            "abteilung",  # de
+            "département",
+            "service",  # fr
+        ],
+        "payment": [
+            "payment",
+            "betaling",  # en, nb/nn
+            "pago",
+            "pagamento",  # es, pt
+            "zahlung",  # de
+            "paiement",  # fr
+        ],
+        "travel_expense": [
+            "travel expense",
+            "reiseregning",  # en, nb
+            "reiserekning",  # nn
+            "gasto de viaje",
+            "despesa de viagem",  # es, pt
+            "reisekosten",
+            "reisekostenabrechnung",  # de
+            "note de frais",  # fr
+        ],
+        "voucher": [
+            "voucher",
+            "bilag",
+            "kupong",  # en, nb/nn
+            "comprobante",
+            "comprovante",  # es, pt
+            "beleg",
+            "gutschein",  # de
+            "bon",
+            "pièce comptable",  # fr
+        ],
+        "ledger": [
+            "ledger",
+            "regnskap",
+            "postering",  # en, nb
+            "rekneskap",  # nn
+            "libro mayor",
+            "razão",  # es, pt
+            "hauptbuch",  # de
+            "grand livre",  # fr
+        ],
+        "account": [
+            "account",
+            "konto",  # en, nb/nn/de
+            "cuenta",
+            "conta",
+            "compte",  # es, pt, fr
+        ],
+        "supplier": [
+            "supplier",
+            "leverandør",
+            "leverandor",  # en, nb/nn
+            "proveedor",
+            "fornecedor",  # es, pt
+            "lieferant",  # de
+            "fournisseur",  # fr
+        ],
+        "credit_note": [
+            "credit note",
+            "kreditnota",
+            "kredittnota",  # en, nb/nn
+            "nota de crédito",
+            "nota de credito",  # es/pt
+            "gutschrift",  # de
+            "avoir",  # fr
+        ],
+        "dimension": [
+            "dimension",
+            "dimensjon",  # en/de/fr, nb/nn
+            "dimensión",
+            "dimensão",  # es, pt
+        ],
     }
 
+    # Use word-boundary matching to prevent partial matches
+    # (e.g. "produkt" should NOT match inside "produktlinje")
     scored_resources: list[tuple[int, str]] = []
     for resource_name, aliases in resource_aliases.items():
         score = 0
         for alias in aliases:
-            if alias in request_prompt.lower():
+            # Word-boundary regex to avoid substring false positives
+            pattern = r"\b" + re.escape(alias) + r"\b"
+            if re.search(pattern, request_prompt.lower()):
                 score += 6
-            if alias in planner.goal.lower():
+            if re.search(pattern, planner.goal.lower()):
                 score += 5
-            if alias in planner.task_type.lower():
+            if re.search(pattern, planner.task_type.lower()):
                 score += 4
-            if alias in text:
+            if re.search(pattern, text):
                 score += 1
         if score > 0:
             scored_resources.append((score, resource_name))
 
+    # Boost the resource that matches the task_type directly
+    # e.g. create_voucher -> voucher gets a big boost
+    _, inferred_target, _ = _infer_task_operation(planner.task_type)
+    if inferred_target:
+        for i, (score, resource_name) in enumerate(scored_resources):
+            if resource_name == inferred_target:
+                scored_resources[i] = (score + 20, resource_name)
+                break
+        else:
+            # Task type target not in scored list — add it with high priority
+            scored_resources.append((20, inferred_target))
+
     scored_resources.sort(key=lambda item: (-item[0], item[1]))
     if not scored_resources:
-        inferred_methods, inferred_target, _ = _infer_task_operation(planner.task_type)
-        if inferred_methods and inferred_target:
+        if inferred_target:
             return inferred_target, []
         return "resource", []
 
@@ -1341,17 +1718,63 @@ def _infer_relation_roles(
         ]
     ).lower()
 
+    # Relation role aliases for all 7 competition languages
     role_aliases = {
-        "customer": ["customer", "kunde", "client", "klient"],
-        "employee": ["employee", "ansatt", "medarbeider"],
+        "customer": [
+            "customer",
+            "kunde",
+            "klient",
+            "client",  # en, nb/nn, fr
+            "cliente",  # es/pt
+        ],
+        "employee": [
+            "employee",
+            "ansatt",
+            "medarbeider",  # en, nb
+            "tilsett",
+            "tilsatt",  # nn
+            "empleado",
+            "empregado",  # es, pt
+            "mitarbeiter",
+            "angestellter",  # de
+            "employé",
+            "salarié",  # fr
+        ],
         "projectManager": [
             "project manager",
-            "prosjektleder",
-            "projectmanager",
+            "prosjektleder",  # en, nb/nn
+            "projectmanager",  # en variant
+            "jefe de proyecto",
+            "gerente de projeto",  # es, pt
+            "projektleiter",  # de
+            "chef de projet",  # fr
         ],
-        "contact": ["contact", "kontakt", "contact person", "kontaktperson"],
-        "department": ["department", "avdeling"],
-        "supplier": ["supplier", "leverandør", "leverandor"],
+        "contact": [
+            "contact",
+            "kontakt",  # en, nb/nn/de
+            "contact person",
+            "kontaktperson",  # en, nb/nn
+            "contacto",
+            "contato",  # es, pt
+            "ansprechpartner",  # de
+        ],
+        "department": [
+            "department",
+            "avdeling",  # en, nb/nn
+            "departamento",  # es/pt
+            "abteilung",  # de
+            "département",
+            "service",  # fr
+        ],
+        "supplier": [
+            "supplier",
+            "leverandør",
+            "leverandor",  # en, nb/nn
+            "proveedor",
+            "fornecedor",  # es, pt
+            "lieferant",  # de
+            "fournisseur",  # fr
+        ],
     }
 
     scored_roles: list[tuple[int, str]] = []
@@ -1602,7 +2025,7 @@ def _detect_off_target_drift(
     tool_name: str,
     arguments: dict[str, Any],
     execution_state: ExecutionState,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     endpoint_family = _extract_endpoint_family(tool_name, arguments)
     if endpoint_family is None:
         return None
@@ -1621,11 +2044,62 @@ def _detect_off_target_drift(
         primary_resource,
         *(resource for resource in linked_resources),
     }
+
+    # Task-type-aware family expansions: certain task types legitimately
+    # use endpoint families outside their primary resource name.
+    _TASK_TYPE_FAMILY_EXPANSIONS: dict[str, set[str]] = {
+        "create_voucher": {"ledger", "voucher", "account", "dimension"},
+        "reverse_voucher": {"ledger", "voucher", "account"},
+        "create_invoice": {
+            "invoice",
+            "order",
+            "customer",
+            "product",
+            "orderline",
+            "ledger",
+            "bank",
+        },
+        "register_payment": {
+            "invoice",
+            "payment",
+            "ledger",
+            "voucher",
+            "bank",
+            "account",
+        },
+        "create_credit_note": {"invoice", "credit", "ledger"},
+        "delete_invoice": {"invoice", "ledger", "order"},
+        "create_order": {"order", "customer", "product", "orderline"},
+        "create_project": {"project", "customer", "employee"},
+        "create_travel_expense": {"travelExpense", "employee", "currency"},
+        "delete_travel_expense": {"travelExpense", "employee"},
+        "bank_reconciliation": {
+            "bank",
+            "reconciliation",
+            "ledger",
+            "statement",
+            "account",
+        },
+        "ledger_error_correction": {"ledger", "voucher", "account", "posting"},
+        "year_end_closing": {
+            "yearEnd",
+            "ledger",
+            "salary",
+            "account",
+            "balance",
+            "reconciliation",
+            "accountingOffice",
+        },
+    }
+    task_type_lower = planner.task_type.lower().strip()
+    extra_families = _TASK_TYPE_FAMILY_EXPANSIONS.get(task_type_lower, set())
+    allowed_families.update(extra_families)
+
     if endpoint_family in allowed_families:
         return None
 
-    trailing_families = execution_state.recent_endpoint_families[-3:]
-    if len(trailing_families) < 3 or any(
+    trailing_families = execution_state.recent_endpoint_families[-6:]
+    if len(trailing_families) < 6 or any(
         family != endpoint_family for family in trailing_families
     ):
         return None
@@ -1832,3 +2306,153 @@ def _build_validation_hint(
             )
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Multi-model routing
+# ---------------------------------------------------------------------------
+
+_TIER_1_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "create_employee",
+        "create_customer",
+        "create_product",
+        "create_department",
+        "enable_module",
+        "update_employee",
+        "update_customer",
+        "create_supplier",
+        "update_contact",
+        "delete_travel_expense",
+    }
+)
+
+_TIER_2_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "create_invoice",
+        "register_payment",
+        "create_project",
+        "create_credit_note",
+        "create_order",
+        "create_travel_expense",
+        "delete_invoice",
+        "reverse_voucher",
+        "create_voucher",
+        "register_supplier_invoice",
+        "update_supplier",
+        "update_product",
+        "update_order",
+        "update_invoice",
+    }
+)
+
+_TIER_3_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "bank_reconciliation",
+        "ledger_error_correction",
+        "year_end_closing",
+    }
+)
+
+
+def _classify_task_tier(task_type: str) -> int:
+    """Classify a planner task_type into scoring tier (1, 2, or 3).
+
+    Handles the ``other_<description>`` prefix the planner sometimes emits
+    by stripping it and re-matching against the known tier sets.
+    """
+    normalized = task_type.lower().strip()
+
+    # Strip 'other_' prefix if present, then try to match the remainder
+    candidates = [normalized]
+    if normalized.startswith("other_"):
+        candidates.append(normalized[len("other_") :])
+
+    for candidate in candidates:
+        if candidate in _TIER_1_TASK_TYPES:
+            return 1
+        if candidate in _TIER_2_TASK_TYPES:
+            return 2
+        if candidate in _TIER_3_TASK_TYPES:
+            return 3
+
+    # Unknown task type → default to Tier 2 (better model, not wasted on Tier 3 chain)
+    # True Tier 3 tasks are explicitly listed above.
+    return 2
+
+
+def _build_planner_model_chain(settings: Settings) -> list[str]:
+    """Build ordered model chain for the planner phase."""
+    return _dedupe_models(
+        [
+            settings.planner_model,
+            settings.openrouter_model,
+        ]
+    )
+
+
+def _build_executor_model_chain(settings: Settings, task_tier: int) -> list[str]:
+    """Build ordered model chain for the executor phase based on task tier."""
+    if task_tier == 1:
+        return _dedupe_models(
+            [
+                settings.tier1_executor_model,
+                settings.openrouter_model,
+            ]
+        )
+    if task_tier == 2:
+        return _dedupe_models(
+            [
+                settings.tier2_executor_model,
+                settings.tier1_executor_model,
+                settings.openrouter_model,
+            ]
+        )
+    # Tier 3 (default): full escalation chain
+    return _dedupe_models(
+        [
+            settings.tier3_executor_model,
+            settings.tier2_executor_model,
+            settings.tier1_executor_model,
+            settings.openrouter_model,
+        ]
+    )
+
+
+def _dedupe_models(models: list[str]) -> list[str]:
+    """Deduplicate model list while preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for model in models:
+        if model not in seen:
+            seen.add(model)
+            result.append(model)
+    return result
+
+
+def _should_fallback_on_error(exc: Exception) -> bool:
+    """Determine if an OpenRouter error is retryable with a different model."""
+    if isinstance(exc, OpenRouterError):
+        sc = exc.status_code
+        if sc is not None:
+            # 429 (rate limit), 5xx (server error) → retryable
+            if sc == 429 or sc >= 500:
+                return True
+            # 4xx client errors (400, 401, 403) → not retryable
+            return False
+        # No status code (empty choices, parse failure) → retryable
+        return True
+    # httpx transport errors → retryable
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    return False
+
+
+def _refresh_overview_json() -> None:
+    """Regenerate runs/overview.json after a run completes."""
+    try:
+        from tripletex_agent.dashboard import _generate_overview
+
+        _generate_overview()
+    except Exception:
+        logger.debug("overview.json refresh failed (non-fatal)", exc_info=True)

@@ -107,6 +107,8 @@ class TripletexSpecIndex:
         normalized_path = path if path.startswith("/") else f"/{path}"
         entry = self._endpoint_map.get((normalized_method, normalized_path))
         if entry is None:
+            entry = self._case_insensitive_lookup(normalized_method, normalized_path)
+        if entry is None:
             entry = self._find_templated_endpoint(
                 normalized_method,
                 normalized_path,
@@ -114,6 +116,17 @@ class TripletexSpecIndex:
         if entry is None:
             raise KeyError(f"Unknown endpoint: {normalized_method} {normalized_path}")
         return self._serialize_endpoint(entry)
+
+    def _case_insensitive_lookup(
+        self,
+        method: str,
+        path: str,
+    ) -> EndpointEntry | None:
+        path_lower = path.lower()
+        for (m, p), entry in self._endpoint_map.items():
+            if m == method and p.lower() == path_lower:
+                return entry
+        return None
 
     def _find_templated_endpoint(
         self,

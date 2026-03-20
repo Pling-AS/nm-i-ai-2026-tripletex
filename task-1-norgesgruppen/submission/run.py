@@ -80,6 +80,8 @@ def main():
         iou=thresholds.get("iou", 0.7),
         max_det=thresholds.get("max_det", 1000),
         augment=thresholds.get("augment", True),
+        tile_threshold=thresholds.get("tile_threshold", 4000),
+        tile_overlap=thresholds.get("tile_overlap", 0.15),
     )
 
     # Load trained classifier
@@ -96,6 +98,8 @@ def main():
             yolo_conf_ceiling=thresholds.get("yolo_conf_ceiling", 0.95),
             score_floor=thresholds.get("score_floor", 0.03),
             yolo_implausible=thresholds.get("yolo_implausible", 0.10),
+            temperature=thresholds.get("temperature", 1.0),
+            tta_flip=thresholds.get("tta_flip", False),
         )
     else:
         print("No classifier bundle found, using detector classes only")

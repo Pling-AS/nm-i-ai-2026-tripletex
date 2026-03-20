@@ -217,7 +217,6 @@ def plan_coverage_queries(
 # ---------------------------------------------------------------------------
 # Phase 2: Adaptive repeat queries — value-of-information scoring
 # ---------------------------------------------------------------------------
-TAU_FOR_VOI = 15.0
 VP_SIZE = 15
 
 
@@ -230,11 +229,10 @@ def _compute_cell_value_grid(
 
     value(cell) = H(prior) * (1 - Σ q_k²) / (N + τ + 1)
 
-    H(prior) ≈ scoring weight (entropy-weighted KL).
-    (1 - Σ q_k²) = Gini impurity of current posterior (uncertainty).
-    1/(N+τ+1) = marginal value decays with more observations.
+    Uses identical posterior formula as predictor.py:
+      q_k = (n_k + τ·m_k) / (N + τ)  with per-archetype τ and blended prior m.
     """
-    from predictor import _get_calibrated_prior, _initial_terrain_prior
+    from predictor import _get_adaptive_tau, _get_prior_mean
 
     h, w = analysis.height, analysis.width
     counts_grid = observation_store.get_seed_counts(seed_idx)
@@ -248,22 +246,23 @@ def _compute_cell_value_grid(
 
             terrain = int(analysis.grid[y, x])
             archetype = analysis.get_archetype(y, x)
+            tau = _get_adaptive_tau(archetype)
 
-            prior = _get_calibrated_prior(archetype, terrain)
-            if prior is None:
-                prior = _initial_terrain_prior(terrain)
-            nonzero = prior > 0
+            prior_mean = _get_prior_mean(
+                seed_idx, analysis, observation_store, y, x, terrain
+            )
+            nonzero = prior_mean > 0
             if not nonzero.any():
                 continue
-            h_prior = float(-np.sum(prior[nonzero] * np.log(prior[nonzero])))
+            h_prior = float(-np.sum(prior_mean[nonzero] * np.log(prior_mean[nonzero])))
             if h_prior < 0.01:
                 continue
 
             counts = counts_grid[y, x].astype(np.float64)
             n = float(obs_grid[y, x])
-            posterior = (counts + 0.5) / (n + 3.0)
+            posterior = (counts + tau * prior_mean) / (n + tau)
             gini = 1.0 - float(np.sum(posterior**2))
-            marginal = 1.0 / (n + TAU_FOR_VOI + 1.0)
+            marginal = 1.0 / (n + tau + 1.0)
 
             value_grid[y, x] = h_prior * gini * marginal
 

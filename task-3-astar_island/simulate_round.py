@@ -18,7 +18,12 @@ load_dotenv()
 from client import AstarClient
 from features import SeedAnalysis
 from observation_store import ObservationStore
-from predictor import predict_full_grid_vectorized, TAU
+from predictor import (
+    compute_round_tau,
+    predict_full_grid_vectorized,
+    set_round_tau,
+    TAU,
+)
 from query_strategy import plan_coverage_queries, plan_repeat_queries
 
 
@@ -140,7 +145,9 @@ def main() -> None:
             archetypes=seed_analyses[q.seed_index].archetypes,
         )
 
-    # Phase 3: Predict and score
+    tau = compute_round_tau(seed_analyses, store)
+    set_round_tau(tau)
+
     print(f"[{ts()}] Phase 3: Generating predictions...")
     scores = []
     for seed_idx in range(seeds_count):

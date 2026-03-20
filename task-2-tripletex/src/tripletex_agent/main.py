@@ -1,13 +1,25 @@
+import json
 import logging
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, UTC
+from pathlib import Path
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from tripletex_agent.agent import TripletexAccountingAgent
 from tripletex_agent.config import Settings, get_settings
+from tripletex_agent.dashboard import router as dashboard_router
 from tripletex_agent.openrouter import OpenRouterError
 from tripletex_agent.schemas import SolveRequest, SolveResponse, TripletexCredentials
+from tripletex_agent.trace import RUNS_DIR
+
+logger = logging.getLogger(__name__)
+
+# Raw request log file (all HTTP requests, not just /solve)
+RAW_LOG_PATH = RUNS_DIR / "raw_requests.jsonl"
 
 
 @asynccontextmanager
@@ -16,10 +28,76 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logging.basicConfig(
         level=getattr(logging, settings.log_level.upper(), logging.INFO)
     )
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
     yield
 
 
 app = FastAPI(title="Tripletex Accounting Agent", lifespan=lifespan)
+app.include_router(dashboard_router)
+
+
+@app.middleware("http")
+async def log_all_requests(request: Request, call_next):
+    start = time.monotonic()
+    body_bytes = b""
+    # Only read body for POST/PUT — skip for GET to avoid stream exhaustion
+    if request.method in ("POST", "PUT"):
+        body_bytes = await request.body()
+
+    response = await call_next(request)
+    elapsed = round(time.monotonic() - start, 3)
+
+    # Skip dashboard auto-refresh noise
+    path = request.url.path
+    if path in (
+        "/api/runs",
+        "/api/settings",
+        "/api/competition/submissions",
+        "/api/competition/submit",
+        "/dashboard",
+        "/favicon.ico",
+    ):
+        return response
+
+    body_preview = ""
+    if body_bytes:
+        try:
+            body_preview = body_bytes[:2000].decode("utf-8", errors="replace")
+        except Exception:
+            body_preview = f"<{len(body_bytes)} bytes>"
+
+    entry = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "method": request.method,
+        "path": path,
+        "query": str(request.url.query) if request.url.query else "",
+        "client": request.client.host if request.client else "unknown",
+        "status_code": response.status_code,
+        "elapsed_seconds": elapsed,
+        "headers": {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower()
+            in (
+                "content-type",
+                "authorization",
+                "user-agent",
+                "x-forwarded-for",
+                "x-real-ip",
+                "ngrok-skip-browser-warning",
+            )
+        },
+        "body_preview": body_preview,
+    }
+    logger.info(
+        "HTTP %s %s → %d (%.3fs)", request.method, path, response.status_code, elapsed
+    )
+    try:
+        with RAW_LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+    return response
 
 
 def get_agent(
@@ -86,3 +164,33 @@ async def solve_endpoint(
             detail=str(exc),
         ) from exc
     return SolveResponse(status="completed")
+
+
+# Fallback: accept POST to root as well (some platforms POST to base URL)
+@app.post(
+    "/",
+    response_model=SolveResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+async def root_solve_endpoint(
+    payload: SolveRequest,
+    settings: Settings = Depends(get_settings),
+    agent: TripletexAccountingAgent = Depends(get_agent),
+) -> SolveResponse:
+    return await solve_endpoint(payload, settings, agent)
+
+
+@app.get("/api/raw-requests")
+async def get_raw_requests() -> JSONResponse:
+    entries: list[dict] = []
+    if RAW_LOG_PATH.exists():
+        try:
+            with RAW_LOG_PATH.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        entries.append(json.loads(line))
+        except (json.JSONDecodeError, OSError):
+            pass
+    entries.reverse()
+    return JSONResponse({"requests": entries[:200]})

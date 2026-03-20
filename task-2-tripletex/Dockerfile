@@ -8,7 +8,6 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY task_docs ./task_docs
-COPY endpoint_spec.md ./endpoint_spec.md
 
 RUN pip install --upgrade pip && pip install .
 

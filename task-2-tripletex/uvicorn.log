@@ -1,0 +1,1317 @@
+INFO:     Started server process [8593]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59428 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59442 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/raw-requests → 200 (0.005s)
+INFO:     127.0.0.1:59428 - "GET /api/raw-requests HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 → 200 (0.005s)
+INFO:     178.74.7.167:0 - "GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/raw-requests → 200 (0.000s)
+INFO:     178.74.7.167:0 - "GET /api/raw-requests HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:tripletex_agent.agent:Routing: task_type=create_voucher tier=2 planner=openai/gpt-5.4-mini executor=anthropic/claude-opus-4.6:exacto
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/f40cf4f76b5342ab80c4be67ffb2f2c4 HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.005s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionName "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/account?number=7140&count=1 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/voucherType?count=10 "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.003s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.004s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/voucherType?count=5&from=10 "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 201 Created"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.004s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 422 unknown"
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 422 unknown"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 422 unknown"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/product?count=1 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue "HTTP/1.1 422 unknown"
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/accountingDimensionValue/search?dimensionIndex=1&count=10 "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/account?number=1920&count=1 "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/voucher "HTTP/1.1 422 unknown"
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/product "HTTP/1.1 201 Created"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/voucher "HTTP/1.1 422 unknown"
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.001s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/voucher "HTTP/1.1 201 Created"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://tx-proxy-jwanbnu3pq-lz.a.run.app/v2/ledger/posting/3844910749?fields=id%2Caccount%2CamountGross%2CamountGrossCurrency%2CfreeAccountingDimension1 "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP POST /solve → 200 (169.361s)
+INFO:     34.34.240.15:0 - "POST /solve HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:tripletex_agent.main:HTTP GET /api/runs/92b51088533745b5be920030a2f42fad → 200 (0.002s)
+INFO:     178.74.7.167:0 - "GET /api/runs/92b51088533745b5be920030a2f42fad HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     178.74.7.167:0 - "GET /api/runs HTTP/1.1" 200 OK

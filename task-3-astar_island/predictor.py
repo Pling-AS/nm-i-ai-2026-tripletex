@@ -53,59 +53,172 @@ from utils import (
 #   τ=15 → N=1 gets  6% weight (strong trust in prior)
 #   τ=25 → N=1 gets  4% weight (very strong trust)
 #
-# Empirical sweep on Round 1 (stochastic N=1 samples, 3×3 tiling):
-#   τ=3 → 73.6, τ=5 → 79.1, τ=8 → 81.5, τ=15 → 82.7, τ=25 → 82.8
-#   Prior-only → 86.1, Old approach → 74.1
-#
-# τ=15 chosen: near-optimal in-sample, robust for cross-round prediction
-# where calibrated priors may be less accurate.
-TAU = 15.0
-
-
+# Adaptive τ strategy:
+#   Per-archetype τ based on Jensen-Shannon divergence between round
+#   observations and calibrated priors. High JSD → priors wrong → lower τ.
+#   Round-level τ (median across archetypes) used for spatial smoothing regime.
 TAU_MIN = 12.0
-TAU_MAX = 18.0
+TAU_MAX = 40.0
+TAU_DEFAULT = 25.0  # fallback if no observations
+TAU = TAU_DEFAULT  # module-level round τ, set by compute_round_tau()
 
-_archetype_entropy_cache: dict[str, float] = {}
-_max_calibrated_entropy: float = 0.0
+# Same-terrain neighbor pseudo-count parameters (validated on R4/R6/R7 backtests)
+NEIGHBOR_LAMBDA = 0.5  # weight per same-terrain neighbor
+NEIGHBOR_MAX_TOTAL = 2.0  # cap on total neighbor weight (λ * n_same ≤ this)
+
+# ---------------------------------------------------------------------------
+# Per-archetype adaptive τ — computed once after coverage queries
+# ---------------------------------------------------------------------------
+_round_regime: str = "easy"
+_archetype_tau: dict[CellArchetype, float] = {}
 
 
-def _build_entropy_cache() -> None:
-    """Populate _archetype_entropy_cache from calibration.json."""
-    global _max_calibrated_entropy
-    cal = _load_calibration()
-    if cal is None:
-        return
-    arch_priors = cal.get("archetype_priors", {})
-    for key, probs in arch_priors.items():
-        p = np.array(probs, dtype=np.float64)
-        p_pos = p[p > 0]
-        h = float(-np.sum(p_pos * np.log(p_pos)))
-        _archetype_entropy_cache[key] = h
-    if _archetype_entropy_cache:
-        _max_calibrated_entropy = max(_archetype_entropy_cache.values())
+def _jsd(p: NDArray[np.floating], q: NDArray[np.floating]) -> float:
+    """Jensen-Shannon divergence between two distributions."""
+    eps = 1e-12
+    p_safe = np.clip(p, eps, None)
+    q_safe = np.clip(q, eps, None)
+    p_safe = p_safe / p_safe.sum()
+    q_safe = q_safe / q_safe.sum()
+    m = 0.5 * (p_safe + q_safe)
+    kl_pm = float(np.sum(p_safe * np.log(p_safe / m)))
+    kl_qm = float(np.sum(q_safe * np.log(q_safe / m)))
+    return max(0.0, 0.5 * kl_pm + 0.5 * kl_qm)
+
+
+def set_round_tau(tau: float) -> None:
+    """Set round-level τ. Derives regime for spatial smoothing."""
+    global TAU, _round_regime
+    TAU = tau
+    _round_regime = "hard" if tau < 20.0 else "easy"
+    print(f"[predictor] Round τ={tau:.1f}, regime='{_round_regime}'")
+
+
+def _log_marginal_likelihood(
+    cell_counts: list[NDArray[np.int32]],
+    prior_mean: NDArray[np.floating],
+    tau: float,
+) -> float:
+    """Dirichlet-Multinomial log marginal likelihood for a set of cells.
+
+    log P(data | τ, m) = Σ_cells [lgΓ(τ) - lgΓ(N+τ) + Σ_k (lgΓ(n_k+τ·m_k) - lgΓ(τ·m_k))]
+    """
+    from scipy.special import gammaln
+
+    alpha = tau * np.maximum(prior_mean, 1e-10)
+    log_alpha = gammaln(alpha)
+    log_tau = gammaln(tau)
+
+    total = 0.0
+    for counts in cell_counts:
+        n = counts.sum()
+        total += log_tau - gammaln(n + tau)
+        total += np.sum(gammaln(counts + alpha) - log_alpha)
+    return total
+
+
+_TAU_GRID = np.array(
+    [3, 5, 8, 12, 16, 20, 25, 30, 35, 40, 50, 60, 80], dtype=np.float64
+)
+
+
+def compute_round_tau(
+    seed_analyses: list[SeedAnalysis],
+    observation_store: ObservationStore,
+) -> float:
+    """Compute per-archetype τ via empirical Bayes (max marginal likelihood).
+
+    For each archetype with enough observed cells:
+      1. Collect per-cell count vectors
+      2. Grid search τ that maximizes Dirichlet-Multinomial marginal likelihood
+      3. Store in _archetype_tau for per-cell lookup
+
+    Round τ = observation-weighted median across archetypes.
+    """
+    global _archetype_tau
+    _archetype_tau.clear()
+
+    arch_cells: dict[CellArchetype, list[NDArray[np.int32]]] = {}
+    for si, sa in enumerate(seed_analyses):
+        counts_grid = observation_store.get_seed_counts(si)
+        obs_grid = observation_store.get_seed_obs_counts(si)
+        for y in range(sa.height):
+            for x in range(sa.width):
+                if obs_grid[y, x] == 0:
+                    continue
+                terrain = int(sa.grid[y, x])
+                if is_static(terrain):
+                    continue
+                arch = sa.get_archetype(y, x)
+                if arch not in arch_cells:
+                    arch_cells[arch] = []
+                arch_cells[arch].append(counts_grid[y, x].copy())
+
+    arch_results: list[tuple[float, float, int]] = []
+
+    for archetype, cells in arch_cells.items():
+        if len(cells) < 5:
+            continue
+        terrain = archetype.initial_terrain
+
+        prior = _get_calibrated_prior(archetype, terrain)
+        if prior is None:
+            prior = _initial_terrain_prior(terrain)
+
+        best_tau = TAU_DEFAULT
+        best_ll = -np.inf
+        for tau_candidate in _TAU_GRID:
+            ll = _log_marginal_likelihood(cells, prior, tau_candidate)
+            if ll > best_ll:
+                best_ll = ll
+                best_tau = float(tau_candidate)
+
+        obs_counts = observation_store._archetype_counts[archetype]
+        empirical = obs_counts.astype(np.float64)
+        emp_sum = empirical.sum()
+        if emp_sum > 0:
+            empirical /= emp_sum
+        jsd = _jsd(empirical, prior)
+        hardness = min(1.0, jsd / 0.20)
+        jsd_tau = TAU_MAX - hardness * (TAU_MAX - TAU_MIN)
+
+        avg_n = np.mean([c.sum() for c in cells])
+        eb_weight = min(1.0, avg_n / 5.0)
+        blended_tau = eb_weight * best_tau + (1 - eb_weight) * jsd_tau
+
+        clamped_tau = float(np.clip(blended_tau, TAU_MIN, TAU_MAX))
+        _archetype_tau[archetype] = clamped_tau
+        arch_results.append((best_tau, clamped_tau, len(cells)))
+
+    if not arch_results:
+        print(f"[predictor] No archetype observations, using τ={TAU_DEFAULT}")
+        return TAU_DEFAULT
+
+    arch_results.sort(key=lambda x: x[1])
+    total_w = sum(w for _, _, w in arch_results)
+    cumulative = 0
+    round_tau = TAU_DEFAULT
+    for _, tau_val, w in arch_results:
+        cumulative += w
+        if cumulative >= total_w / 2:
+            round_tau = tau_val
+            break
+
+    all_tau = [t for _, t, _ in arch_results]
+    unclamped = [t for t, _, _ in arch_results]
+    print(
+        f"[predictor] Empirical Bayes τ: {len(arch_results)} archetypes, "
+        f"τ range=[{min(all_tau):.1f}, {max(all_tau):.1f}], "
+        f"unclamped range=[{min(unclamped):.0f}, {max(unclamped):.0f}], "
+        f"round τ={round_tau:.1f} (weighted median)"
+    )
+
+    return round_tau
 
 
 def _get_adaptive_tau(archetype: CellArchetype) -> float:
-    """Return τ scaled by calibrated archetype entropy.
-
-    τ = TAU_MIN + (TAU_MAX - TAU_MIN) × (1 - H(arch) / H_max)
-
-    High-entropy archetypes (settlements, ports) get lower τ → trust observations more.
-    Low-entropy archetypes (remote plains/forest) get higher τ → trust prior more.
-    Falls back to TAU (15.0) if calibration is unavailable.
-    """
-    if not _archetype_entropy_cache:
-        _build_entropy_cache()
-    if not _archetype_entropy_cache or _max_calibrated_entropy < 1e-8:
-        return TAU
-
-    key = str(archetype)
-    h = _archetype_entropy_cache.get(key)
-    if h is None:
-        return TAU
-
-    ratio = h / _max_calibrated_entropy
-    return TAU_MIN + (TAU_MAX - TAU_MIN) * (1.0 - ratio)
+    """Return per-archetype τ, falling back to round-level τ."""
+    return _archetype_tau.get(archetype, TAU)
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +360,7 @@ def _initial_terrain_prior(terrain_code: int) -> NDArray[np.floating]:
 #   λ = arch_n / (arch_n + κ)
 #   κ=50 → need 50 round obs for 50/50 blend, 10 obs → 17% round weight
 #   κ=100 → need 100 round obs for 50/50, more conservative
-SHRINKAGE_KAPPA = 50.0
+SHRINKAGE_KAPPA = 10.0
 
 # Minimum round observations to even consider blending (noise floor)
 MIN_ARCHETYPE_BLEND = 5
@@ -400,8 +513,9 @@ def predict_full_grid_vectorized(
     prediction[ocean_mask, CLASS_EMPTY] = 1.0
     prediction[mountain_mask, CLASS_MOUNTAIN] = 1.0
 
-    # --- Dynamic cells: single formula per cell ---
+    # --- Dynamic cells: single formula per cell with neighbor pseudo-counts ---
     dynamic_mask = ~ocean_mask & ~mountain_mask
+    obs_grid = observation_store.get_seed_obs_counts(seed_index)
 
     for y in range(h):
         for x in range(w):
@@ -409,15 +523,86 @@ def predict_full_grid_vectorized(
                 continue
 
             terrain = int(grid[y, x])
-            local_counts = counts_grid[y, x]
+            local_counts = counts_grid[y, x].astype(np.float64)
+
+            neighbor_pseudo = np.zeros(NUM_CLASSES, dtype=np.float64)
+            n_same = 0
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dy == 0 and dx == 0:
+                        continue
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w:
+                        if int(grid[ny, nx]) == terrain and obs_grid[ny, nx] > 0:
+                            neighbor_pseudo += counts_grid[ny, nx].astype(np.float64)
+                            n_same += 1
+
+            if n_same > 0:
+                total_lam = min(NEIGHBOR_LAMBDA * n_same, NEIGHBOR_MAX_TOTAL)
+                nw = total_lam / max(neighbor_pseudo.sum(), 1.0)
+                effective_counts = local_counts + nw * neighbor_pseudo
+            else:
+                effective_counts = local_counts
+
             prior_mean = _get_prior_mean(
                 seed_index, seed_analysis, observation_store, y, x, terrain
             )
             archetype = seed_analysis.get_archetype(y, x)
-            prediction[y, x] = _dirichlet_posterior(
-                local_counts, prior_mean, tau=_get_adaptive_tau(archetype)
-            )
+            tau = _get_adaptive_tau(archetype)
+            n_eff = effective_counts.sum()
+            prediction[y, x] = (effective_counts + tau * prior_mean) / (n_eff + tau)
 
     prediction = apply_floor_and_normalize_grid(prediction, class_masks)
+    prediction = _spatial_smooth(prediction, class_masks, grid)
 
     return prediction
+
+
+def _spatial_smooth(
+    prediction: NDArray[np.floating],
+    class_masks: NDArray[np.bool_],
+    grid: NDArray[np.int_],
+    max_beta: float = 0.15,
+) -> NDArray[np.floating]:
+    """Terrain-aware uncertainty-weighted 8-neighbor smoothing.
+
+    Only averages predictions from same-terrain neighbors, preventing
+    cross-terrain contamination (e.g., forest priors bleeding into plains).
+
+    p'(cell) = (1 - β) · p(cell) + β · mean(p(same-terrain neighbors))
+    where β = max_beta · (1 - max(p(cell))).
+    """
+    h, w, c = prediction.shape
+
+    max_probs = prediction.max(axis=-1)
+    uncertainty = 1.0 - max_probs
+
+    padded_pred = np.pad(prediction, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    padded_grid = np.pad(grid, ((1, 1), (1, 1)), mode="constant", constant_values=-1)
+
+    neighbor_sum = np.zeros_like(prediction)
+    neighbor_count = np.zeros((h, w), dtype=np.float64)
+
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dy == 0 and dx == 0:
+                continue
+            shifted_pred = padded_pred[1 + dy : h + 1 + dy, 1 + dx : w + 1 + dx, :]
+            shifted_grid = padded_grid[1 + dy : h + 1 + dy, 1 + dx : w + 1 + dx]
+            same_terrain = shifted_grid == grid
+            neighbor_sum += shifted_pred * same_terrain[..., np.newaxis]
+            neighbor_count += same_terrain.astype(np.float64)
+
+    safe_count = np.maximum(neighbor_count, 1.0)
+    neighbor_mean = neighbor_sum / safe_count[..., np.newaxis]
+
+    beta = max_beta * uncertainty
+    is_static_mask = (grid == TERRAIN_OCEAN) | (grid == TERRAIN_MOUNTAIN)
+    no_neighbors = neighbor_count == 0
+    beta[is_static_mask | no_neighbors] = 0.0
+
+    smoothed = (1.0 - beta[..., np.newaxis]) * prediction + beta[
+        ..., np.newaxis
+    ] * neighbor_mean
+
+    return apply_floor_and_normalize_grid(smoothed, class_masks)

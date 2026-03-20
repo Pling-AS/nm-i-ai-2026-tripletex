@@ -29,7 +29,21 @@ def fuse_detections(
     if not detection_list:
         return _empty_result()
 
-    non_empty = [d for d in detection_list if len(d["scores"]) > 0]
+    # Build per-source weights, extending if needed (e.g. tile pass)
+    if weights is None:
+        weights = [1.0] * len(detection_list)
+    while len(weights) < len(detection_list):
+        weights.append(1.0)
+    weights = weights[: len(detection_list)]
+
+    # Filter empty detections AND their corresponding weights together
+    non_empty = []
+    active_weights = []
+    for det, w in zip(detection_list, weights):
+        if len(det["scores"]) > 0:
+            non_empty.append(det)
+            active_weights.append(w)
+
     if not non_empty:
         return _empty_result()
 
@@ -49,14 +63,11 @@ def fuse_detections(
         labels_list.append([0] * len(det["scores"]))
         source_classes_list.append(det["classes"])
 
-    if weights is None:
-        weights = [1.0] * len(non_empty)
-
     fused_boxes, fused_scores, _ = weighted_boxes_fusion(
         boxes_list,
         scores_list,
         labels_list,
-        weights=weights,
+        weights=active_weights,
         iou_thr=wbf_iou,
         skip_box_thr=skip_box_thr,
     )
@@ -73,7 +84,7 @@ def fuse_detections(
         fused_scores,
         non_empty,
         source_classes_list,
-        weights,
+        active_weights,
     )
 
     return {

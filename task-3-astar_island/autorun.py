@@ -100,6 +100,51 @@ def run_pipeline(round_id: str | None = None) -> bool:
         return False
 
 
+def has_observation_data(round_id: str) -> bool:
+    """Check if we have saved observation data for a round."""
+    from pathlib import Path
+
+    data_dir = Path(__file__).parent / "data"
+    return (data_dir / f"obs_{round_id[:8]}.npz").exists()
+
+
+def run_resubmit(round_id: str) -> bool:
+    """Re-predict and resubmit using saved observations with updated calibration."""
+    cmd = [sys.executable, "run.py", "--predict-only", round_id]
+    log(f"Resubmitting with updated calibration: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=False, text=True)
+    if result.returncode == 0:
+        log("Resubmit complete — predictions updated with fresh calibration")
+        return True
+    else:
+        log(f"Resubmit failed (exit code {result.returncode})")
+        return False
+
+
+def resubmit_active_if_needed(client: AstarClient) -> None:
+    """If there's an active round with existing observation data, resubmit it.
+
+    This ensures that when calibration is updated after analyzing a completed
+    round, any already-submitted active round gets re-predicted with the
+    fresh priors.
+    """
+    active = find_active_round(client)
+    if not active:
+        log("No active round to resubmit")
+        return
+
+    round_id = active["id"]
+    if has_observation_data(round_id):
+        log(
+            f"Active round {round_id[:8]} has observation data — resubmitting with fresh calibration"
+        )
+        run_resubmit(round_id)
+    else:
+        log(
+            f"Active round {round_id[:8]} has no observation data yet — skipping resubmit"
+        )
+
+
 def find_active_round(client: AstarClient) -> dict | None:
     """Find the current active round."""
     try:
@@ -154,9 +199,11 @@ def main() -> None:
     completed_id = handle_current_round(client)
     if completed_id:
         log(f"Round {completed_id[:8]} analyzed and calibration updated")
+        resubmit_active_if_needed(client)
     else:
         log("No active round — checking for recently completed rounds to analyze")
         run_analysis()
+        resubmit_active_if_needed(client)
 
     while True:
         next_round = wait_for_next_round(client)
@@ -171,6 +218,7 @@ def main() -> None:
         wait_for_round_completion(client, round_id)
         wait_for_scoring_done(client, round_id)
         run_analysis()
+        resubmit_active_if_needed(client)
 
         log("=== Cycle complete, waiting for next round ===")
 

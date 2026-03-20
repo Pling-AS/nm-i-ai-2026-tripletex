@@ -39,6 +39,8 @@ class TrainedClassifier:
         yolo_conf_ceiling: float = DEFAULT_YOLO_CONF_CEILING,
         score_floor: float = DEFAULT_SCORE_FLOOR,
         yolo_implausible: float = DEFAULT_YOLO_IMPLAUSIBLE,
+        temperature: float = 1.0,
+        tta_flip: bool = False,
     ):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.cls_conf_threshold = cls_conf_threshold
@@ -46,6 +48,8 @@ class TrainedClassifier:
         self.yolo_conf_ceiling = yolo_conf_ceiling
         self.yolo_implausible = yolo_implausible
         self.score_floor = score_floor
+        self.temperature = temperature
+        self.tta_flip = tta_flip
 
         from safetensors.torch import load_file
 
@@ -86,7 +90,11 @@ class TrainedClassifier:
         data_cfg["input_size"] = (3, CROP_SIZE, CROP_SIZE)
         self.transform = timm.data.create_transform(**data_cfg, is_training=False)
 
-        print(f"Trained classifier loaded: {nc} classes, device={self.device}")
+        tta_str = "+hflip" if self.tta_flip else ""
+        temp_str = f", T={self.temperature}" if self.temperature != 1.0 else ""
+        print(
+            f"Trained classifier loaded: {nc} classes, device={self.device}{tta_str}{temp_str}"
+        )
 
     def classify_batch(self, crops: list, yolo_classes: np.ndarray = None) -> tuple:
         """Classify a batch of PIL crops.
@@ -113,6 +121,16 @@ class TrainedClassifier:
 
             with torch.no_grad():
                 logits = self.model(tensors)
+
+                # Horizontal flip TTA: average logits before softmax
+                if self.tta_flip:
+                    logits_flip = self.model(torch.flip(tensors, dims=[3]))
+                    logits = (logits + logits_flip) / 2
+
+                # Temperature scaling: sharpen/soften probabilities
+                if self.temperature != 1.0:
+                    logits = logits / self.temperature
+
                 probs = F.softmax(logits, dim=-1)
 
             # Top-2 for confidence and margin

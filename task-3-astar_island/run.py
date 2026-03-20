@@ -28,7 +28,11 @@ import numpy as np
 from client import AstarClient, SimulationResult
 from features import SeedAnalysis
 from observation_store import ObservationStore
-from predictor import predict_full_grid_vectorized
+from predictor import (
+    compute_round_tau,
+    predict_full_grid_vectorized,
+    set_round_tau,
+)
 from query_strategy import (
     QueryPlan,
     plan_coverage_queries,
@@ -303,7 +307,9 @@ def run(round_id: str | None = None, predict_only: bool = False) -> None:
             client, round_id, seed_analyses, width, height, seeds_count
         )
 
-    # Predict and submit
+    tau = compute_round_tau(seed_analyses, observation_store)
+    set_round_tau(tau)
+
     _predict_and_submit(
         client,
         round_id,

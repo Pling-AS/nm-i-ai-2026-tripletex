@@ -76,6 +76,7 @@ class TripletexClient:
                 )
                 return cached_response
 
+        is_mutation = normalized_method in {"POST", "PUT", "DELETE"}
         response = None
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
@@ -100,7 +101,11 @@ class TripletexClient:
                         "status_code": response.status_code,
                     }
                 )
-                if response.status_code == 429 or response.status_code >= 500:
+                if response.status_code == 429:
+                    raise TripletexRetriableError(response.text)
+                # Only retry 5xx for safe reads — mutations should fail fast
+                # to avoid burning 3 API calls on a single bad write.
+                if response.status_code >= 500 and not is_mutation:
                     raise TripletexRetriableError(response.text)
 
         if response is None:
@@ -179,9 +184,9 @@ class TripletexClient:
 def compact_response(
     value: Any,
     *,
-    max_depth: int = 5,
-    max_items: int = 8,
-    max_string: int = 600,
+    max_depth: int = 6,
+    max_items: int = 15,
+    max_string: int = 800,
 ) -> Any:
     if max_depth <= 0:
         return "<trimmed>"

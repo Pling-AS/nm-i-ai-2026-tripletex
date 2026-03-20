@@ -1,0 +1,50 @@
+# Tripletex â AI Accounting Agent
+
+Build an AI agent that completes accounting tasks in Tripletex. You receive a task prompt (in one of 7 languages), use the Tripletex API to execute it, and get scored on correctness and efficiency.
+
+## How It Works
+
+1. Submit your HTTPS endpoint URL on the platform
+2. We provision a fresh Tripletex sandbox account
+3. We send a randomly selected accounting task to your `/solve` endpoint
+4. Your agent reads the prompt, optionally processes attached files (PDFs, images)
+5. Your agent calls the Tripletex API via a proxy to complete the task
+6. We verify the result field-by-field against expected values
+7. Your score updates on the rolling leaderboard
+
+Each submission gets a brand new Tripletex account â you always start from scratch.
+
+## Key Facts
+
+| | |
+|---|---|
+| Task types | 30 different accounting tasks |
+| Variants | 56 per task (7 languages Ã 8 data sets) |
+| Language | Prompts in Norwegian, English, Spanish, Portuguese, Nynorsk, German, French |
+| Timeout | 5 minutes per submission |
+| API | [Tripletex v2 REST API](https://kkpqfuj-amager.tripletex.dev/v2-docs/) via authenticated proxy |
+| Scoring | Field-by-field checks + efficiency bonus, best score per task kept |
+| Score range | 0.0 (failed) â up to 6.0 (perfect Tier 3 + best efficiency) |
+| Files | Some tasks include PDF or image attachments |
+
+## Quick Start
+
+1. Build a `/solve` endpoint that accepts POST requests with a task prompt and Tripletex credentials
+2. Use an LLM to interpret the Norwegian prompt and decide which API calls to make
+3. Call the Tripletex API using the provided proxy URL and session token
+4. Return `{"status": "completed"}` when done
+5. Submit your endpoint URL at `https://app.ainm.no/submit/tripletex`
+
+## Task Categories
+
+Your agent will encounter tasks like:
+
+- **Employees** â Create employees, set roles, update contact info
+- **Customers & Products** â Register customers, create products
+- **Invoicing** â Create invoices, register payments, issue credit notes
+- **Travel Expenses** â Register or delete travel expense reports
+- **Projects** â Create projects linked to customers
+- **Corrections** â Delete or reverse incorrect entries
+- **Departments** â Create departments, enable accounting modules
+
+Tasks range from simple single-API-call operations to multi-step workflows requiring several resources to be created and linked together.

@@ -30,6 +30,8 @@ class DetectorEnsemble:
         iou: float = DEFAULT_IOU,
         max_det: int = DEFAULT_MAX_DET,
         augment: bool = True,
+        tile_threshold: int = TILE_THRESHOLD,
+        tile_overlap: float = TILE_OVERLAP,
     ):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.models = []
@@ -41,6 +43,8 @@ class DetectorEnsemble:
         self.iou = iou
         self.max_det = max_det
         self.augment = augment
+        self.tile_threshold = tile_threshold
+        self.tile_overlap = tile_overlap
 
     def predict_single(self, model: YOLO, source, augment: bool | None = None) -> dict:
         """Run one model on a single image/array.
@@ -95,10 +99,10 @@ class DetectorEnsemble:
 
         # Tile size: tile_w = img_w / (cols - (cols-1)*overlap)
         # Step size: step = tile_w * (1 - overlap)
-        tile_w = img_w / (cols - (cols - 1) * TILE_OVERLAP)
-        tile_h = img_h / (rows - (rows - 1) * TILE_OVERLAP)
-        step_x = tile_w * (1 - TILE_OVERLAP)
-        step_y = tile_h * (1 - TILE_OVERLAP)
+        tile_w = img_w / (cols - (cols - 1) * self.tile_overlap)
+        tile_h = img_h / (rows - (rows - 1) * self.tile_overlap)
+        step_x = tile_w * (1 - self.tile_overlap)
+        step_y = tile_h * (1 - self.tile_overlap)
 
         all_boxes = []
         all_scores = []
@@ -165,7 +169,7 @@ class DetectorEnsemble:
             all_dets.append(full_det)
 
         # Tile pass on first model for large images (no TTA on tiles — too slow)
-        if long_side > TILE_THRESHOLD and len(self.models) > 0:
+        if long_side > self.tile_threshold and len(self.models) > 0:
             tile_det = self.predict_tiled(
                 self.models[0], img_path, img_w, img_h, augment=False
             )
