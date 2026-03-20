@@ -1,4 +1,4 @@
-"""Query allocation strategy: coverage-first with adaptive repeats."""
+"""Query allocation strategy: coverage-first with entropy-aware overlap."""
 
 from __future__ import annotations
 
@@ -23,43 +23,104 @@ class QueryPlan:
 
 
 # ---------------------------------------------------------------------------
-# Tiling: cover a map with 15×15 viewports
+# Tiling: cover a map with 15×15 viewports, entropy-aware overlap
 # ---------------------------------------------------------------------------
+def _find_best_positions(
+    length: int,
+    vp_size: int,
+    entropy_profile: NDArray[np.floating] | None = None,
+) -> list[int]:
+    """Find 3 viewport positions along one axis that cover `length` cells.
+
+    For length=40, vp_size=15, we need 3 viewports.
+    Total coverage = 3*15 = 45, so 5 cells get double-covered.
+    The overlap distribution is determined by where we place viewports.
+
+    If entropy_profile is given (shape (length,)), place overlap on
+    the highest-entropy corridor. Otherwise use even spacing.
+    """
+    if length <= vp_size:
+        return [0]
+
+    n_viewports = -(-length // vp_size)  # ceil division
+    if n_viewports <= 1:
+        return [0]
+
+    if n_viewports == 2:
+        return [0, length - vp_size]
+
+    # For 3 viewports covering 40 with vp=15:
+    # pos[0] = 0 (always start at 0)
+    # pos[2] = 25 (always end at length - vp_size)
+    # pos[1] = ? (determines where overlap goes)
+    #
+    # pos[1] must satisfy: pos[1] < pos[0]+vp_size (overlap with first)
+    #                  and pos[1]+vp_size > pos[2] (overlap with third)
+    # So: pos[2]-vp_size < pos[1] < pos[0]+vp_size
+    # For 40/15: 10 < pos[1] < 15
+    # Valid range: [11, 14] → overlap shifts accordingly
+
+    last_pos = length - vp_size
+    min_mid = last_pos - vp_size + 1  # must overlap with last viewport
+    max_mid = vp_size - 1  # must overlap with first viewport
+
+    if min_mid > max_mid:
+        # Can't do 3 viewports with overlap — just space evenly
+        step = (length - vp_size) / (n_viewports - 1)
+        return [round(i * step) for i in range(n_viewports)]
+
+    if entropy_profile is None or len(entropy_profile) != length:
+        # Default: center the middle viewport
+        mid = (min_mid + max_mid) // 2
+        return [0, mid, last_pos]
+
+    # Entropy-aware: find the position that maximizes overlap entropy.
+    # For each candidate mid position, compute the total entropy in
+    # the overlap bands.
+    best_mid = min_mid
+    best_score = -1.0
+
+    for mid in range(min_mid, max_mid + 1):
+        # Overlap with first viewport: cells [mid, min(vp_size, mid+vp_size)-1]
+        overlap1_start = mid
+        overlap1_end = min(vp_size, mid + vp_size)
+        # Overlap with last viewport: cells [last_pos, mid+vp_size-1]
+        overlap2_start = last_pos
+        overlap2_end = min(mid + vp_size, length)
+
+        score = float(entropy_profile[overlap1_start:overlap1_end].sum())
+        score += float(entropy_profile[overlap2_start:overlap2_end].sum())
+
+        if score > best_score:
+            best_score = score
+            best_mid = mid
+
+    return [0, best_mid, last_pos]
+
+
 def generate_tiling(
-    map_w: int, map_h: int, vp_size: int = 15
+    map_w: int,
+    map_h: int,
+    vp_size: int = 15,
+    entropy_map: NDArray[np.floating] | None = None,
 ) -> list[tuple[int, int, int, int]]:
     """Generate viewport positions that tile the full map.
 
-    Uses overlapping placement to ensure complete coverage.
-    For a 40-wide map with vp_size=15:
-      positions: 0, 13, 25  (covers 0-14, 13-27, 25-39)
-      Overlap bands at cols 13-14 and 25-27 give bonus repeat observations.
+    If entropy_map (H, W) is provided, places overlap bands on
+    highest-entropy corridors. Otherwise uses even spacing.
 
     Returns list of (x, y, w, h) tuples.
     """
+    if entropy_map is not None:
+        # Compute 1D entropy profiles by summing along each axis
+        x_profile = entropy_map.sum(axis=0)  # shape (W,)
+        y_profile = entropy_map.sum(axis=1)  # shape (H,)
+    else:
+        x_profile = None
+        y_profile = None
 
-    def _positions(length: int, size: int) -> list[int]:
-        if length <= size:
-            return [0]
-        positions = [0]
-        # Place subsequent viewports to cover remaining space
-        pos = 0
-        while pos + size < length:
-            # Next position: start where we'd leave at most `size` remaining
-            remaining = length - (pos + size)
-            if remaining <= 0:
-                break
-            # Step forward, ensuring we don't exceed map bounds
-            step = min(size, remaining + size)
-            next_pos = min(pos + size - 2, length - size)  # -2 for overlap
-            if next_pos <= pos:
-                next_pos = pos + 1
-            pos = next_pos
-            positions.append(pos)
-        return sorted(set(positions))
-
-    xs = _positions(map_w, vp_size)
-    ys = _positions(map_h, vp_size)
+    xs = _find_best_positions(map_w, vp_size, x_profile)
+    ys = _find_best_positions(map_h, vp_size, y_profile)
 
     tiles = []
     for y in ys:
@@ -73,19 +134,62 @@ def generate_tiling(
 # ---------------------------------------------------------------------------
 # Phase 1: Coverage queries (interleaved across seeds)
 # ---------------------------------------------------------------------------
+def _compute_prior_entropy_map(analysis: SeedAnalysis) -> NDArray[np.floating]:
+    """Estimate per-cell entropy from the initial state (no queries needed).
+
+    High entropy = near settlements, mixed terrain, coastal development zones.
+    Low entropy = deep ocean, mountains, isolated forest interiors.
+    """
+    from predictor import _get_calibrated_prior, _initial_terrain_prior
+
+    h, w = analysis.height, analysis.width
+    entropy = np.zeros((h, w), dtype=np.float64)
+
+    for y in range(h):
+        for x in range(w):
+            terrain = int(analysis.grid[y, x])
+            if terrain in (10, 5):  # ocean, mountain — static
+                continue
+
+            archetype = analysis.get_archetype(y, x)
+            prior = _get_calibrated_prior(archetype, terrain)
+            if prior is None:
+                prior = _initial_terrain_prior(terrain)
+
+            # Shannon entropy of the prior
+            nonzero = prior > 0
+            if nonzero.any():
+                ent = -np.sum(prior[nonzero] * np.log(prior[nonzero]))
+                entropy[y, x] = ent
+
+    return entropy
+
+
 def plan_coverage_queries(
     seeds_count: int,
     map_w: int,
     map_h: int,
     max_budget: int = 50,
+    seed_analyses: list[SeedAnalysis] | None = None,
 ) -> list[QueryPlan]:
     """Plan coverage queries interleaved across all seeds.
 
     Interleaving ensures that if we run out of budget, we have partial
     coverage of ALL seeds rather than full coverage of some and zero of others.
+
+    If seed_analyses are provided, uses entropy-aware overlap placement.
     """
-    tiles = generate_tiling(map_w, map_h)
-    tiles_per_seed = len(tiles)  # typically 9 for 40×40
+    # Generate per-seed tilings (possibly entropy-aware)
+    per_seed_tiles: list[list[tuple[int, int, int, int]]] = []
+    for seed_idx in range(seeds_count):
+        if seed_analyses is not None:
+            entropy_map = _compute_prior_entropy_map(seed_analyses[seed_idx])
+            tiles = generate_tiling(map_w, map_h, entropy_map=entropy_map)
+        else:
+            tiles = generate_tiling(map_w, map_h)
+        per_seed_tiles.append(tiles)
+
+    tiles_per_seed = len(per_seed_tiles[0])  # typically 9 for 40×40
 
     queries: list[QueryPlan] = []
 
@@ -94,7 +198,7 @@ def plan_coverage_queries(
         for seed_idx in range(seeds_count):
             if len(queries) >= max_budget:
                 break
-            x, y, w, h = tiles[tile_idx]
+            x, y, w, h = per_seed_tiles[seed_idx][tile_idx]
             queries.append(
                 QueryPlan(
                     seed_index=seed_idx,
@@ -111,8 +215,61 @@ def plan_coverage_queries(
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: Adaptive repeat queries
+# Phase 2: Adaptive repeat queries — value-of-information scoring
 # ---------------------------------------------------------------------------
+TAU_FOR_VOI = 15.0
+VP_SIZE = 15
+
+
+def _compute_cell_value_grid(
+    observation_store: ObservationStore,
+    seed_idx: int,
+    analysis: SeedAnalysis,
+) -> NDArray[np.floating]:
+    """Per-cell expected value of an additional observation.
+
+    value(cell) = H(prior) * (1 - Σ q_k²) / (N + τ + 1)
+
+    H(prior) ≈ scoring weight (entropy-weighted KL).
+    (1 - Σ q_k²) = Gini impurity of current posterior (uncertainty).
+    1/(N+τ+1) = marginal value decays with more observations.
+    """
+    from predictor import _get_calibrated_prior, _initial_terrain_prior
+
+    h, w = analysis.height, analysis.width
+    counts_grid = observation_store.get_seed_counts(seed_idx)
+    obs_grid = observation_store.get_seed_obs_counts(seed_idx)
+    value_grid = np.zeros((h, w), dtype=np.float64)
+
+    for y in range(h):
+        for x in range(w):
+            if not analysis.priority_mask[y, x]:
+                continue
+
+            terrain = int(analysis.grid[y, x])
+            archetype = analysis.get_archetype(y, x)
+
+            prior = _get_calibrated_prior(archetype, terrain)
+            if prior is None:
+                prior = _initial_terrain_prior(terrain)
+            nonzero = prior > 0
+            if not nonzero.any():
+                continue
+            h_prior = float(-np.sum(prior[nonzero] * np.log(prior[nonzero])))
+            if h_prior < 0.01:
+                continue
+
+            counts = counts_grid[y, x].astype(np.float64)
+            n = float(obs_grid[y, x])
+            posterior = (counts + 0.5) / (n + 3.0)
+            gini = 1.0 - float(np.sum(posterior**2))
+            marginal = 1.0 / (n + TAU_FOR_VOI + 1.0)
+
+            value_grid[y, x] = h_prior * gini * marginal
+
+    return value_grid
+
+
 def plan_repeat_queries(
     observation_store: ObservationStore,
     seed_analyses: list[SeedAnalysis],
@@ -120,44 +277,47 @@ def plan_repeat_queries(
     map_w: int,
     map_h: int,
 ) -> list[QueryPlan]:
-    """Select repeat queries targeting highest-uncertainty dynamic regions.
+    """Select repeat queries by searching ALL legal 15×15 windows.
 
-    Strategy: for each possible viewport position, compute the sum of
-    posterior entropy over dynamic (priority) cells.  Pick the viewports
-    with the highest total uncertainty.
+    Scores each window by sum of cell-level expected value-of-information,
+    which combines scoring weight (prior entropy), prediction uncertainty
+    (Gini impurity), and marginal value (1/(N+τ+1)).
     """
     if remaining_budget <= 0:
         return []
 
-    tiles = generate_tiling(map_w, map_h)
-    candidates: list[tuple[float, int, int, int, int, int]] = []
+    vp = VP_SIZE
+    max_x = max(0, map_w - vp)
+    max_y = max(0, map_h - vp)
+
+    candidates: list[tuple[float, int, int, int]] = []
 
     for seed_idx, analysis in enumerate(seed_analyses):
-        entropy_grid = observation_store.compute_entropy_grid(seed_idx)
+        value_grid = _compute_cell_value_grid(observation_store, seed_idx, analysis)
 
-        for x, y, w, h in tiles:
-            # Sum entropy only over priority (dynamic) cells in this viewport
-            vp_entropy = 0.0
-            for ry in range(h):
-                for rx in range(w):
-                    ay, ax = y + ry, x + rx
-                    if ay < map_h and ax < map_w and analysis.priority_mask[ay, ax]:
-                        vp_entropy += entropy_grid[ay, ax]
+        sat = np.zeros((map_h + 1, map_w + 1), dtype=np.float64)
+        sat[1:, 1:] = np.cumsum(np.cumsum(value_grid, axis=0), axis=1)
 
-            candidates.append((vp_entropy, seed_idx, x, y, w, h))
+        for vy in range(max_y + 1):
+            for vx in range(max_x + 1):
+                ey = min(vy + vp, map_h)
+                ex = min(vx + vp, map_w)
+                window_val = sat[ey, ex] - sat[vy, ex] - sat[ey, vx] + sat[vy, vx]
+                candidates.append((float(window_val), seed_idx, vx, vy))
 
-    # Sort by descending entropy
     candidates.sort(key=lambda c: c[0], reverse=True)
 
     queries: list[QueryPlan] = []
-    for _, seed_idx, x, y, w, h in candidates[:remaining_budget]:
+    for _, seed_idx, vx, vy in candidates[:remaining_budget]:
+        vw = min(vp, map_w - vx)
+        vh = min(vp, map_h - vy)
         queries.append(
             QueryPlan(
                 seed_index=seed_idx,
-                viewport_x=x,
-                viewport_y=y,
-                viewport_w=w,
-                viewport_h=h,
+                viewport_x=vx,
+                viewport_y=vy,
+                viewport_w=vw,
+                viewport_h=vh,
             )
         )
 

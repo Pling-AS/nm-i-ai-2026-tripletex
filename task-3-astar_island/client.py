@@ -70,14 +70,14 @@ class AstarClient:
     def _get(self, path: str) -> Any:
         self._rate_limit()
         url = f"{self._base}{path}"
-        resp = self._session.get(url, timeout=30)
+        resp = self._session.get(url, timeout=120)
         resp.raise_for_status()
         return resp.json()
 
     def _post(self, path: str, payload: dict[str, Any]) -> Any:
         self._rate_limit()
         url = f"{self._base}{path}"
-        resp = self._session.post(url, json=payload, timeout=30)
+        resp = self._session.post(url, json=payload, timeout=120)
         resp.raise_for_status()
         return resp.json()
 
@@ -167,6 +167,10 @@ class AstarClient:
     def get_my_rounds(self) -> list[dict[str, Any]]:
         """GET /astar-island/my-rounds — rounds with scores and budget."""
         return self._get("/astar-island/my-rounds")
+
+    def get_my_predictions(self, round_id: str) -> list[dict[str, Any]]:
+        """GET /astar-island/my-predictions/{round_id} — predictions with argmax/confidence."""
+        return self._get(f"/astar-island/my-predictions/{round_id}")
 
     def get_analysis(self, round_id: str, seed_index: int) -> dict[str, Any]:
         """GET /astar-island/analysis/{round_id}/{seed_index} — post-round analysis."""

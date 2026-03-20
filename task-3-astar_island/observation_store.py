@@ -1,8 +1,13 @@
-"""Aggregate observations and compute Dirichlet posteriors."""
+"""Aggregate observations and compute Dirichlet posteriors.
+
+Supports save/load to disk for resubmission without re-querying.
+"""
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -140,3 +145,70 @@ class ObservationStore:
             log_post = np.where(posterior > 0, np.log(posterior), 0.0)
         entropy = -np.sum(posterior * log_post, axis=-1)
         return entropy
+
+    # ------------------------------------------------------------------
+    # Persistence — save/load observation data to disk
+    # ------------------------------------------------------------------
+    def save(self, path: str | Path) -> None:
+        """Save observation data (counts + archetype pools) to .npz file."""
+        path = Path(path)
+
+        # Serialize archetype counts/obs_counts to JSON-compatible format
+        arch_data = {}
+        for arch, counts in self._archetype_counts.items():
+            key = str(arch)
+            arch_data[key] = {
+                "counts": counts.tolist(),
+                "obs_count": self._archetype_obs_count[arch],
+            }
+
+        # Save numpy arrays + archetype JSON
+        np.savez_compressed(
+            path.with_suffix(".npz"),
+            counts=self._counts,
+            obs_count=self._obs_count,
+        )
+
+        # Save archetype data separately as JSON (NamedTuple keys aren't numpy-friendly)
+        json_path = path.with_suffix(".json")
+        meta = {
+            "seeds_count": self.seeds_count,
+            "height": self.height,
+            "width": self.width,
+            "archetype_pools": arch_data,
+        }
+        json_path.write_text(json.dumps(meta, indent=2))
+        print(f"[obs_store] Saved to {path.with_suffix('.npz')} + {json_path}")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ObservationStore":
+        """Load observation data from disk."""
+        path = Path(path)
+        npz_path = path.with_suffix(".npz")
+        json_path = path.with_suffix(".json")
+
+        # Load metadata + archetype pools
+        meta = json.loads(json_path.read_text())
+        store = cls(meta["seeds_count"], meta["height"], meta["width"])
+
+        # Load numpy arrays
+        data = np.load(npz_path)
+        store._counts = data["counts"]
+        store._obs_count = data["obs_count"]
+
+        for key_str, pool in meta["archetype_pools"].items():
+            if "has_adjacent_ruin" in key_str:
+                key_str = key_str.replace(", has_adjacent_ruin=True", "").replace(
+                    ", has_adjacent_ruin=False", ""
+                )
+            arch = eval(key_str)
+            store._archetype_counts[arch] += np.array(pool["counts"], dtype=np.int32)
+            store._archetype_obs_count[arch] += pool["obs_count"]
+
+        n_cells_observed = int((store._obs_count > 0).sum())
+        n_archetypes = len(store._archetype_counts)
+        print(
+            f"[obs_store] Loaded: {n_cells_observed} cells observed, "
+            f"{n_archetypes} archetype pools"
+        )
+        return store

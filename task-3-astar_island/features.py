@@ -35,11 +35,10 @@ from utils import (
 class CellArchetype(NamedTuple):
     """Hashable archetype key for pooling observations across seeds."""
 
-    initial_terrain: int  # internal terrain code at t=0
-    is_coastal: bool  # adjacent to ocean?
-    dist_settlement_bucket: int  # 0=on settlement, 1=adjacent, 2=near(2-4), 3=far(5+)
+    initial_terrain: int
+    is_coastal: bool
+    dist_settlement_bucket: int  # 0=on, 1=adjacent, 2=near(2-4), 3=far(5+)
     has_adjacent_settlement: bool
-    has_adjacent_ruin: bool
 
 
 def _distance_bucket(dist: float) -> int:
@@ -202,7 +201,6 @@ class SeedAnalysis:
         archetypes = np.empty((h, w), dtype=object)
 
         has_adj_settlement = self.dist_to_settlement <= 1.5
-        has_adj_ruin = self.dist_to_ruin <= 1.5
 
         for y in range(h):
             for x in range(w):
@@ -213,7 +211,6 @@ class SeedAnalysis:
                         self.dist_to_settlement[y, x]
                     ),
                     has_adjacent_settlement=bool(has_adj_settlement[y, x]),
-                    has_adjacent_ruin=bool(has_adj_ruin[y, x]),
                 )
         return archetypes
 

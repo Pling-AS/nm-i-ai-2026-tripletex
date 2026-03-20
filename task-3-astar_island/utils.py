@@ -54,34 +54,27 @@ def is_static(terrain_code: int) -> bool:
 # ---------------------------------------------------------------------------
 # Probability helpers
 # ---------------------------------------------------------------------------
+FLOOR_EPS = 0.001
+
+
 def apply_floor_and_normalize(
     probs: NDArray[np.floating],
     class_mask: NDArray[np.bool_],
-    epsilon: float = 0.005,
+    epsilon: float = FLOOR_EPS,
 ) -> NDArray[np.floating]:
-    """Apply minimum probability floor only to *allowed* classes, then renormalize.
+    """Floor allowed classes at epsilon, then renormalize.
 
-    Parameters
-    ----------
-    probs : (6,) array of predicted probabilities.
-    class_mask : (6,) boolean array — True for classes that are possible.
-    epsilon : minimum probability for allowed classes.
-
-    Returns
-    -------
-    (6,) normalized probability vector.
+    The additive floor acts as regularization against prior miscalibration:
+    classes with exact-zero priors get a minimum mass, hedging against
+    ground-truth surprises. Optimal eps found by sweep: 0.001.
     """
     out = probs.copy()
-    # Zero out impossible classes
     out[~class_mask] = 0.0
-    # Floor on allowed classes
     out[class_mask] = np.maximum(out[class_mask], epsilon)
-    # Renormalize
     total = out.sum()
     if total > 0:
         out /= total
     else:
-        # Fallback: uniform over allowed classes
         n_allowed = class_mask.sum()
         out[class_mask] = 1.0 / max(n_allowed, 1)
     return out
@@ -90,28 +83,13 @@ def apply_floor_and_normalize(
 def apply_floor_and_normalize_grid(
     prediction: NDArray[np.floating],
     class_masks: NDArray[np.bool_],
-    epsilon: float = 0.005,
+    epsilon: float = FLOOR_EPS,
 ) -> NDArray[np.floating]:
-    """Vectorized version of apply_floor_and_normalize for full H×W×6 tensor.
-
-    Parameters
-    ----------
-    prediction : (H, W, 6) probability tensor.
-    class_masks : (H, W, 6) boolean mask of allowed classes per cell.
-    epsilon : minimum probability for allowed classes.
-
-    Returns
-    -------
-    (H, W, 6) normalized probability tensor.
-    """
+    """Vectorized: floor allowed classes at epsilon, then renormalize."""
     out = prediction.copy()
-    # Zero out impossible classes
     out[~class_masks] = 0.0
-    # Floor on allowed classes
     out = np.where(class_masks, np.maximum(out, epsilon), 0.0)
-    # Renormalize per cell
     totals = out.sum(axis=-1, keepdims=True)
-    # Avoid division by zero
     totals = np.where(totals > 0, totals, 1.0)
     out /= totals
     return out
