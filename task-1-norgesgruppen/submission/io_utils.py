@@ -62,17 +62,17 @@ def format_predictions(
 
 def write_predictions(predictions: list[dict], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(predictions, f)
 
 
 def load_predictions(path: Path) -> list[dict]:
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 
 def load_coco_annotations(path: Path) -> dict:
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 

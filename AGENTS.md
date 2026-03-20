@@ -67,7 +67,7 @@ nm-i-ai/
     ├── docs/                      #   Overview, mechanics, API, scoring, quickstart
     ├── client.py                  #   REST API client
     ├── run.py                     #   Main pipeline (query -> predict -> submit)
-    ├── predictor.py               #   Dirichlet posterior predictor
+    ├── solution_spatial.py        #   Spatial Bayesian Diffusion predictor
     ├── query_strategy.py          #   Entropy-aware viewport tiling
     ├── observation_store.py       #   Observation accumulator (save/load)
     ├── features.py                #   Cell archetypes, priority masks
@@ -101,6 +101,8 @@ nm-i-ai/
 
 ### Task 3 — Astar Island (Norse World Prediction)
 
+**STATUS: VERIFIED (Score 91.55)**
+
 | Aspect | Detail |
 |--------|--------|
 | Type | Predict terrain probability distributions |
@@ -125,6 +127,7 @@ nm-i-ai/
 cd task-3-astar_island
 uv run run.py                      # Full pipeline: query + predict + submit
 uv run run.py --predict-only       # Re-predict from saved observations
+uv run simulate_round.py           # Verify solution against Round 2 ground truth
 uv run analyze.py                  # Post-round analysis + calibration
 uv run analyze.py --all            # Analyze all completed rounds
 

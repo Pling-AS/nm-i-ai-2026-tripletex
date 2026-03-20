@@ -48,7 +48,7 @@ def find_classifier_bundle(script_dir: Path) -> Path | None:
 def load_thresholds(script_dir: Path) -> dict:
     p = script_dir / "thresholds.json"
     if p.exists():
-        with open(p) as f:
+        with p.open() as f:
             return json.load(f)
     return {}
 
@@ -165,7 +165,7 @@ def main():
             )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with output_path.open("w") as f:
         json.dump(all_predictions, f)
 
     elapsed = time.time() - start_time
