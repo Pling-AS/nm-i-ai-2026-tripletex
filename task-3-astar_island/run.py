@@ -32,6 +32,7 @@ from predictor import (
     compute_round_tau,
     predict_full_grid_vectorized,
     set_round_tau,
+    set_settlement_vitality,
 )
 from query_strategy import (
     QueryPlan,
@@ -116,6 +117,9 @@ def _query_phase(
 
     observation_store = ObservationStore(seeds_count, height, width)
 
+    # Accumulate settlement data from simulate responses
+    all_settlement_obs: list[dict] = []
+
     coverage_queries = plan_coverage_queries(
         seeds_count,
         width,
@@ -148,6 +152,10 @@ def _query_phase(
                 archetypes=seed_analyses[q.seed_index].archetypes,
             )
             coverage_successes += 1
+            # Capture settlement metadata from simulate response
+            if result.settlements:
+                for s in result.settlements:
+                    all_settlement_obs.append(s)
             if (i + 1) % 10 == 0 or i == n_coverage - 1:
                 log(
                     f"    [{i + 1}/{n_coverage}] seed={q.seed_index} "
@@ -236,6 +244,37 @@ def _query_phase(
     DATA_DIR.mkdir(exist_ok=True)
     obs_file = _obs_path(round_id)
     observation_store.save(obs_file)
+
+    # Compute round-level settlement vitality from captured data
+    if all_settlement_obs:
+        n_alive = sum(1 for s in all_settlement_obs if s.get("alive", False))
+        n_total = len(all_settlement_obs)
+        alive_rate = n_alive / n_total if n_total > 0 else 0.5
+
+        pops = [s.get("population", 0) for s in all_settlement_obs if s.get("alive", False)]
+        foods = [s.get("food", 0) for s in all_settlement_obs if s.get("alive", False)]
+        defenses = [s.get("defense", 0) for s in all_settlement_obs if s.get("alive", False)]
+
+        avg_pop = sum(pops) / len(pops) if pops else 0.0
+        avg_food = sum(foods) / len(foods) if foods else 0.0
+        avg_def = sum(defenses) / len(defenses) if defenses else 0.0
+
+        vitality = {
+            "alive_rate": alive_rate,
+            "avg_population": avg_pop,
+            "avg_food": avg_food,
+            "avg_defense": avg_def,
+            "n_observations": n_total,
+        }
+        log(
+            f"  Settlement vitality: alive={alive_rate:.1%} "
+            f"({n_alive}/{n_total}), avg_pop={avg_pop:.2f}, "
+            f"avg_food={avg_food:.2f}, avg_def={avg_def:.2f}"
+        )
+        set_settlement_vitality(vitality)
+    else:
+        log("  No settlement data captured (predict-only or empty)")
+        set_settlement_vitality(None)
 
     return observation_store
 

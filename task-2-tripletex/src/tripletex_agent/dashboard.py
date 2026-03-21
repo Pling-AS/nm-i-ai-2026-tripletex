@@ -115,6 +115,7 @@ def verify_dashboard_access(
 _submissions_cache: list[dict[str, Any]] = []
 _submissions_cache_ts: float = 0
 _enrichment_retry_state: dict[str, dict[str, float | int]] = {}
+_enrich_lock = asyncio.Lock()
 
 
 async def _get_cached_submissions(force_refresh: bool = False) -> list[dict[str, Any]]:
@@ -487,6 +488,11 @@ async def list_runs() -> JSONResponse:
 
 @router.post("/api/runs/enrich")
 async def enrich_runs() -> JSONResponse:
+    async with _enrich_lock:
+        return await _do_enrich_runs()
+
+
+async def _do_enrich_runs() -> JSONResponse:
     store = get_run_store()
     submissions = await _get_cached_submissions(force_refresh=True)
     enriched_count = 0
@@ -548,9 +554,13 @@ async def enrich_runs() -> JSONResponse:
                     model=settings.enforcer_model,
                 )
                 if analysis:
-                    append_postmortem_event(path, analysis)
-                    store.invalidate_run(run_id)
-                    postmortem_count += 1
+                    fresh_events = store.parse_trace_file(path)
+                    if not any(
+                        e.get("event_type") == "post_mortem" for e in fresh_events
+                    ):
+                        append_postmortem_event(path, analysis)
+                        store.invalidate_run(run_id)
+                        postmortem_count += 1
         finally:
             await openrouter.close()
 
@@ -669,6 +679,12 @@ async def generate_run_postmortem(run_id: str) -> JSONResponse:
 
     cached = store._by_run_id.get(run_id)
     if cached:
+        fresh_events = store.parse_trace_file(cached.path)
+        if any(e.get("event_type") == "post_mortem" for e in fresh_events):
+            pm_event = next(e for e in fresh_events if e["event_type"] == "post_mortem")
+            return JSONResponse(
+                {"status": "exists", "post_mortem": pm_event["payload"]}
+            )
         append_postmortem_event(cached.path, analysis)
         store.invalidate_run(run_id)
 

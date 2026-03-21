@@ -74,6 +74,12 @@ NEIGHBOR_MAX_TOTAL = 2.0
 # Same terrain map means same-position cells share terrain-driven dynamics.
 CROSS_SEED_LAMBDA = 0.5  # 0 = disabled; >0 = total pseudo-count weight from other seeds
 
+# Settlement vitality conditioning: use actual settlement stats (population,
+# food, defense) from simulate API to nudge priors for near-settlement cells.
+# Strength controls max prior adjustment: 0.05 = max ~1 percentage point shift.
+SETTLEMENT_VITALITY_STRENGTH = 0.05
+_settlement_vitality: dict | None = None
+
 FIELD_SIGMA = 2.0
 FIELD_LAMBDA0 = 8.0
 FIELD_ALPHA = 1.0
@@ -103,7 +109,18 @@ def set_round_tau(tau: float) -> None:
     global TAU, _round_regime
     TAU = tau
     _round_regime = "hard" if tau < 20.0 else "easy"
-    print(f"[predictor] Round τ={tau:.1f}, regime='{_round_regime}'")
+    print(f"[predictor] Round τ={tau:.1f}, regime=\'{_round_regime}\'")
+
+
+def set_settlement_vitality(vitality: dict | None) -> None:
+    """Set round-level settlement vitality from simulate API data."""
+    global _settlement_vitality
+    _settlement_vitality = vitality
+    if vitality:
+        ar = vitality["alive_rate"]
+        print(f"[predictor] Settlement vitality: alive_rate={ar:.1%}, strength={SETTLEMENT_VITALITY_STRENGTH}")
+    else:
+        print("[predictor] Settlement vitality: disabled (no data)")
 
 
 def compute_round_tau(
@@ -614,7 +631,28 @@ def predict_full_grid_vectorized(
             prior_mean = _get_prior_mean(
                 seed_index, seed_analysis, observation_store, y, x, terrain
             )
+
+            # Settlement vitality conditioning
             archetype = seed_analysis.get_archetype(y, x)
+            if (
+                _settlement_vitality is not None
+                and SETTLEMENT_VITALITY_STRENGTH > 0
+                and archetype.dist_settlement_bucket <= 2
+                and prior_mean[CLASS_SETTLEMENT] > 0.03
+            ):
+                ar = _settlement_vitality["alive_rate"]
+                delta = (ar - 0.5) * 2.0  # [-1, 1]
+                boost = delta * SETTLEMENT_VITALITY_STRENGTH
+                adjusted = prior_mean.copy()
+                adjusted[CLASS_SETTLEMENT] += boost
+                adjusted[CLASS_PORT] += boost * 0.2
+                adjusted[CLASS_RUIN] -= boost * 0.4
+                adjusted[CLASS_EMPTY] -= boost * 0.5
+                adjusted[CLASS_FOREST] -= boost * 0.3
+                adjusted = np.clip(adjusted, 1e-4, None)
+                adjusted /= adjusted.sum()
+                prior_mean = adjusted
+
             adaptive_tau = _get_adaptive_tau(archetype)
             n_eff = effective_counts.sum()
 
