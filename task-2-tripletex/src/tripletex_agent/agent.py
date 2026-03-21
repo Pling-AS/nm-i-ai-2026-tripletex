@@ -43,6 +43,14 @@ class AgentRunResult:
 
 
 @dataclass(slots=True)
+class CreatedResource:
+    path: str
+    resource_id: int | None
+    method: str
+    key_fields: dict[str, Any]
+
+
+@dataclass(slots=True)
 class ExecutionState:
     inspected_schemas: set[str] = field(default_factory=set)
     cached_tool_results: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -53,14 +61,11 @@ class ExecutionState:
     last_enforcer_suggestion: str = ""
     created_entity_keys: set[str] = field(default_factory=set)
     advisor_recovery_keys: set[str] = field(default_factory=set)
-    # Circuit breaker: consecutive proxy token errors
     consecutive_proxy_errors: int = 0
-    # Time budget: wall-clock start (set in solve())
     start_time: float = 0.0
-    # Track total API errors for conditional enforcer (P3)
     total_api_errors: int = 0
-    # Track 422 endpoints for conditional advisor (P3)
     advisor_422_endpoints: set[str] = field(default_factory=set)
+    created_resources: list[CreatedResource] = field(default_factory=list)
 
 
 class TripletexAccountingAgent:
@@ -163,6 +168,13 @@ class TripletexAccountingAgent:
                 trace,
                 model_chain=executor_chain,
             )
+            await self._verify_and_repair(
+                openrouter,
+                tripletex,
+                planner,
+                execution_state,
+                trace,
+            )
             trace.write(
                 "done",
                 {
@@ -194,7 +206,12 @@ class TripletexAccountingAgent:
         messages: list[dict[str, Any]],
         model_chain: list[str],
     ) -> dict[str, Any]:
-        """Call complete_json trying each model in chain on retryable failures."""
+        """Call complete_json trying each model in chain on retryable failures.
+
+        If a model produces unparseable JSON (likely truncated output), retry
+        the same model once with a higher max_tokens budget before falling back
+        to the next model in the chain.
+        """
         last_exc: Exception | None = None
         for model in model_chain:
             try:
@@ -202,6 +219,42 @@ class TripletexAccountingAgent:
                     messages=messages,
                     model_override=model,
                 )
+            except OpenRouterError as exc:
+                is_parse_error = "Failed to parse JSON from LLM output" in str(exc)
+                if is_parse_error:
+                    # Likely truncated — retry same model with higher token budget
+                    logger.warning(
+                        "Model %s JSON parse failed (likely truncated), retrying with higher max_tokens",
+                        model,
+                    )
+                    try:
+                        return await openrouter.complete_json(
+                            messages=messages,
+                            model_override=model,
+                            max_tokens=4096,
+                        )
+                    except Exception as retry_exc:
+                        last_exc = retry_exc
+                        if (
+                            _should_fallback_on_error(retry_exc)
+                            and model != model_chain[-1]
+                        ):
+                            logger.warning(
+                                "Model %s retry also failed (%s), falling back",
+                                model,
+                                retry_exc,
+                            )
+                            continue
+                        raise
+                last_exc = exc
+                if _should_fallback_on_error(exc) and model != model_chain[-1]:
+                    logger.warning(
+                        "Model %s failed (%s), falling back to next in chain",
+                        model,
+                        exc,
+                    )
+                    continue
+                raise
             except Exception as exc:
                 last_exc = exc
                 if _should_fallback_on_error(exc) and model != model_chain[-1]:
@@ -728,10 +781,11 @@ class TripletexAccountingAgent:
                                 "or search_tripletex_api unless the schema is genuinely missing."
                             ),
                             (
-                                "FIELD RULES: execution_brief.field_rules contains CRITICAL "
-                                "validation rules for each endpoint. OBEY these rules on your "
-                                "FIRST attempt — they prevent known 422 errors. Every 4xx error "
-                                "reduces your efficiency score."
+                                "FIELD RULES: execution_brief.field_rules contains historical "
+                                "guidance for each endpoint. Follow these on your FIRST attempt, "
+                                "but if a rule leads to a 422 error, IGNORE that rule and use the "
+                                "prefetched_schemas as the authoritative reference instead. "
+                                "The API schema always takes priority over field rules."
                             ),
                             (
                                 "TRACE TEMPLATE: If execution_brief.successful_trace_example "
@@ -990,10 +1044,7 @@ class TripletexAccountingAgent:
                             }
                         )
                         continue
-                    should_run_semantic = (
-                        not execution_state.enforcer_override_active
-                        and execution_state.total_api_errors > 0
-                    )
+                    should_run_semantic = not execution_state.enforcer_override_active
                     semantic: dict[str, Any] | None = None
                     if should_run_semantic:
                         semantic = await self._semantic_enforce(
@@ -1068,6 +1119,15 @@ class TripletexAccountingAgent:
                         tool_result["enforcer_reminder"] = (
                             f"The enforcer previously warned about this. "
                             f"Follow its suggestion: {execution_state.last_enforcer_suggestion}"
+                        )
+                    if (
+                        not tool_result.get("ok")
+                        and tool_result.get("status_code") == 422
+                    ):
+                        tool_result["schema_priority_hint"] = (
+                            "If a field_rule guided this call, that rule may be stale. "
+                            "Check the prefetched_schemas for the correct field names, "
+                            "types, and required fields. The API schema is authoritative."
                         )
 
                     advisor_endpoint_key = f"{(arguments.get('method') or 'GET').upper()} {arguments.get('path', '')}"
@@ -1314,6 +1374,17 @@ class TripletexAccountingAgent:
                 resource_id = _extract_primary_resource_id(response)
                 if resource_id is not None:
                     result["resource_id"] = resource_id
+                method_upper = (arguments.get("method") or "").upper()
+                if method_upper in ("POST", "PUT"):
+                    key_fields = _extract_key_fields(response)
+                    execution_state.created_resources.append(
+                        CreatedResource(
+                            path=arguments.get("path", ""),
+                            resource_id=resource_id,
+                            method=method_upper,
+                            key_fields=key_fields,
+                        )
+                    )
                 summary = _build_success_summary(
                     tool_name=tool_name,
                     arguments=arguments,
@@ -1497,6 +1568,180 @@ class TripletexAccountingAgent:
             )
 
         return None
+
+    async def _verify_and_repair(
+        self,
+        openrouter: OpenRouterClient,
+        tripletex: TripletexClient,
+        planner: PlannerOutput,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+    ) -> None:
+        remaining = 280.0 - (time.monotonic() - execution_state.start_time)
+        if remaining < 30:
+            return
+        if not execution_state.created_resources:
+            return
+
+        post_resources = [
+            r
+            for r in execution_state.created_resources
+            if r.method == "POST" and r.resource_id is not None
+        ]
+        if not post_resources:
+            return
+
+        entity_lookup: dict[str, dict[str, Any]] = {}
+        for entity in getattr(planner, "entities", []):
+            role = entity.role.lower()
+            entry: dict[str, Any] = {}
+            if entity.name:
+                entry["name"] = entity.name
+            if entity.email:
+                entry["email"] = entity.email
+                entry["invoiceEmail"] = entity.email
+            if entity.organization_number:
+                entry["organizationNumber"] = entity.organization_number
+            if entity.phone:
+                entry["phoneNumber"] = entity.phone
+            for k, v in entity.extra_fields.items():
+                entry[k] = v
+            entity_lookup[role] = entry
+
+        if not entity_lookup:
+            return
+
+        _ENTITY_PATH_ROLES = {
+            "/employee": ("employee",),
+            "/customer": ("customer", "client"),
+            "/supplier": ("supplier", "vendor"),
+            "/project": ("project",),
+            "/product": ("product",),
+            "/department": ("department",),
+        }
+
+        mismatches: list[dict[str, Any]] = []
+        for resource in post_resources:
+            remaining = 280.0 - (time.monotonic() - execution_state.start_time)
+            if remaining < 20:
+                break
+
+            path_base = resource.path.rstrip("/").split("?")[0]
+            matched_roles: tuple[str, ...] = ()
+            for endpoint_prefix, roles in _ENTITY_PATH_ROLES.items():
+                if path_base == endpoint_prefix or path_base.startswith(
+                    endpoint_prefix + "/"
+                ):
+                    matched_roles = roles
+                    break
+            if not matched_roles:
+                continue
+
+            expected: dict[str, Any] | None = None
+            matched_role = ""
+            for role in matched_roles:
+                if role in entity_lookup:
+                    expected = entity_lookup[role]
+                    matched_role = role
+                    break
+            if expected is None:
+                continue
+
+            try:
+                actual = await tripletex.request(
+                    method="GET",
+                    path=f"{path_base}/{resource.resource_id}",
+                    params={"fields": "*"},
+                )
+            except Exception:
+                continue
+
+            actual_value = (
+                actual.get("value", actual) if isinstance(actual, dict) else actual
+            )
+            if not isinstance(actual_value, dict):
+                continue
+
+            field_mismatches: dict[str, dict[str, Any]] = {}
+            for field_name, expected_val in expected.items():
+                actual_val = actual_value.get(field_name)
+                if actual_val is None and expected_val is not None:
+                    field_mismatches[field_name] = {
+                        "expected": expected_val,
+                        "actual": None,
+                    }
+                elif (
+                    isinstance(expected_val, str)
+                    and isinstance(actual_val, str)
+                    and expected_val.strip().lower() != actual_val.strip().lower()
+                ):
+                    field_mismatches[field_name] = {
+                        "expected": expected_val,
+                        "actual": actual_val,
+                    }
+
+            if field_mismatches:
+                mismatches.append(
+                    {
+                        "role": matched_role,
+                        "path": path_base,
+                        "resource_id": resource.resource_id,
+                        "mismatches": field_mismatches,
+                        "version": actual_value.get("version"),
+                    }
+                )
+
+        if not mismatches:
+            trace.write(
+                "verification", {"status": "pass", "checked": len(post_resources)}
+            )
+            return
+
+        trace.write(
+            "verification",
+            {
+                "status": "mismatches_found",
+                "checked": len(post_resources),
+                "mismatches": mismatches,
+            },
+        )
+
+        for mismatch in mismatches:
+            remaining = 280.0 - (time.monotonic() - execution_state.start_time)
+            if remaining < 15:
+                break
+
+            repair_body: dict[str, Any] = {"id": mismatch["resource_id"]}
+            if mismatch.get("version") is not None:
+                repair_body["version"] = mismatch["version"]
+            for field_name, vals in mismatch["mismatches"].items():
+                repair_body[field_name] = vals["expected"]
+
+            try:
+                await tripletex.request(
+                    method="PUT",
+                    path=f"{mismatch['path']}/{mismatch['resource_id']}",
+                    json_body=repair_body,
+                )
+                trace.write(
+                    "verification_repair",
+                    {
+                        "role": mismatch["role"],
+                        "resource_id": mismatch["resource_id"],
+                        "repaired_fields": list(mismatch["mismatches"].keys()),
+                        "status": "success",
+                    },
+                )
+            except Exception as exc:
+                trace.write(
+                    "verification_repair",
+                    {
+                        "role": mismatch["role"],
+                        "resource_id": mismatch["resource_id"],
+                        "status": "failed",
+                        "error": str(exc)[:200],
+                    },
+                )
 
 
 def build_tool_definitions(
@@ -1748,7 +1993,6 @@ def _extract_completion_json(content: str) -> dict[str, Any] | None:
     if not stripped:
         return None
 
-    # Direct JSON parse
     try:
         result = json.loads(stripped)
         if isinstance(result, dict):
@@ -1756,7 +2000,15 @@ def _extract_completion_json(content: str) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         pass
 
-    # Find JSON with "status" key anywhere in the text
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", stripped, re.DOTALL)
+    if fence_match:
+        try:
+            result = json.loads(fence_match.group(1).strip())
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+
     for match in re.finditer(r'\{[^{}]*"status"\s*:\s*"completed"[^{}]*\}', stripped):
         try:
             result = json.loads(match.group(0))
@@ -1765,7 +2017,6 @@ def _extract_completion_json(content: str) -> dict[str, Any] | None:
         except json.JSONDecodeError:
             continue
 
-    # Find any {...} block that looks like completion JSON
     for match in re.finditer(r"\{[^{}]+\}", stripped):
         try:
             result = json.loads(match.group(0))
@@ -1865,10 +2116,21 @@ def _find_schema_payload_problems(
     ]
     problems: list[dict[str, Any]] = []
 
+    fields_to_rename: list[tuple[str, str]] = []
     for field_name, value in payload.items():
         field_path = f"{path}.{field_name}"
         definition = properties.get(field_name)
         if not isinstance(definition, dict):
+            case_match = _case_insensitive_field_match(field_name, writable_fields)
+            if case_match is not None and isinstance(payload, dict) and depth == 0:
+                fields_to_rename.append((field_name, case_match))
+                logger.warning(
+                    "Auto-correcting field casing '%s' -> '%s' in %s payload",
+                    field_name,
+                    case_match,
+                    schema_name,
+                )
+                continue
             suggestions = _suggest_schema_fields(field_name, writable_fields)
             message = f"Unsupported field `{field_path}` for schema `{schema_name}`."
             if suggestions:
@@ -1977,7 +2239,22 @@ def _find_schema_payload_problems(
                     }
                 )
 
+    if fields_to_rename and isinstance(payload, dict):
+        for old_name, new_name in fields_to_rename:
+            if old_name in payload:
+                payload[new_name] = payload.pop(old_name)
+
     return problems
+
+
+def _case_insensitive_field_match(
+    field_name: str, schema_fields: list[str]
+) -> str | None:
+    lower = field_name.lower()
+    for sf in schema_fields:
+        if sf.lower() == lower and sf != field_name:
+            return sf
+    return None
 
 
 def _suggest_schema_fields(field_name: str, allowed_fields: list[str]) -> list[str]:
@@ -2051,6 +2328,43 @@ def _extract_primary_resource_id(result: Any) -> int | None:
                 if isinstance(first_value_id, int):
                     return first_value_id
     return None
+
+
+_KEY_FIELD_NAMES = frozenset(
+    {
+        "id",
+        "version",
+        "name",
+        "firstName",
+        "lastName",
+        "email",
+        "invoiceEmail",
+        "organizationNumber",
+        "phoneNumber",
+        "number",
+        "invoiceNumber",
+        "amount",
+        "amountCurrency",
+        "unitPriceExcludingVatCurrency",
+        "fixedPrice",
+        "budget",
+        "startDate",
+        "endDate",
+        "invoiceDate",
+        "invoiceDueDate",
+        "paymentDate",
+        "paidAmount",
+    }
+)
+
+
+def _extract_key_fields(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+    value = result.get("value")
+    if not isinstance(value, dict):
+        value = result
+    return {k: v for k, v in value.items() if k in _KEY_FIELD_NAMES and v is not None}
 
 
 def _build_deterministic_completion_payload(
