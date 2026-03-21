@@ -1,65 +1,132 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Header, type DashboardView } from '@/components/Header'
+import { RunList } from '@/components/RunList'
+import { RunDetail } from '@/components/RunDetail'
+import { CompetitionView } from '@/components/CompetitionView'
+import { RawRequestsView } from '@/components/RawRequestsView'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { useSounds } from '@/hooks/useSounds'
+import { useStore } from '@/lib/store'
 
 export default function Home() {
+  const { connectionStatus } = useWebSocket()
+  const { playStart, playComplete, playError } = useSounds()
+  const { runs, activeCount, totalCount, settings, soundEnabled, bestScore } = useStore()
+
+  const [activeView, setActiveView] = useState<DashboardView>('runs')
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'completed' | 'error'>('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'competition' | 'simulation'>('all')
+
+  const prevRunStatusesRef = useRef<Map<string, string>>(new Map())
+  const initializedRef = useRef(false)
+
+  useEffect(() => {
+    if (!initializedRef.current) {
+      prevRunStatusesRef.current = new Map(runs.map((r) => [r.run_id, r.status]))
+      initializedRef.current = true
+      return
+    }
+
+    const prev = prevRunStatusesRef.current
+    for (const run of runs) {
+      const previousStatus = prev.get(run.run_id)
+      if (!previousStatus && run.status === 'running') {
+        playStart()
+      }
+      if (previousStatus === 'running' && run.status === 'completed') {
+        playComplete()
+      }
+      if ((previousStatus === 'running' || !previousStatus) && run.status === 'error') {
+        playError()
+      }
+    }
+    prevRunStatusesRef.current = new Map(runs.map((r) => [r.run_id, r.status]))
+  }, [runs, playComplete, playError, playStart])
+
+  const filteredRuns = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return runs.filter((run) => {
+      const matchesStatus =
+        statusFilter === 'all' ? true : statusFilter === 'error' ? run.status === 'error' || run.status === 'incomplete' : run.status === statusFilter
+      const matchesSource = sourceFilter === 'all' ? true : run.source === sourceFilter
+      const matchesQuery =
+        query.length === 0
+          ? true
+          : [run.prompt, run.task_type, run.run_id, run.goal].some((value) =>
+              (value ?? '').toLowerCase().includes(query),
+            )
+
+      return matchesStatus && matchesSource && matchesQuery
+    })
+  }, [runs, searchQuery, sourceFilter, statusFilter])
+
+  useEffect(() => {
+    if (!selectedRunId && filteredRuns.length > 0) {
+      setSelectedRunId(filteredRuns[0].run_id)
+    }
+    if (selectedRunId && !runs.some((r) => r.run_id === selectedRunId)) {
+      setSelectedRunId(filteredRuns[0]?.run_id ?? null)
+    }
+  }, [filteredRuns, runs, selectedRunId])
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className="flex h-screen min-h-screen w-full flex-col bg-[var(--bg)] text-[var(--text)]">
+      <Header
+        activeView={activeView}
+        onViewChange={setActiveView}
+        plannerModel={settings?.planner_model ?? ''}
+        tier1Model={settings?.tier1_executor_model ?? ''}
+        tier2Model={settings?.tier2_executor_model ?? ''}
+        tier3Model={settings?.tier3_executor_model ?? ''}
+        activeCount={activeCount}
+        totalCount={totalCount}
+        bestScore={bestScore}
+        connectionStatus={connectionStatus}
+        soundEnabled={soundEnabled}
+      />
+
+      <main className="flex min-h-0 flex-1 overflow-hidden">
+        {activeView === 'runs' && (
+          <>
+            <RunList
+              runs={runs}
+              selectedRunId={selectedRunId}
+              onSelectRun={setSelectedRunId}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              sourceFilter={sourceFilter}
+              onSourceFilterChange={setSourceFilter}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            <section className="min-w-0 flex-1 overflow-hidden border-l border-[var(--border)] bg-[var(--bg)]">
+              {selectedRunId ? (
+                <RunDetail runId={selectedRunId} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[var(--text2)]">
+                  Select a run to inspect details
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {activeView === 'competition' && (
+          <section className="min-w-0 flex-1 overflow-auto p-4">
+            <CompetitionView />
+          </section>
+        )}
+
+        {activeView === 'raw-requests' && (
+          <section className="min-w-0 flex-1 overflow-auto p-4">
+            <RawRequestsView />
+          </section>
+        )}
       </main>
     </div>
-  );
+  )
 }

@@ -8,6 +8,7 @@ from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from tripletex_agent.agent import TripletexAccountingAgent
 from tripletex_agent.config import Settings, get_settings
@@ -34,6 +35,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Tripletex Accounting Agent", lifespan=lifespan)
 app.include_router(dashboard_router)
+
+_nextjs_static = Path(__file__).resolve().parents[2] / "dashboard" / "out"
+if (_nextjs_static / "_next").exists():
+    app.mount(
+        "/dashboard/_next",
+        StaticFiles(directory=str(_nextjs_static / "_next")),
+        name="nextjs-static",
+    )
 
 
 @app.middleware("http")
