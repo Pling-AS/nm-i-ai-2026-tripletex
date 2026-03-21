@@ -47,8 +47,8 @@ gcloud builds submit --tag gcr.io/PROJECT-ID/task2 .
 
 ### 3. Submission
 1. Deploy the `task-2-tripletex` directory.
-2. Get your public URL (e.g., `https://my-agent.onrender.com`).
-3. **Smoke Test**: Visit `https://my-agent.onrender.com/health` to confirm it returns `{"status": "ok"}`.
+2. Get your public URL: `https://annamae-subseptate-nonveraciously.ngrok-free.dev` (Active via ngrok)
+3. **Smoke Test**: Visit `https://annamae-subseptate-nonveraciously.ngrok-free.dev/health` to confirm it returns `{"status": "ok"}`.
 4. Submit this URL to [app.ainm.no](https://app.ainm.no) for Task 2.
 
 ---
