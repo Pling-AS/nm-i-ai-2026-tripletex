@@ -9,6 +9,7 @@ dist/
 *.egg-info/
 .DS_Store
 runs/overview.json
+runs/raw_requests.jsonl
 dashboard/out/
 dashboard/node_modules/
 dashboard/.next/

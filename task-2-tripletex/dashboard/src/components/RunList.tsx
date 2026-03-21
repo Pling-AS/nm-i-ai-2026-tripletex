@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { RunCard } from './RunCard'
@@ -34,12 +35,24 @@ export function RunList({
   runs, selectedRunId, onSelectRun, searchQuery, onSearchChange,
   statusFilter, onStatusFilterChange, sourceFilter, onSourceFilterChange,
 }: RunListProps) {
+  const [hostnameFilter, setHostnameFilter] = useState<string>('all')
+
+  const hostnames = useMemo(() => {
+    const set = new Set<string>()
+    for (const run of runs) {
+      const h = run.metadata?.hostname
+      if (h) set.add(h.split('.')[0])
+    }
+    return Array.from(set).sort()
+  }, [runs])
+
   const filteredRuns = runs.filter((run) => {
     const matchesStatus = statusFilter === 'all' || run.status === statusFilter || (statusFilter === 'error' && run.status === 'incomplete')
     const matchesSource = sourceFilter === 'all' || run.source === sourceFilter
+    const matchesHostname = hostnameFilter === 'all' || (run.metadata?.hostname?.split('.')[0] ?? '') === hostnameFilter
     const q = searchQuery.trim().toLowerCase()
     const matchesQuery = !q || [run.prompt, run.task_type, run.run_id, run.goal].some(v => (v ?? '').toLowerCase().includes(q))
-    return matchesStatus && matchesSource && matchesQuery
+    return matchesStatus && matchesSource && matchesHostname && matchesQuery
   })
 
   return (
@@ -87,6 +100,24 @@ export function RunList({
             </button>
           ))}
         </div>
+
+        {hostnames.length > 1 && (
+          <div className="flex gap-1 flex-wrap">
+            <button type="button" onClick={() => setHostnameFilter('all')}
+              className={cn('rounded px-2 py-1 text-[11px] font-medium transition',
+                hostnameFilter === 'all' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-[var(--surface2)] text-[var(--text2)] hover:text-[var(--text)]')}>
+              All
+            </button>
+            {hostnames.map(h => (
+              <button key={h} type="button" onClick={() => setHostnameFilter(h)}
+                className={cn('rounded px-2 py-1 text-[11px] font-medium transition truncate max-w-[80px]',
+                  hostnameFilter === h ? 'bg-cyan-500/30 text-cyan-300' : 'bg-[var(--surface2)] text-[var(--text2)] hover:text-[var(--text)]')}
+                title={h}>
+                {h}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="text-[11px] text-[var(--text2)]">{filteredRuns.length} runs</div>
       </div>

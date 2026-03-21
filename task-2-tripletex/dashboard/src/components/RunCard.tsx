@@ -74,6 +74,11 @@ export function RunCard({ run, isSelected, onClick }: RunCardProps) {
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold uppercase tracking-wider animate-pulse">running</span>
         )}
         <span className="text-xs font-medium text-[var(--text)]">{run.task_type || 'unknown'}</span>
+        {run.metadata?.hostname && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-medium truncate max-w-[60px]" title={run.metadata.hostname}>
+            {run.metadata.hostname.split('.')[0]}
+          </span>
+        )}
         <span className={cn('ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium',
           run.source === 'competition' ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-500/20 text-zinc-400'
         )}>

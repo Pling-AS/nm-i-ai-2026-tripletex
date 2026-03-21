@@ -89,6 +89,8 @@ class TripletexAccountingAgent:
             self._settings, fast=is_simple_prompt
         )
 
+        import platform as _platform
+
         metadata: dict[str, Any] = {
             "model": self._settings.openrouter_model,
             "planner_model": planner_chain[0],
@@ -97,6 +99,7 @@ class TripletexAccountingAgent:
             "http_timeout": self._settings.http_timeout_seconds,
             "max_attachment_chars": self._settings.max_attachment_text_chars,
             "source": "competition" if is_competition else "simulation",
+            "hostname": _platform.node(),
         }
         if submission_id:
             metadata["submission_id"] = submission_id
