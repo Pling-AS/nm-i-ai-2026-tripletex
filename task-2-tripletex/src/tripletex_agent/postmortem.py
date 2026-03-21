@@ -29,7 +29,7 @@ def build_analysis_payload(events: list[dict[str, Any]]) -> str:
 
         if event_type == "init":
             parts.append(
-                f"[{timestamp}] INIT: prompt={_s(payload.get('prompt', ''))[:500]}"
+                f"[{timestamp}] INIT: prompt={_s(payload.get('prompt', ''))[:2000]}"
             )
             parts.append(
                 f"  files={payload.get('file_count', 0)}, source={_s(payload.get('metadata', {}).get('source', ''))}"
@@ -47,11 +47,11 @@ def build_analysis_payload(events: list[dict[str, Any]]) -> str:
                 )
 
         elif event_type == "thinking":
-            text = _s(payload.get("text", ""))[:800]
+            text = _s(payload.get("text", ""))[:4000]
             parts.append(f"[{timestamp}] THINKING: {text}")
 
         elif event_type == "assistant_reasoning":
-            text = _s(payload.get("text", ""))[:500]
+            text = _s(payload.get("text", ""))[:4000]
             parts.append(f"[{timestamp}] REASONING: {text}")
 
         elif event_type == "tool_start":
@@ -153,8 +153,8 @@ def build_analysis_payload(events: list[dict[str, Any]]) -> str:
 
     analysis_text = "\n".join(parts)
 
-    if len(analysis_text) > 30000:
-        analysis_text = analysis_text[:30000] + "\n... (truncated)"
+    if len(analysis_text) > 200000:
+        analysis_text = analysis_text[:200000] + "\n... (truncated)"
 
     return analysis_text
 
@@ -230,7 +230,7 @@ async def generate_postmortem(
 
         result = await openrouter_client.complete_json(
             messages=messages,
-            max_tokens=1500,
+            max_tokens=4096,
             model_override=model,
         )
 
