@@ -70,6 +70,10 @@ TAU_OBS_FLOOR = 8.0
 NEIGHBOR_LAMBDA = 0.5
 NEIGHBOR_MAX_TOTAL = 2.0
 
+# Cross-seed pooling: borrow observations from same (y,x) across all seeds.
+# Same terrain map means same-position cells share terrain-driven dynamics.
+CROSS_SEED_LAMBDA = 0.5  # 0 = disabled; >0 = total pseudo-count weight from other seeds
+
 FIELD_SIGMA = 2.0
 FIELD_LAMBDA0 = 8.0
 FIELD_ALPHA = 1.0
@@ -565,6 +569,13 @@ def predict_full_grid_vectorized(
     dynamic_mask = ~ocean_mask & ~mountain_mask
     obs_grid = observation_store.get_seed_obs_counts(seed_index)
 
+    # Pre-compute cross-seed pooled counts (sum of other seeds at same position)
+    cross_seed_grid = np.zeros((h, w, NUM_CLASSES), dtype=np.float64)
+    if CROSS_SEED_LAMBDA > 0:
+        for other_seed in range(observation_store.seeds_count):
+            if other_seed != seed_index:
+                cross_seed_grid += observation_store.get_seed_counts(other_seed).astype(np.float64)
+
     for y in range(h):
         for x in range(w):
             if not dynamic_mask[y, x]:
@@ -591,6 +602,14 @@ def predict_full_grid_vectorized(
                 effective_counts = local_counts + nw * neighbor_pseudo
             else:
                 effective_counts = local_counts
+
+            # Cross-seed pooling
+            if CROSS_SEED_LAMBDA > 0:
+                cs = cross_seed_grid[y, x]
+                cs_total = cs.sum()
+                if cs_total > 0:
+                    cs_weight = CROSS_SEED_LAMBDA / cs_total
+                    effective_counts = effective_counts + cs_weight * cs
 
             prior_mean = _get_prior_mean(
                 seed_index, seed_analysis, observation_store, y, x, terrain

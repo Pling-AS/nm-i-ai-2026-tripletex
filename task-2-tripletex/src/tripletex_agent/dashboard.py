@@ -3,23 +3,78 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.routing import WebSocketRoute
 
 from tripletex_agent.config import get_settings, Settings
-from tripletex_agent.prompts import EXECUTOR_SYSTEM_PROMPT
-from tripletex_agent.trace import RunTrace, RUNS_DIR
+from tripletex_agent.postmortem import (
+    append_postmortem_event,
+    build_analysis_payload,
+    generate_postmortem,
+)
+from tripletex_agent.run_store import get_run_store
+from tripletex_agent.trace import RUNS_DIR, RunTrace, register_trace_callback
 
 logger = logging.getLogger(__name__)
 
 security = HTTPBasic(auto_error=False)
+
+
+class ConnectionManager:
+    def __init__(self) -> None:
+        self._connections: list[WebSocket] = []
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        async with self._lock:
+            self._connections.append(websocket)
+
+    async def disconnect(self, websocket: WebSocket) -> None:
+        async with self._lock:
+            self._connections = [c for c in self._connections if c is not websocket]
+
+    async def broadcast(self, message: dict) -> None:
+        async with self._lock:
+            dead: list[WebSocket] = []
+            for conn in self._connections:
+                try:
+                    await conn.send_json(message)
+                except Exception:
+                    dead.append(conn)
+            for connection in dead:
+                self._connections = [
+                    c for c in self._connections if c is not connection
+                ]
+
+    @property
+    def connection_count(self) -> int:
+        return len(self._connections)
+
+
+_ws_manager: ConnectionManager | None = None
+
+
+def get_ws_manager() -> ConnectionManager:
+    global _ws_manager
+    if _ws_manager is None:
+        _ws_manager = ConnectionManager()
+    return _ws_manager
 
 
 def verify_dashboard_access(
@@ -59,9 +114,10 @@ def verify_dashboard_access(
 # --- Cached competition submissions for run matching ---
 _submissions_cache: list[dict[str, Any]] = []
 _submissions_cache_ts: float = 0
+_enrichment_retry_state: dict[str, dict[str, float | int]] = {}
 
 
-async def _get_cached_submissions() -> list[dict[str, Any]]:
+async def _get_cached_submissions(force_refresh: bool = False) -> list[dict[str, Any]]:
     """Fetch and merge competition submissions from both API endpoints.
 
     /tasks/{task_id}/submissions — has precise `started_at` (when our endpoint was called)
@@ -77,7 +133,7 @@ async def _get_cached_submissions() -> list[dict[str, Any]]:
     )
     ttl = 15.0 if (active_count > 0 or has_pending) else 120.0
 
-    if _submissions_cache and (now - _submissions_cache_ts) < ttl:
+    if not force_refresh and _submissions_cache and (now - _submissions_cache_ts) < ttl:
         return _submissions_cache
 
     settings = get_settings()
@@ -131,12 +187,11 @@ def _match_submission_to_run(
     run_started_at: str,
     run_duration: float | None,
     submissions: list[dict[str, Any]],
+    run_endpoint_url: str | None = None,
 ) -> dict[str, Any] | None:
     """Match a local run to a competition submission by timestamp.
 
-    Uses platform's `started_at` (when our /solve was called) for tight matching.
-    Falls back to `queued_at` if started_at unavailable.
-    Window: 15 seconds (platform calls us within ms of queuing).
+    Uses platform_started_at when available and falls back to queued_at.
     """
     if not run_started_at or not submissions:
         return None
@@ -146,7 +201,10 @@ def _match_submission_to_run(
         return None
 
     best_match = None
-    best_delta = 15.0  # tight 15s window
+    best_delta = 30.0
+
+    normalized_run_endpoint = (run_endpoint_url or "").rstrip("/").lower()
+    best_endpoint_mismatch = 1
 
     for sub in submissions:
         # Prefer platform_started_at (exact moment our endpoint was called)
@@ -158,7 +216,16 @@ def _match_submission_to_run(
         except ValueError:
             continue
         delta = abs((sub_ts - run_ts).total_seconds())
-        if delta < best_delta:
+        if delta > 30.0:
+            continue
+
+        sub_endpoint = (sub.get("endpoint_url") or "").rstrip("/").lower()
+        endpoint_mismatch = 1
+        if normalized_run_endpoint and sub_endpoint:
+            endpoint_mismatch = 0 if normalized_run_endpoint == sub_endpoint else 1
+
+        if (endpoint_mismatch, delta) < (best_endpoint_mismatch, best_delta):
+            best_endpoint_mismatch = endpoint_mismatch
             best_delta = delta
             best_match = sub
 
@@ -168,241 +235,208 @@ def _match_submission_to_run(
 router = APIRouter(dependencies=[Depends(verify_dashboard_access)])
 
 
-def _parse_trace_file(path: Path) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
+async def dashboard_ws(websocket: WebSocket) -> None:
+    manager = get_ws_manager()
+    await manager.connect(websocket)
     try:
-        with path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    events.append(json.loads(line))
-    except (json.JSONDecodeError, OSError):
+        store = get_run_store()
+        runs = store.list_summaries()
+
+        submissions = await _get_cached_submissions()
+        used_sub_ids: set[str] = set()
+        for run in runs:
+            if run.get("source") != "competition":
+                run["competition_score"] = None
+                continue
+            match = _match_submission_to_run(
+                run["started_at"], run.get("duration_seconds"), submissions
+            )
+            if match and match.get("id") not in used_sub_ids:
+                used_sub_ids.add(match["id"])
+                feedback = match.get("feedback", {})
+                checks = feedback.get("checks", [])
+                passed = sum(1 for c in checks if "passed" in c.lower())
+                run["competition_score"] = {
+                    "score_raw": match.get("score_raw", 0),
+                    "score_max": match.get("score_max", 0),
+                    "normalized_score": match.get("normalized_score", 0),
+                    "checks_passed": passed,
+                    "checks_total": len(checks),
+                    "comment": feedback.get("comment", ""),
+                    "checks": checks,
+                    "submission_id": match["id"],
+                    "status": match.get("status", "unknown"),
+                }
+            else:
+                if "competition_score" not in run:
+                    run["competition_score"] = None
+
+        active_count = len(RunTrace.get_active_runs())
+        await websocket.send_json(
+            {
+                "type": "snapshot",
+                "payload": {
+                    "runs": runs,
+                    "active_count": active_count,
+                    "total_count": len(runs),
+                },
+            }
+        )
+
+        s = get_settings()
+        await websocket.send_json(
+            {
+                "type": "settings",
+                "payload": {
+                    "model": s.openrouter_model,
+                    "planner_model": s.planner_model,
+                    "tier1_executor_model": s.tier1_executor_model,
+                    "tier2_executor_model": s.tier2_executor_model,
+                    "tier3_executor_model": s.tier3_executor_model,
+                    "max_steps": s.agent_max_steps,
+                    "temperature": s.agent_model_temperature,
+                },
+            }
+        )
+
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "heartbeat"})
+            except WebSocketDisconnect:
+                break
+    except WebSocketDisconnect:
         pass
-    return events
+    except Exception:
+        pass
+    finally:
+        await manager.disconnect(websocket)
+
+
+async def broadcast_run_update(
+    run_id: str, update_type: str, data: dict | None = None
+) -> None:
+    manager = get_ws_manager()
+    if manager.connection_count == 0:
+        return
+
+    message = {
+        "type": update_type,
+        "payload": {"run_id": run_id, **(data or {})},
+    }
+    await manager.broadcast(message)
+
+
+async def broadcast_run_list_update() -> None:
+    manager = get_ws_manager()
+    if manager.connection_count == 0:
+        return
+
+    store = get_run_store()
+    runs = store.list_summaries()
+
+    submissions = await _get_cached_submissions()
+    used_sub_ids: set[str] = set()
+    for run in runs:
+        if run.get("source") != "competition":
+            run["competition_score"] = None
+            continue
+        match = _match_submission_to_run(
+            run["started_at"], run.get("duration_seconds"), submissions
+        )
+        if match and match.get("id") not in used_sub_ids:
+            used_sub_ids.add(match["id"])
+            feedback = match.get("feedback", {})
+            checks = feedback.get("checks", [])
+            passed = sum(1 for c in checks if "passed" in c.lower())
+            run["competition_score"] = {
+                "score_raw": match.get("score_raw", 0),
+                "score_max": match.get("score_max", 0),
+                "normalized_score": match.get("normalized_score", 0),
+                "checks_passed": passed,
+                "checks_total": len(checks),
+                "comment": feedback.get("comment", ""),
+                "checks": checks,
+                "submission_id": match["id"],
+                "status": match.get("status", "unknown"),
+            }
+        else:
+            if "competition_score" not in run:
+                run["competition_score"] = None
+
+    active_count = len(RunTrace.get_active_runs())
+    await manager.broadcast(
+        {
+            "type": "snapshot",
+            "payload": {
+                "runs": runs,
+                "active_count": active_count,
+                "total_count": len(runs),
+            },
+        }
+    )
+
+
+async def _on_trace_event(trace: RunTrace, event_type: str, payload: dict) -> None:
+    manager = get_ws_manager()
+    if manager.connection_count == 0:
+        return
+
+    store = get_run_store()
+
+    if event_type == "_close":
+        store.invalidate_run(trace.run_id)
+        await broadcast_run_list_update()
+        return
+
+    if event_type in (
+        "init",
+        "done",
+        "error",
+        "planner",
+        "metadata_update",
+        "competition_scoring",
+    ):
+        store.refresh_run(trace.path)
+        await broadcast_run_list_update()
+        return
+
+    await broadcast_run_update(
+        trace.run_id,
+        "run_event",
+        {
+            "event_type": event_type,
+            "timestamp": payload.get("timestamp", ""),
+        },
+    )
+
+
+register_trace_callback(_on_trace_event)
+router.routes.append(WebSocketRoute("/dashboard/ws", endpoint=dashboard_ws))
+
+
+def _parse_trace_file(path: Path) -> list[dict[str, Any]]:
+    return get_run_store().parse_trace_file(path)
 
 
 def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
-    filename = path.name
-    run_id = (
-        filename.rsplit("_", 1)[-1].replace(".jsonl", "")
-        if "_" in filename
-        else filename
-    )
-
-    init_event = next((e for e in events if e["event_type"] == "init"), None)
-    planner_event = next((e for e in events if e["event_type"] == "planner"), None)
-    execution_brief_event = next(
-        (e for e in events if e["event_type"] == "execution_brief"), None
-    )
-    done_event = next((e for e in events if e["event_type"] == "done"), None)
-    error_event = next((e for e in events if e["event_type"] == "error"), None)
-    final_event = next((e for e in events if e["event_type"] == "final_payload"), None)
-
-    prompt = ""
-    base_url = ""
-    file_count = 0
-    metadata: dict[str, Any] = {}
-    if init_event:
-        payload = init_event.get("payload", {})
-        prompt = payload.get("prompt", "")
-        base_url = payload.get("base_url", "")
-        file_count = payload.get("file_count", 0)
-        metadata = payload.get("metadata", {})
-
-    # Merge any later metadata_update events (e.g., routing decisions after planner)
-    for event in events:
-        if event.get("event_type") == "metadata_update":
-            metadata.update(event.get("payload", {}))
-
-    task_type = ""
-    goal = ""
-    planner_payload: dict[str, Any] = {}
-    if planner_event:
-        payload = planner_event.get("payload", {})
-        task_type = payload.get("task_type", "")
-        goal = payload.get("goal", "")
-        planner_payload = payload
-
-    execution_brief: dict[str, Any] = {}
-    if execution_brief_event:
-        execution_brief = execution_brief_event.get("payload", {})
-
-    # Determine status
-    status = "unknown"
-    if done_event:
-        status = "completed"
-    elif error_event:
-        status = "error"
-    elif run_id in RunTrace.get_active_runs():
-        status = "running"
-    elif events:
-        last_event = events[-1]["event_type"]
-        status = "error" if last_event == "error" else "incomplete"
-
-    # Stats
-    call_count = 0
-    error_count = 0
-    call_log: list[dict[str, Any]] = []
-    if done_event:
-        payload = done_event.get("payload", {})
-        call_count = payload.get("tripletex_call_count", 0)
-        error_count = payload.get("tripletex_error_count", 0)
-        call_log = payload.get("tripletex_call_log", [])
-
-    # Duration
-    duration_seconds: float | None = None
-    if events:
-        try:
-            first_ts = datetime.fromisoformat(events[0]["timestamp"])
-            actual_run_events = [
-                e
-                for e in events
-                if e["event_type"] not in ("competition_scoring", "error_summary")
-            ]
-            if actual_run_events:
-                last_ts = datetime.fromisoformat(actual_run_events[-1]["timestamp"])
-                duration_seconds = round((last_ts - first_ts).total_seconds(), 1)
-        except (KeyError, ValueError):
-            pass
-
-    # Source
-    source = metadata.get("source", "")
-    if not source:
-        source = "competition" if "tx-proxy" in base_url else "simulation"
-
-    # Tool call counts
-    tool_starts = [e for e in events if e["event_type"] == "tool_start"]
-    tool_errors = [
-        e
-        for e in events
-        if e["event_type"] == "tool_result"
-        and not e.get("payload", {}).get("result", {}).get("ok", True)
-    ]
-
-    # Preflight rejections (schema_validation_errors in tool_result)
-    preflight_rejections: list[dict[str, Any]] = []
-    for e in events:
-        if e["event_type"] == "tool_result":
-            result = e.get("payload", {}).get("result", {})
-            if result.get("schema_validation_errors"):
-                preflight_rejections.append(
-                    {
-                        "error": result.get("error", ""),
-                        "fields": [
-                            p.get("path", "")
-                            for p in result["schema_validation_errors"]
-                        ],
-                        "tool_name": e.get("payload", {}).get("tool_name", ""),
-                    }
-                )
-
-    # Auto-stripped fields (successful calls where fields were removed)
-    auto_stripped: list[dict[str, Any]] = []
-    for e in events:
-        if e["event_type"] == "tool_result":
-            result = e.get("payload", {}).get("result", {})
-            if result.get("ok") and result.get("stripped_fields"):
-                auto_stripped.append(
-                    {
-                        "fields": result["stripped_fields"],
-                        "tool_name": e.get("payload", {}).get("tool_name", ""),
-                    }
-                )
-
-    # Summary text from final_payload
-    summary_text = ""
-    if final_event:
-        summary_text = final_event.get("payload", {}).get("summary", "")
-
-    error_message = ""
-    if error_event:
-        error_message = error_event.get("payload", {}).get("message", "")
-
-    enforcer_rejections = [
-        e.get("payload", {}) for e in events if e["event_type"] == "enforcer_rejected"
-    ]
-    semantic_rejections = [
-        e.get("payload", {})
-        for e in events
-        if e["event_type"] == "semantic_enforcer_rejected"
-    ]
-    enforcer_overrides = [
-        e.get("payload", {}) for e in events if e["event_type"] == "enforcer_override"
-    ]
-
-    return {
-        "run_id": run_id,
-        "filename": filename,
-        "started_at": events[0]["timestamp"] if events else "",
-        "prompt": prompt,
-        "task_type": task_type,
-        "goal": goal,
-        "status": status,
-        "source": source,
-        "duration_seconds": duration_seconds,
-        "tripletex_call_count": call_count,
-        "tripletex_error_count": error_count,
-        "tripletex_call_log": call_log,
-        "tool_call_count": len(tool_starts),
-        "tool_error_count": len(tool_errors),
-        "file_count": file_count,
-        "summary": summary_text,
-        "error_message": error_message,
-        "metadata": metadata,
-        "event_count": len(events),
-        "preflight_rejections": preflight_rejections,
-        "preflight_rejection_count": len(preflight_rejections),
-        "auto_stripped": auto_stripped,
-        "enforcer_rejections": enforcer_rejections,
-        "semantic_rejections": semantic_rejections,
-        "enforcer_overrides": enforcer_overrides,
-        "planner_payload": planner_payload,
-        "execution_brief": execution_brief,
-        "executor_system_prompt": EXECUTOR_SYSTEM_PROMPT,
-    }
+    return get_run_store().summarize_run(path, events)
 
 
 @router.get("/api/runs")
 async def list_runs() -> JSONResponse:
-    runs: list[dict[str, Any]] = []
-    if RUNS_DIR.exists():
-        for path in sorted(RUNS_DIR.glob("*.jsonl"), reverse=True):
-            if path.name == "raw_requests.jsonl":
-                continue
-            events = _parse_trace_file(path)
-            if events:
-                runs.append(_summarize_run(path, events))
+    store = get_run_store()
+    runs: list[dict[str, Any]] = store.list_summaries()
 
     # Also add active runs not yet on disk
     for run_id, trace in RunTrace.get_active_runs().items():
         if not any(r["run_id"] == run_id for r in runs):
-            events = _parse_trace_file(trace.path) if trace.path.exists() else []
+            detail = store.get_detail(run_id)
             summary = (
-                _summarize_run(trace.path, events)
-                if events
-                else {
-                    "run_id": run_id,
-                    "filename": trace.path.name,
-                    "started_at": trace.started_at.isoformat(),
-                    "prompt": trace.prompt,
-                    "task_type": "",
-                    "goal": "",
-                    "status": "running",
-                    "source": trace.metadata.get("source", "unknown"),
-                    "duration_seconds": round(
-                        (datetime.now(UTC) - trace.started_at).total_seconds(), 1
-                    ),
-                    "tripletex_call_count": 0,
-                    "tripletex_error_count": 0,
-                    "tripletex_call_log": [],
-                    "tool_call_count": 0,
-                    "tool_error_count": 0,
-                    "file_count": 0,
-                    "summary": "",
-                    "error_message": "",
-                    "metadata": trace.metadata,
-                    "event_count": 0,
-                }
+                detail[0] if detail else store.get_active_run_summary(run_id, trace)
             )
             summary["status"] = "running"
             runs.insert(0, summary)
@@ -453,23 +487,72 @@ async def list_runs() -> JSONResponse:
 
 @router.post("/api/runs/enrich")
 async def enrich_runs() -> JSONResponse:
-    """Enrich completed runs with competition scoring and error summaries."""
-    submissions = await _get_cached_submissions()
+    store = get_run_store()
+    submissions = await _get_cached_submissions(force_refresh=True)
     enriched_count = 0
     skipped_count = 0
+    pending_count = 0
+    postmortem_count = 0
 
     if RUNS_DIR.exists():
         for path in sorted(RUNS_DIR.glob("*.jsonl"), reverse=True):
             if path.name == "raw_requests.jsonl":
                 continue
-            events = _parse_trace_file(path)
+            run_id = store.get_run_id(path)
+            detail = store.get_detail(run_id)
+            events = detail[1] if detail else store.parse_trace_file(path)
             if not events:
                 continue
             result = _enrich_run_file(path, events, submissions)
-            if result is not None:
+            if result and result.get("pending_match"):
+                pending_count += 1
+            if result and result.get("wrote_events"):
                 enriched_count += 1
+                store.invalidate_run(run_id)
             else:
                 skipped_count += 1
+
+        from tripletex_agent.openrouter import OpenRouterClient
+
+        settings = get_settings()
+        openrouter = OpenRouterClient(settings)
+        try:
+            for path in sorted(RUNS_DIR.glob("*.jsonl"), reverse=True):
+                if path.name == "raw_requests.jsonl":
+                    continue
+                run_id = store.get_run_id(path)
+                detail = store.get_detail(run_id)
+                if not detail:
+                    continue
+
+                summary, events = detail
+                if summary.get("source") != "competition":
+                    continue
+                if summary.get("status") not in ("completed", "error"):
+                    continue
+
+                event_types = {e["event_type"] for e in events}
+                if "post_mortem" in event_types:
+                    continue
+                if "competition_scoring" not in event_types:
+                    continue
+
+                logger.debug(
+                    "Generating post-mortem for run_id=%s payload_chars=%d",
+                    run_id,
+                    len(build_analysis_payload(events)),
+                )
+                analysis = await generate_postmortem(
+                    events=events,
+                    openrouter_client=openrouter,
+                    model=settings.enforcer_model,
+                )
+                if analysis:
+                    append_postmortem_event(path, analysis)
+                    store.invalidate_run(run_id)
+                    postmortem_count += 1
+        finally:
+            await openrouter.close()
 
     overview = _generate_overview()
 
@@ -477,6 +560,8 @@ async def enrich_runs() -> JSONResponse:
         {
             "enriched": enriched_count,
             "skipped": skipped_count,
+            "pending_match": pending_count,
+            "postmortem_generated": postmortem_count,
             "overview_runs": overview.get("total_runs", 0),
         }
     )
@@ -499,41 +584,95 @@ async def runs_overview() -> JSONResponse:
 
 @router.get("/api/runs/{run_id}")
 async def get_run(run_id: str) -> JSONResponse:
-    if RUNS_DIR.exists():
-        for path in RUNS_DIR.glob("*.jsonl"):
-            if run_id in path.name:
-                events = _parse_trace_file(path)
-                summary = _summarize_run(path, events)
-                # Attach competition score if available
-                if summary.get("source") == "competition":
-                    submissions = await _get_cached_submissions()
-                    match = _match_submission_to_run(
-                        summary["started_at"],
-                        summary.get("duration_seconds"),
-                        submissions,
-                    )
-                    if match:
-                        feedback = match.get("feedback", {})
-                        checks = feedback.get("checks", [])
-                        passed = sum(1 for c in checks if "passed" in c.lower())
-                        summary["competition_score"] = {
-                            "score_raw": match.get("score_raw", 0),
-                            "score_max": match.get("score_max", 0),
-                            "normalized_score": match.get("normalized_score", 0),
-                            "checks_passed": passed,
-                            "checks_total": len(checks),
-                            "comment": feedback.get("comment", ""),
-                            "checks": checks,
-                            "submission_id": match["id"],
-                            "status": match.get("status", "unknown"),
-                        }
-                return JSONResponse(
-                    {
-                        "summary": summary,
-                        "events": events,
-                    }
-                )
+    store = get_run_store()
+    result = store.get_detail(run_id)
+    if result:
+        summary, events = result
+        # Attach competition score if available
+        if summary.get("source") == "competition":
+            submissions = await _get_cached_submissions()
+            match = _match_submission_to_run(
+                summary["started_at"],
+                summary.get("duration_seconds"),
+                submissions,
+            )
+            if match:
+                feedback = match.get("feedback", {})
+                checks = feedback.get("checks", [])
+                passed = sum(1 for c in checks if "passed" in c.lower())
+                summary["competition_score"] = {
+                    "score_raw": match.get("score_raw", 0),
+                    "score_max": match.get("score_max", 0),
+                    "normalized_score": match.get("normalized_score", 0),
+                    "checks_passed": passed,
+                    "checks_total": len(checks),
+                    "comment": feedback.get("comment", ""),
+                    "checks": checks,
+                    "submission_id": match["id"],
+                    "status": match.get("status", "unknown"),
+                }
+        return JSONResponse(
+            {
+                "summary": summary,
+                "events": events,
+            }
+        )
     return JSONResponse({"error": "Run not found"}, status_code=404)
+
+
+@router.post("/api/runs/{run_id}/postmortem")
+async def generate_run_postmortem(run_id: str) -> JSONResponse:
+    store = get_run_store()
+    detail = store.get_detail(run_id)
+    if not detail:
+        return JSONResponse({"error": "Run not found"}, status_code=404)
+
+    summary, events = detail
+    if summary.get("source") != "competition":
+        return JSONResponse(
+            {"error": "Post-mortem is only supported for competition runs"},
+            status_code=400,
+        )
+
+    event_types = {e["event_type"] for e in events}
+
+    if "post_mortem" in event_types:
+        pm_event = next(e for e in events if e["event_type"] == "post_mortem")
+        return JSONResponse({"status": "exists", "post_mortem": pm_event["payload"]})
+
+    if "competition_scoring" not in event_types:
+        return JSONResponse(
+            {"error": "Run not yet scored — enrich first"},
+            status_code=400,
+        )
+
+    from tripletex_agent.openrouter import OpenRouterClient
+
+    settings = get_settings()
+    openrouter = OpenRouterClient(settings)
+    try:
+        logger.debug(
+            "Generating post-mortem for single run_id=%s payload_chars=%d",
+            run_id,
+            len(build_analysis_payload(events)),
+        )
+        analysis = await generate_postmortem(
+            events=events,
+            openrouter_client=openrouter,
+            model=settings.enforcer_model,
+        )
+    finally:
+        await openrouter.close()
+
+    if not analysis:
+        return JSONResponse({"error": "Post-mortem generation failed"}, status_code=500)
+
+    cached = store._by_run_id.get(run_id)
+    if cached:
+        append_postmortem_event(cached.path, analysis)
+        store.invalidate_run(run_id)
+
+    return JSONResponse({"status": "generated", "post_mortem": analysis})
 
 
 @router.get("/api/settings")
@@ -886,12 +1025,10 @@ def _enrich_run_file(
 
     Returns the enrichment data if newly added, None if already enriched or not applicable.
     """
-    # Skip if already enriched
     existing_types = {e["event_type"] for e in events}
-    if "competition_scoring" in existing_types:
-        return None
 
     summary = _summarize_run(path, events)
+    run_id = summary.get("run_id", path.stem)
 
     # Only enrich completed competition runs
     if summary["source"] != "competition" or summary["status"] not in (
@@ -900,10 +1037,20 @@ def _enrich_run_file(
     ):
         return None
 
-    # Match to submission
-    match = _match_submission_to_run(
-        summary["started_at"], summary.get("duration_seconds"), submissions
-    )
+    has_scoring = "competition_scoring" in existing_types
+    has_error_summary = "error_summary" in existing_types
+
+    run_endpoint_url = ""
+    init_event = next((e for e in events if e["event_type"] == "init"), None)
+    if init_event:
+        payload = init_event.get("payload", {})
+        metadata = payload.get("metadata", {})
+        run_endpoint_url = (
+            metadata.get("endpoint_url")
+            or payload.get("endpoint_url")
+            or payload.get("solve_url")
+            or ""
+        )
 
     # Collect all errors from tool_result events
     errors: list[dict[str, Any]] = []
@@ -927,42 +1074,77 @@ def _enrich_run_file(
                 }
             )
 
+    import time
+
+    pending_match = False
     scoring_data: dict[str, Any] = {}
-    if match:
-        feedback = match.get("feedback", {})
-        checks = feedback.get("checks", [])
-        passed = sum(1 for c in checks if "passed" in c.lower())
-        scoring_data = {
-            "submission_id": match.get("id"),
-            "status": match.get("status"),
-            "score_raw": match.get("score_raw", 0),
-            "score_max": match.get("score_max", 0),
-            "normalized_score": match.get("normalized_score", 0),
-            "checks_passed": passed,
-            "checks_total": len(checks),
-            "checks": checks,
-            "comment": feedback.get("comment", ""),
-        }
-    else:
-        scoring_data = {"status": "no_match", "comment": "No matching submission found"}
+    should_write_scoring = False
 
-    # Append events to JSONL
-    from datetime import datetime, UTC
-
-    now = datetime.now(UTC).isoformat()
-    with path.open("a", encoding="utf-8") as f:
-        f.write(
-            json.dumps(
-                {
-                    "timestamp": now,
-                    "event_type": "competition_scoring",
-                    "payload": scoring_data,
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
+    if not has_scoring:
+        retry_state = _enrichment_retry_state.get(
+            run_id, {"attempts": 0, "next_retry_at": 0.0}
         )
-        if errors:
+        now_monotonic = time.monotonic()
+        next_retry_at = float(retry_state.get("next_retry_at", 0.0))
+        attempts = int(retry_state.get("attempts", 0))
+
+        if now_monotonic >= next_retry_at:
+            match = _match_submission_to_run(
+                summary["started_at"],
+                summary.get("duration_seconds"),
+                submissions,
+                run_endpoint_url=run_endpoint_url,
+            )
+
+            if match:
+                feedback = match.get("feedback", {})
+                checks = feedback.get("checks", [])
+                passed = sum(1 for c in checks if "passed" in c.lower())
+                scoring_data = {
+                    "submission_id": match.get("id"),
+                    "status": match.get("status"),
+                    "score_raw": match.get("score_raw", 0),
+                    "score_max": match.get("score_max", 0),
+                    "normalized_score": match.get("normalized_score", 0),
+                    "checks_passed": passed,
+                    "checks_total": len(checks),
+                    "checks": checks,
+                    "comment": feedback.get("comment", ""),
+                }
+                should_write_scoring = True
+                _enrichment_retry_state.pop(run_id, None)
+            else:
+                pending_match = True
+                attempts += 1
+                backoff_seconds = min(300.0, float(2**attempts))
+                _enrichment_retry_state[run_id] = {
+                    "attempts": attempts,
+                    "next_retry_at": now_monotonic + backoff_seconds,
+                }
+        else:
+            pending_match = True
+    else:
+        _enrichment_retry_state.pop(run_id, None)
+
+    should_write_error_summary = bool(errors) and not has_error_summary
+    if not should_write_scoring and not should_write_error_summary:
+        return {"wrote_events": False, "pending_match": pending_match}
+
+    now = datetime.now(timezone.utc).isoformat()
+    with path.open("a", encoding="utf-8") as f:
+        if should_write_scoring:
+            f.write(
+                json.dumps(
+                    {
+                        "timestamp": now,
+                        "event_type": "competition_scoring",
+                        "payload": scoring_data,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        if should_write_error_summary:
             f.write(
                 json.dumps(
                     {
@@ -978,71 +1160,73 @@ def _enrich_run_file(
                 + "\n"
             )
 
-    return {"scoring": scoring_data, "error_count": len(errors)}
+    return {
+        "wrote_events": True,
+        "pending_match": pending_match,
+        "scoring": scoring_data if should_write_scoring else None,
+        "error_count": len(errors),
+    }
 
 
 def _generate_overview() -> dict[str, Any]:
     """Generate overview.json with one entry per run."""
-    from datetime import datetime, UTC
-
     runs_data: list[dict[str, Any]] = []
-    if RUNS_DIR.exists():
-        for path in sorted(RUNS_DIR.glob("*.jsonl"), reverse=True):
-            if path.name == "raw_requests.jsonl":
-                continue
-            events = _parse_trace_file(path)
-            if not events:
-                continue
+    store = get_run_store()
+    for summary in store.list_summaries():
+        detail = store.get_detail(summary["run_id"])
+        events = detail[1] if detail else []
+        if not events:
+            continue
 
-            summary = _summarize_run(path, events)
+        # Extract scoring from competition_scoring event if present
+        scoring_event = next(
+            (e for e in events if e["event_type"] == "competition_scoring"), None
+        )
+        scoring = scoring_event.get("payload", {}) if scoring_event else {}
 
-            # Extract scoring from competition_scoring event if present
-            scoring_event = next(
-                (e for e in events if e["event_type"] == "competition_scoring"), None
-            )
-            scoring = scoring_event.get("payload", {}) if scoring_event else {}
+        # Extract error summary from error_summary event if present
+        error_event = next(
+            (e for e in events if e["event_type"] == "error_summary"), None
+        )
+        error_data = error_event.get("payload", {}) if error_event else {}
+        postmortem_event = next(
+            (e for e in events if e["event_type"] == "post_mortem"), None
+        )
 
-            # Extract error summary from error_summary event if present
-            error_event = next(
-                (e for e in events if e["event_type"] == "error_summary"), None
-            )
-            error_data = error_event.get("payload", {}) if error_event else {}
-
-            runs_data.append(
-                {
-                    "filename": path.name,
-                    "run_id": summary["run_id"],
-                    "started_at": summary["started_at"],
-                    "task_type": summary["task_type"],
-                    "task_tier": summary.get("metadata", {}).get("task_tier"),
-                    "executor_model": summary.get("metadata", {}).get(
-                        "executor_model", ""
-                    ),
-                    "status": summary["status"],
-                    "source": summary["source"],
-                    "duration_seconds": summary["duration_seconds"],
-                    "api_calls": summary["tripletex_call_count"],
-                    "api_errors": summary["tripletex_error_count"],
-                    "tool_calls": summary["tool_call_count"],
-                    "preflight_rejections": summary.get("preflight_rejection_count", 0),
-                    "score_raw": scoring.get("score_raw"),
-                    "score_max": scoring.get("score_max"),
-                    "normalized_score": scoring.get("normalized_score"),
-                    "checks_passed": scoring.get("checks_passed"),
-                    "checks_total": scoring.get("checks_total"),
-                    "checks": scoring.get("checks", []),
-                    "total_errors": error_data.get("total_errors", 0),
-                    "errors": [
-                        e.get("error", "") for e in error_data.get("errors", [])
-                    ],
-                    "prompt_preview": summary["prompt"][:120],
-                }
-            )
+        runs_data.append(
+            {
+                "filename": summary["filename"],
+                "run_id": summary["run_id"],
+                "started_at": summary["started_at"],
+                "task_type": summary["task_type"],
+                "task_tier": summary.get("metadata", {}).get("task_tier"),
+                "executor_model": summary.get("metadata", {}).get("executor_model", ""),
+                "status": summary["status"],
+                "source": summary["source"],
+                "duration_seconds": summary["duration_seconds"],
+                "api_calls": summary["tripletex_call_count"],
+                "api_errors": summary["tripletex_error_count"],
+                "tool_calls": summary["tool_call_count"],
+                "preflight_rejections": summary.get("preflight_rejection_count", 0),
+                "score_raw": scoring.get("score_raw"),
+                "score_max": scoring.get("score_max"),
+                "normalized_score": scoring.get("normalized_score"),
+                "checks_passed": scoring.get("checks_passed"),
+                "checks_total": scoring.get("checks_total"),
+                "checks": scoring.get("checks", []),
+                "post_mortem": postmortem_event.get("payload", {})
+                if postmortem_event
+                else None,
+                "total_errors": error_data.get("total_errors", 0),
+                "errors": [e.get("error", "") for e in error_data.get("errors", [])],
+                "prompt_preview": summary["prompt"][:120],
+            }
+        )
 
     overview = {
         "runs": runs_data,
         "total_runs": len(runs_data),
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     # Write to disk
@@ -1356,6 +1540,11 @@ header.flash-error { animation: flashError 1.5s ease-out; }
 .check-pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--surface2); color: var(--text2); border: 1px solid transparent; }
 .check-passed { background: rgba(52,211,153,.15); color: var(--green); border-color: rgba(52,211,153,.2); }
 .check-failed { background: rgba(248,113,113,.15); color: var(--red); border-color: rgba(248,113,113,.2); }
+.ws-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
+.ws-live { color: var(--green); }
+.ws-reconnecting { color: var(--yellow); animation: pulse 1.5s infinite; }
+.ws-offline { color: var(--red); }
+.ws-connecting { color: var(--text2); }
 </style>
 </head>
 <body>
@@ -1370,6 +1559,7 @@ header.flash-error { animation: flashError 1.5s ease-out; }
     <div id="hdr-best-score-container" style="display:none;color:var(--yellow);font-weight:600;">&#127942; Best: <span id="hdr-best-score">-</span></div>
     <div>Active: <span class="value" id="hdr-active">0</span></div>
     <div>Total: <span class="value" id="hdr-total">0</span></div>
+    <span id="ws-status" class="ws-status ws-connecting" title="WebSocket status">&#9679; connecting</span>
     <div class="refresh-dot" title="Auto-refreshing"></div>
     <div id="sound-toggle" title="Toggle sounds" onclick="toggleSound()">&#x1F50A;</div>
   </div>
@@ -1756,6 +1946,46 @@ function renderDetail(data) {
       ).join('')
     : '';
 
+  // Extract post-mortem from events
+  const pmEvent = events.find(e => e.event_type === 'post_mortem');
+  const pm = pmEvent ? pmEvent.payload : null;
+
+  // Post-mortem card HTML
+  const postMortemHtml = pm ? `
+    <div style="background:linear-gradient(135deg, rgba(99,102,241,.08), rgba(168,85,247,.08));border:1px solid rgba(139,92,246,.25);border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:16px;">🔍</span>
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--purple);">Post-Mortem Analysis</h3>
+        <span class="badge" style="margin-left:auto;background:rgba(139,92,246,.15);color:var(--purple);font-size:10px;">${pm.confidence || 'unknown'} confidence</span>
+        <span class="badge" style="background:rgba(139,92,246,.1);color:var(--text2);font-size:10px;">${pm.root_cause_category || ''}</span>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;">${pm.headline || ''}</div>
+      ${pm.what_went_wrong && pm.what_went_wrong.length > 0 ? `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--red);text-transform:uppercase;margin-bottom:4px;">Issues Found</div>
+          ${pm.what_went_wrong.map(w => `<div style="font-size:13px;color:var(--text);padding:4px 0;padding-left:12px;border-left:2px solid var(--red);">• ${w}</div>`).join('')}
+        </div>
+      ` : ''}
+      ${pm.what_worked && pm.what_worked.length > 0 ? `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;margin-bottom:4px;">What Worked</div>
+          ${pm.what_worked.map(w => `<div style="font-size:13px;color:var(--text);padding:4px 0;padding-left:12px;border-left:2px solid var(--green);">✓ ${w}</div>`).join('')}
+        </div>
+      ` : ''}
+      ${pm.what_to_try_next && pm.what_to_try_next.length > 0 ? `
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--blue);text-transform:uppercase;margin-bottom:4px;">Recommendations</div>
+          ${pm.what_to_try_next.map(w => `<div style="font-size:13px;color:var(--text);padding:4px 0;padding-left:12px;border-left:2px solid var(--blue);">→ ${w}</div>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  ` : (s.source === 'competition' && s.status !== 'running' ? `
+    <div style="background:var(--surface);border:1px dashed var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;text-align:center;">
+      <span style="color:var(--text2);font-size:13px;">No post-mortem yet</span>
+      <button onclick="triggerPostMortem('${s.run_id}')" style="margin-left:12px;background:var(--purple);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">Generate Analysis</button>
+    </div>
+  ` : '');
+
   panel.innerHTML = `
     <div class="detail-header">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -1796,6 +2026,7 @@ function renderDetail(data) {
         ${s.competition_score.submission_id ? '<div style="font-size:11px;color:var(--text2);margin-top:8px;font-family:monospace;">Submission ID: '+s.competition_score.submission_id+'</div>' : ''}
       </div>`) : ''}
     </div>
+    ${postMortemHtml}
     <div class="detail-grid">
       <div class="detail-stat"><div class="detail-stat-label">Duration</div><div class="detail-stat-value">${fmtDuration(s.duration_seconds)}</div></div>
       <div class="detail-stat"><div class="detail-stat-label">API Calls</div><div class="detail-stat-value">${s.tripletex_call_count}</div></div>
@@ -1835,6 +2066,18 @@ function renderDetail(data) {
     requestAnimationFrame(() => {
       panel.scrollTop = panel.scrollHeight;
     });
+  }
+}
+
+async function triggerPostMortem(runId) {
+  try {
+    const res = await fetch(`/api/runs/${runId}/postmortem`, {method: 'POST'});
+    const data = await res.json();
+    if (data.status === 'generated' || data.status === 'exists') {
+      selectRun(runId); // Refresh detail to show the analysis
+    }
+  } catch (e) {
+    console.error('Post-mortem error:', e);
   }
 }
 
@@ -2221,8 +2464,170 @@ async function refresh() {
   }
 }
 
-refresh();
-setInterval(refresh, 4000);
+// WebSocket connection
+let ws = null;
+let wsReconnectTimer = null;
+let wsReconnectDelay = 1000;
+
+function updateConnectionStatus(state) {
+  const el = document.getElementById('ws-status');
+  if (!el) return;
+  el.className = 'ws-status ws-' + state;
+  const labels = { live: '● live', reconnecting: '● reconnecting', offline: '● offline', connecting: '● connecting' };
+  el.innerHTML = labels[state] || state;
+  
+  if (state === 'live') {
+    stopHttpFallback();
+  } else if (state === 'reconnecting' || state === 'offline') {
+    startHttpFallback();
+  }
+}
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/dashboard/ws`;
+  
+  updateConnectionStatus('connecting');
+  ws = new WebSocket(wsUrl);
+  
+  ws.onopen = () => {
+    updateConnectionStatus('live');
+    wsReconnectDelay = 1000; // Reset backoff
+  };
+  
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    handleWsMessage(msg);
+  };
+  
+  ws.onclose = () => {
+    updateConnectionStatus('reconnecting');
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, 15000);
+      connectWebSocket();
+    }, wsReconnectDelay);
+  };
+  
+  ws.onerror = () => {
+    ws.close();
+  };
+  
+  // Keepalive ping every 25s
+  setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('ping');
+    }
+  }, 25000);
+}
+
+function handleWsMessage(msg) {
+  switch (msg.type) {
+    case 'snapshot':
+      handleSnapshot(msg.payload);
+      break;
+    case 'settings':
+      handleSettings(msg.payload);
+      break;
+    case 'run_upsert':
+    case 'run_status_changed':
+      handleRunUpdate(msg.payload);
+      break;
+    case 'run_event':
+      handleRunEvent(msg.payload);
+      break;
+    case 'heartbeat':
+    case 'pong':
+      break; // Connection alive
+  }
+}
+
+function handleSnapshot(payload) {
+  const newRuns = payload.runs || [];
+  
+  // Sound & flash triggers (detect state transitions)
+  const newStatuses = {};
+  const newScoreStatuses = {};
+  for (const run of newRuns) {
+    newStatuses[run.run_id] = run.status;
+    const prev = previousRunStatuses[run.run_id];
+    if (!prev && run.status === 'running') {
+      playStartSound();
+      flashHeader('start');
+    } else if (prev === 'running' && run.status === 'completed') {
+      playCompletionSound();
+      flashHeader('done');
+    } else if (prev === 'running' && run.status === 'error') {
+      playErrorSound();
+      flashHeader('error');
+    }
+    
+    if (run.competition_score) {
+      newScoreStatuses[run.run_id] = run.competition_score.status;
+      const prevScore = previousScoreStatuses[run.run_id];
+      if (prevScore && ['in_progress', 'pending'].includes(prevScore) && run.competition_score.status === 'completed') {
+        playCompletionSound();
+        flashHeader('done');
+      }
+    }
+  }
+  previousRunStatuses = newStatuses;
+  previousScoreStatuses = newScoreStatuses;
+  
+  allRuns = newRuns;
+  document.getElementById('hdr-active').textContent = payload.active_count;
+  document.getElementById('hdr-total').textContent = payload.total_count;
+  
+  renderRunList();
+  
+  // Auto-refresh selected run if running
+  if (selectedRunId) {
+    const selectedRun = allRuns.find(r => r.run_id === selectedRunId);
+    if (selectedRun && (selectedRun.status === 'running' || (selectedRun.competition_score && ['in_progress', 'pending'].includes(selectedRun.competition_score.status)))) {
+      selectRun(selectedRunId); // Refresh detail
+    }
+  }
+}
+
+function handleSettings(payload) {
+  const shortModel = (m) => m ? m.split('/').pop().replace(':exacto','') : '-';
+  document.getElementById('hdr-planner').textContent = shortModel(payload.planner_model);
+  document.getElementById('hdr-t1').textContent = shortModel(payload.tier1_executor_model);
+  document.getElementById('hdr-t2').textContent = shortModel(payload.tier2_executor_model);
+  document.getElementById('hdr-t3').textContent = shortModel(payload.tier3_executor_model);
+}
+
+function handleRunUpdate(payload) {
+  // A single run was updated — request fresh snapshot
+  // (The server sends full snapshots on significant events, so this is just a trigger)
+}
+
+function handleRunEvent(payload) {
+  // Lightweight event for in-progress runs
+  // If it's the selected run, refresh detail
+  if (payload.run_id === selectedRunId) {
+    selectRun(selectedRunId);
+  }
+}
+
+// Fallback: HTTP polling only when WebSocket is unavailable
+let httpFallbackInterval = null;
+
+function startHttpFallback() {
+  if (httpFallbackInterval) return;
+  httpFallbackInterval = setInterval(refresh, 4000);
+  refresh(); // Initial load
+}
+
+function stopHttpFallback() {
+  if (httpFallbackInterval) {
+    clearInterval(httpFallbackInterval);
+    httpFallbackInterval = null;
+  }
+}
+
+// Initialize: try WebSocket first, fall back to HTTP polling
+connectWebSocket();
+// Periodic enrichment
 setInterval(() => { fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e)); }, 30000);
 
 let batchPollInterval = null;

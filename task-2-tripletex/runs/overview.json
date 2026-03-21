@@ -1,6 +1,31 @@
 {
   "runs": [
     {
+      "filename": "20260321-152933_8e9bebc8973e486ebd2b501618916ca9.jsonl",
+      "run_id": "8e9bebc8973e486ebd2b501618916ca9",
+      "started_at": "2026-03-21T15:29:33.793707+00:00",
+      "task_type": "register_supplier_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 201.4,
+      "api_calls": 7,
+      "api_errors": 2,
+      "tool_calls": 8,
+      "preflight_rejections": 0,
+      "score_raw": null,
+      "score_max": null,
+      "normalized_score": null,
+      "checks_passed": null,
+      "checks_total": null,
+      "checks": [],
+      "post_mortem": null,
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Hemos recibido la factura INV-2026-1515 del proveedor Costa Brava SL (org. nº 886379250) por 47650 NOK con IVA incluido."
+    },
+    {
       "filename": "20260321-143817_25a30d110f7c44c7ba3461e9137d73f1.jsonl",
       "run_id": "25a30d110f7c44c7ba3461e9137d73f1",
       "started_at": "2026-03-21T14:38:17.755035+00:00",
@@ -9,7 +34,7 @@
       "executor_model": "gpt-5.4",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 157.4,
+      "duration_seconds": 2995.6,
       "api_calls": 5,
       "api_errors": 2,
       "tool_calls": 21,
@@ -20,6 +45,26 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": {
+        "headline": "Agent gave up on bank reconciliation after failing to list invoices, scoring 0/0.",
+        "what_went_wrong": [
+          "Agent incorrectly concluded that GET /invoice requires mandatory date filters and abandoned the task, instead of trying alternative parameters or paginated calls.",
+          "Only 5 actual API calls were made in a complex reconciliation task; the agent spent most time in tool inspections and reasoning rather than executing.",
+          "No reconciliation actions were attempted (no payment postings, no ledger entries, no bank statement imports) — the agent never progressed past data discovery.",
+          "The agent misread filter errors as hard blockers and gave up, producing a FINAL answer with no submission, resulting in 'No matching submission found' and 0 score."
+        ],
+        "what_worked": [
+          "Agent correctly identified relevant counterparties (customers and suppliers) from the CSV before stalling.",
+          "Planner correctly categorized the task as bank_reconciliation with a reasonable multi-step plan."
+        ],
+        "what_to_try_next": [
+          "When GET /invoice with date filters fails, retry without filters or with minimal required params (e.g., just count=100) before declaring the endpoint blocked.",
+          "Use /ledger/voucher or /bank/statement endpoints to post bank reconciliation entries directly rather than relying solely on invoice search.",
+          "Implement a fallback: if invoice listing fails, create invoices from CSV data and then post payments against them rather than aborting the entire reconciliation."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Rapprochez le releve bancaire (CSV ci-joint) avec les factures ouvertes dans Tripletex. Associez les paiements entrants "
@@ -33,7 +78,7 @@
       "executor_model": "claude-opus-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 119.0,
+      "duration_seconds": 3099.2,
       "api_calls": 13,
       "api_errors": 0,
       "tool_calls": 13,
@@ -44,6 +89,26 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Run completed with 0 errors but scoring returned None/None — no checks were evaluated.",
+        "what_went_wrong": [
+          "Scoring returned score_raw=None/None with 0/0 checks passed, indicating the competition evaluator found no verifiable outcomes or the submission was not recognized.",
+          "Order was created with deliveryDate same as orderDate (2026-03-21) rather than a future date, which may have caused invoice/order validation issues.",
+          "The invoice was created from a manually-built order line rather than using project-based invoicing (e.g., POST /invoice with project hours), which may not satisfy 'project invoice based on hours registered'.",
+          "Bank account PUT was performed unnecessarily early and may have consumed an API call without contributing to the scoring criteria."
+        ],
+        "what_worked": [
+          "Enforcer correctly prevented duplicate Activity creation and duplicate hourly rate POST, saving potential 422/409 errors.",
+          "All 13 API calls completed with 0 errors, showing solid sequential and parallel execution logic."
+        ],
+        "what_to_try_next": [
+          "Use the project-invoice endpoint or ensure the invoice references the project timesheet hours directly (e.g., via /invoice with projectInvoiceDetails) rather than a manual order line.",
+          "Verify the scoring harness is reachable and that the final invoice ID is returned in a format the evaluator can parse — the FINAL log was truncated, suggesting the summary may have been cut off.",
+          "Check if /order requires isPrioritizeAmountsIncludingVat or specific fields for project-linked orders; also set a realistic deliveryDate (e.g., 2026-04-20) to avoid potential validation rejections."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "unknown"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registre 15 horas para Miguel Torres (miguel.torres@example.org) en la actividad \"Design\" del proyecto \"Rediseño web\" pa"
@@ -57,7 +122,7 @@
       "executor_model": "claude-sonnet-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 274.1,
+      "duration_seconds": 3238.7,
       "api_calls": 24,
       "api_errors": 2,
       "tool_calls": 29,
@@ -68,6 +133,26 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Employee created successfully but scoring returned no checks, suggesting evaluation issue",
+        "what_went_wrong": [
+          "Scoring returned 0/0 checks with score_raw=None/None, indicating the evaluator found no verifiable checks or the run wasn't scored properly.",
+          "Occupation code search was extremely inefficient: agent paginated through 7000+ entries across 15+ API calls instead of using nameAndCode filter correctly, wasting ~2 minutes.",
+          "Initial GET /employee/occupationCode calls used wrong endpoint (missing /employment/ segment), causing 2 errors and wasted calls before finding correct path.",
+          "Occupation code 4672 (REGNSKAPSFØRER/3432101) was chosen as a proxy for STYRK '3323' — this mapping may be incorrect and could fail validation if scorer checks exact code."
+        ],
+        "what_worked": [
+          "Core employee creation flow succeeded: department, employee, employment, and employment details all created with correct IDs.",
+          "Correct endpoints were eventually found and all required fields (DOB, NIN, bank account, salary, percentage, start date) were populated."
+        ],
+        "what_to_try_next": [
+          "Use the nameAndCode query parameter with the exact STYRK code string when searching occupation codes, e.g. GET /employee/employment/occupationCode?nameAndCode=3323 to avoid full pagination.",
+          "Investigate why scoring returned 0/0 — the task may require a specific competition context or the agent's final answer format may not have triggered the evaluator correctly.",
+          "Pre-validate the occupation code mapping: STYRK '3323' should map to a 7-digit code starting with '3323'; if none exists, document the closest match and flag it rather than silently substituting."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "logic_error"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "You received an employment contract (see attached PDF). Create the employee in Tripletex with all details from the contr"
@@ -81,7 +166,7 @@
       "executor_model": "claude-opus-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 252.6,
+      "duration_seconds": 3540.7,
       "api_calls": 6,
       "api_errors": 1,
       "tool_calls": 12,
@@ -92,6 +177,26 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Invoice registered via manual 3-posting voucher after failed auto-VAT and incomingInvoice attempts",
+        "what_went_wrong": [
+          "Initial POST /ledger/voucher with vatType id=1 failed with balance error — auto-VAT generation did not trigger as expected from field rules",
+          "POST /incomingInvoice failed repeatedly due to schema confusion: agent tried nested objects then flat IDs, both rejected by enforcer, wasting 3+ calls",
+          "Scoring returned 0/0 checks passed with no score, suggesting the final voucher registration may not have satisfied competition criteria despite apparent API success",
+          "Sign convention uncertainty caused extra reasoning overhead; agent was unsure whether debit=positive or negative, risking incorrect posting direction"
+        ],
+        "what_worked": [
+          "Supplier creation via POST /supplier succeeded on first attempt with correct org number, address, and bank account",
+          "Agent recovered from multiple failures and ultimately produced a balanced 3-posting voucher (6540, 2710, 2400)"
+        ],
+        "what_to_try_next": [
+          "Use POST /supplierInvoice (not /incomingInvoice or /ledger/voucher) which is the canonical Tripletex endpoint for supplier invoices and likely what scoring checks",
+          "Inspect /supplierInvoice schema early via inspect_tripletex_endpoint before attempting calls to avoid repeated enforcer rejections from wrong field names",
+          "Verify sign convention: in Tripletex voucher postings, debit entries should be positive amountGross; confirm 6540 and 2710 are positive, 2400 is negative"
+        ],
+        "confidence": "medium",
+        "root_cause_category": "wrong_endpoint"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "You received a supplier invoice (see attached PDF). Register the invoice in Tripletex. Create the supplier if it does no"
@@ -105,7 +210,7 @@
       "executor_model": "claude-opus-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 70.8,
+      "duration_seconds": 3678.0,
       "api_calls": 9,
       "api_errors": 0,
       "tool_calls": 9,
@@ -116,6 +221,25 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Invoice created successfully but scoring system returned no checks (0/0 evaluated).",
+        "what_went_wrong": [
+          "Scoring returned 0/0 checks with score_raw=None/None — the competition evaluator did not assess the run, possibly due to a scoring pipeline issue.",
+          "Enforcer blocked 3 product creation attempts, causing extra GET /product lookup calls that added latency before the order could be created.",
+          "Bank account setup (PUT /ledger/account) may be unnecessary overhead if already configured — no verification was done before attempting the PUT."
+        ],
+        "what_worked": [
+          "All 9 API calls completed with 0 errors; customer, order, order lines, and invoice were created correctly.",
+          "Enforcer guidance was heeded immediately — existing products were reused instead of causing 422 duplicate errors."
+        ],
+        "what_to_try_next": [
+          "Investigate why scoring returned None/None (0/0 checks) — this may indicate a competition harness issue or the invoice ID/customer wasn't matched by the evaluator.",
+          "Pre-check products with GET /product before attempting creation to avoid enforcer blocks and reduce round trips — build this into the default planning flow.",
+          "Skip bank account PUT if not strictly required by the task; verify prerequisites lazily (only configure if invoice creation fails) to reduce unnecessary API calls."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "unknown"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create an invoice for the customer Oakwood Ltd (org no. 820641566) with three product lines: Analysis Report (7049) at 1"
@@ -129,7 +253,7 @@
       "executor_model": "claude-opus-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 181.7,
+      "duration_seconds": 3922.1,
       "api_calls": 9,
       "api_errors": 2,
       "tool_calls": 9,
@@ -140,6 +264,25 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Voucher created successfully after 2 failed attempts due to vatType auto-generation confusion",
+        "what_went_wrong": [
+          "First POST /ledger/voucher failed: agent assumed Tripletex would auto-generate VAT/credit postings from a single debit line with vatType, but this requires manual balancing.",
+          "Second POST /ledger/voucher failed: agent tried voucherType:{id:5} to enable auto-generation, but the voucherType ID was invalid, wasting a call.",
+          "No scoring data returned (0/0 checks), making it impossible to confirm correctness of account selection (6540 Inventar vs. a dedicated office chair account) or VAT treatment."
+        ],
+        "what_worked": [
+          "Correct VAT math: 6750 gross / 1.25 = 5400 net, 1350 VAT, and proper exclusion of Kaffemøte line.",
+          "Department, supplier, and account lookups all succeeded on first attempt with correct IDs used in final voucher."
+        ],
+        "what_to_try_next": [
+          "Always use fully manual 3-line voucher postings (expense debit, VAT debit, AP credit) from the start instead of relying on Tripletex auto-generation, to avoid wasted retry calls.",
+          "Verify scoring pipeline is returning results; 0/0 checks suggests the voucher may not have been recognized or the scoring harness had an issue — check voucher ID 608978806 manually.",
+          "Confirm account 6540 (Inventar) is the correct account for office chairs vs. 6500-series operating expense accounts, as 'Kontorstoler' may map better to 6560 or similar."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "logic_error"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "We need the Kontorstoler expense from this receipt posted to department Produksjon. Use the correct expense account and "
@@ -153,7 +296,7 @@
       "executor_model": "claude-opus-4-6",
       "status": "completed",
       "source": "competition",
-      "duration_seconds": 161.0,
+      "duration_seconds": 4161.5,
       "api_calls": 19,
       "api_errors": 1,
       "tool_calls": 19,
@@ -164,6 +307,26 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": {
+        "headline": "Agent completed all tasks but scoring returned no checks (0/0), suggesting a grading issue.",
+        "what_went_wrong": [
+          "Scoring returned 0/0 checks with score_raw=None/None — no validation criteria were evaluated, possibly a competition grader misconfiguration.",
+          "Enforcer repeatedly blocked activity creation with false-positive duplicate warnings, causing 3 unnecessary override cycles and extra GET /activity call.",
+          "First POST /activity failed (422) due to missing activityType field, indicating incomplete API schema knowledge before the call.",
+          "Activities were linked via POST /project/projectActivity rather than being created directly on the project, which may not satisfy the grader's expected structure."
+        ],
+        "what_worked": [
+          "Ledger analysis correctly identified top 3 expense accounts with increases and fetched account names accurately.",
+          "All 3 projects and 3 activities were successfully created and linked to their respective projects."
+        ],
+        "what_to_try_next": [
+          "Investigate why scoring returned 0/0 — verify the competition grader is configured with checks for this task type and that entity IDs are registered correctly.",
+          "Pre-check activityType enum values before POSTing activities to avoid 422 errors; cache valid field values from a schema or OPTIONS call.",
+          "Tune enforcer thresholds to avoid blocking unique, context-derived names (ledger account names) that clearly don't pre-exist as activities."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "unknown"
+      },
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Los costos totales aumentaron significativamente de enero a febrero de 2026. Analice el libro mayor e identifique las tr"
@@ -188,6 +351,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Voce recebeu uma fatura de fornecedor (ver PDF anexo). Registe a fatura no Tripletex. Crie o fornecedor se nao existir. "
@@ -212,6 +376,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Test active run"
@@ -236,6 +401,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 40,
       "errors": [
         {
@@ -412,6 +578,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 41,
       "errors": [
         {
@@ -598,6 +765,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 3,
       "errors": [
         "Unsupported field `json_body.projectActivities[0].hourlyRate` for schema `ProjectActivity`. Closest valid fields: `budgetHourlyRateCurrency`.",
@@ -626,6 +794,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea el cliente Río Verde SL con número de organización 975181626. La dirección es Solveien 97, 3015 Drammen. Correo: po"
@@ -650,6 +819,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Kunden Nordhav AS (org.nr 841333608) har en utestående faktura på 14200 kr eksklusiv MVA for \"Skylagring\". Registrer ful"
@@ -674,6 +844,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett produktet \"Analyserapport\" med produktnummer 1908. Prisen er 18050 kr eksklusiv MVA, og standard MVA-sats på 25 "
@@ -704,6 +875,7 @@
         "Check 4: passed",
         "Check 5: passed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Establezca un precio fijo de 152400 NOK en el proyecto \"Mejora de infraestructura\" para Estrella SL (org. nº 808166283)."
@@ -728,6 +900,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Fixez un prix forfaitaire de 365350 NOK sur le projet \"Intégration CRM\" pour Colline SARL (nº org. 894562234). Le chef d"
@@ -752,6 +925,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Der Kunde Sonnental GmbH (Org.-Nr. 809303829) hat die Rechnung für \"Systementwicklung\" (10400 NOK ohne MwSt.) reklamiert"
@@ -776,6 +950,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create the customer Windmill Ltd with organization number 884659876. The address is Parkveien 124, 7010 Trondheim. Email"
@@ -800,6 +975,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie eine Rechnung für den Kunden Grünfeld GmbH (Org.-Nr. 913178823) mit drei Produktzeilen: Netzwerkdienst (64"
@@ -824,6 +1000,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez le client Colline SARL avec le numéro d'organisation 939137599. L'adresse est Kirkegata 77, 4611 Kristiansand. E-m"
@@ -848,6 +1025,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie das Produkt \"Beratungsstunden\" mit der Produktnummer 3512. Der Preis beträgt 42600 NOK ohne MwSt., mit dem"
@@ -872,6 +1050,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -913,6 +1092,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie das Projekt \"Analyse Sonnental\" verknüpft mit dem Kunden Sonnental GmbH (Org.-Nr. 980215350). Projektleite"
@@ -937,6 +1117,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Enregistrez le fournisseur Lumière SARL avec le numéro d'organisation 879852439. E-mail : faktura@lumiresarl.no."
@@ -961,6 +1142,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "O pagamento de Luz do Sol Lda (org. nº 962812384) referente à fatura \"Sessão de formação\" (41100 NOK sem IVA) foi devolv"
@@ -985,33 +1167,10 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Cree una dimensión contable personalizada \"Kostsenter\" con los valores \"Markedsføring\" y \"Kundeservice\". Luego registre "
-    },
-    {
-      "filename": "20260320-224509_2af07551895640209f058b0cda58a8a2.jsonl",
-      "run_id": "2af07551895640209f058b0cda58a8a2",
-      "started_at": "2026-03-20T22:45:09.728573+00:00",
-      "task_type": "create_product",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 89.9,
-      "api_calls": 2,
-      "api_errors": 0,
-      "tool_calls": 2,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Create the product \"Training Session\" with product number 2451. The price is 20350 NOK excluding VAT, using the standard"
     },
     {
       "filename": "20260320-224509_14b53d4170054d4bb439254b410c6c23.jsonl",
@@ -1039,6 +1198,7 @@
         "Check 4: passed",
         "Check 5: passed"
       ],
+      "post_mortem": null,
       "total_errors": 41,
       "errors": [
         {
@@ -1206,6 +1366,31 @@
       "prompt_preview": "Registrer leverandøren Elvdal AS med organisasjonsnummer 994963309. E-post: faktura@elvdal.no."
     },
     {
+      "filename": "20260320-224509_2af07551895640209f058b0cda58a8a2.jsonl",
+      "run_id": "2af07551895640209f058b0cda58a8a2",
+      "started_at": "2026-03-20T22:45:09.728573+00:00",
+      "task_type": "create_product",
+      "task_tier": 1,
+      "executor_model": "claude-sonnet-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 89.9,
+      "api_calls": 2,
+      "api_errors": 0,
+      "tool_calls": 2,
+      "preflight_rejections": 0,
+      "score_raw": null,
+      "score_max": null,
+      "normalized_score": null,
+      "checks_passed": 0,
+      "checks_total": 0,
+      "checks": [],
+      "post_mortem": null,
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Create the product \"Training Session\" with product number 2451. The price is 20350 NOK excluding VAT, using the standard"
+    },
+    {
       "filename": "20260320-224428_f6adfd2c488a47c6acdfaa30af41a651.jsonl",
       "run_id": "f6adfd2c488a47c6acdfaa30af41a651",
       "started_at": "2026-03-20T22:44:28.767921+00:00",
@@ -1225,6 +1410,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie o projeto \"Análise Rio\" vinculado ao cliente Rio Azul Lda (org. nº 912018431). O gerente de projeto é Inês Rodrigue"
@@ -1249,6 +1435,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Kunden Elvdal AS (org.nr 963143230) har ein uteståande faktura på 19600 kr eksklusiv MVA for \"Datarådgjeving\". Registrer"
@@ -1273,6 +1460,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Ejecute la nómina de Fernando Sánchez (fernando.sanchez@example.org) para este mes. El salario base es de 42350 NOK. Aña"
@@ -1297,6 +1485,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie três departamentos no Tripletex: \"Drift\", \"Kundeservice\" e \"HR\"."
@@ -1321,6 +1510,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 15,
       "errors": [
         {
@@ -1409,6 +1599,7 @@
         "Check 4: failed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Sett fastpris 429500 kr på prosjektet \"ERP-implementering\" for Elvdal AS (org.nr 834214261). Prosjektleiar er Marit Kvam"
@@ -1439,6 +1630,7 @@
         "Check 4: passed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 33,
       "errors": [
         {
@@ -1593,6 +1785,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registe o fornecedor Oceano Lda com número de organização 841149394. E-mail: faktura@oceanolda.no."
@@ -1623,6 +1816,7 @@
         "Check 4: passed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Betalingen fra Bergvik AS (org.nr 977576776) for fakturaen \"Webdesign\" (14000 kr ekskl. MVA) ble returnert av banken. Re"
@@ -1647,6 +1841,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         {
@@ -1729,6 +1924,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie das Produkt \"Orangensaft\" mit der Produktnummer 1256. Der Preis beträgt 17450 NOK ohne MwSt., mit dem MwSt"
@@ -1760,6 +1956,7 @@
         "Check 5: failed",
         "Check 6: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett ein faktura til kunden Bølgekraft AS (org.nr 827304212) med tre produktlinjer: Webdesign (6744) til 27000 kr med"
@@ -1784,6 +1981,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Der Kunde Sonnental GmbH (Org.-Nr. 809303829) hat die Rechnung für \"Systementwicklung\" (10400 NOK ohne MwSt.) reklamiert"
@@ -1808,6 +2006,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 8,
       "errors": [
         "'Unknown endpoint: GET /v2/employee'",
@@ -1871,6 +2070,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create the customer Northwave Ltd with organization number 964179239. The address is Nygata 39, 2317 Hamar. Email: post@"
@@ -1895,6 +2095,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registrer 19 timer for Thea Ødegård (thea.degard@example.org) på aktiviteten \"Design\" i prosjektet \"Datamigrering\" for T"
@@ -1919,6 +2120,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez le produit \"Jus de pomme\" avec le numéro de produit 3582. Le prix est de 33800 NOK hors TVA, avec le taux de TVA p"
@@ -1943,6 +2145,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett ein ordre for kunden Skogheim AS (org.nr 865101422) med produkta Opplæring (2677) til 15100 kr og Webdesign (584"
@@ -1967,6 +2170,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea tres departamentos en Tripletex: \"Logistikk\", \"Produksjon\" y \"Drift\"."
@@ -1991,6 +2195,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Me har ein ny tilsett som heiter Turid Kvamme, fødd 31. May 1985. Opprett vedkomande som tilsett med e-post turid.kvamme"
@@ -2015,6 +2220,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registe 17 horas para Carolina Pereira (carolina.pereira@example.org) na atividade \"Testing\" do projeto \"Auditoria de se"
@@ -2039,6 +2245,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create three departments in Tripletex: \"Innkjøp\", \"Drift\", and \"Kundeservice\"."
@@ -2063,6 +2270,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 3,
       "errors": [
         {
@@ -2148,6 +2356,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez trois départements dans Tripletex : \"Produksjon\", \"Salg\" et \"Logistikk\"."
@@ -2172,6 +2381,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "O pagamento de Luz do Sol Lda (org. nº 856642402) referente à fatura \"Horas de consultoria\" (9000 NOK sem IVA) foi devol"
@@ -2196,6 +2406,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie o projeto \"Implementação Rio\" vinculado ao cliente Rio Azul Lda (org. nº 827937223). O gerente de projeto é Gonçalo"
@@ -2220,6 +2431,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "The payment from Windmill Ltd (org no. 858237033) for the invoice \"Consulting Hours\" (25500 NOK excl. VAT) was returned "
@@ -2244,6 +2456,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie um pedido para o cliente Cascata Lda (org. nº 927161524) com os produtos Consultoria de dados (8400) a 5700 NOK e D"
@@ -2268,6 +2481,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 5,
       "errors": [
         {
@@ -2370,6 +2584,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "The customer Greenfield Ltd (org no. 918318070) has complained about the invoice for \"Software License\" (40250 NOK excl."
@@ -2394,6 +2609,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie o projeto \"Integração Porto\" vinculado ao cliente Porto Alegre Lda (org. nº 872798277). O gerente de projeto é Andr"
@@ -2418,6 +2634,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Fixez un prix forfaitaire de 365350 NOK sur le projet \"Intégration CRM\" pour Colline SARL (nº org. 894562234). Le chef d"
@@ -2442,6 +2659,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         {
@@ -2510,6 +2728,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Le paiement de Colline SARL (nº org. 804499180) pour la facture \"Heures de conseil\" (8850 NOK HT) a été retourné par la "
@@ -2534,6 +2753,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea una factura para el cliente Sierra SL (org. nº 909007135) con tres líneas de producto: Desarrollo de sistemas (8344"
@@ -2565,6 +2785,7 @@
         "Check 5: failed",
         "Check 6: failed"
       ],
+      "post_mortem": null,
       "total_errors": 10,
       "errors": [
         {
@@ -2747,6 +2968,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 3,
       "errors": [
         "'Unknown endpoint: GET /v2/employee'",
@@ -2775,6 +2997,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie das Produkt \"Datenberatung\" mit der Produktnummer 9788. Der Preis beträgt 41150 NOK ohne MwSt., mit dem St"
@@ -2799,6 +3022,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create an invoice for the customer Ridgepoint Ltd (org no. 932956233) with three product lines: Analysis Report (5566) a"
@@ -2823,6 +3047,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -2864,6 +3089,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett tre avdelinger i Tripletex: \"Utvikling\", \"Administrasjon\" og \"Lager\"."
@@ -2888,6 +3114,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie drei Abteilungen in Tripletex: \"Logistikk\", \"Salg\" und \"Drift\"."
@@ -2912,6 +3139,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Tenemos un nuevo empleado llamado Lucía García, nacido el 18. March 1997. Créelo como empleado con el correo lucia.garci"
@@ -2936,6 +3164,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 5,
       "errors": [
         {
@@ -3027,6 +3256,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Sett fastpris 352200 kr på prosjektet \"Automatiseringsprosjekt\" for Nordhav AS (org.nr 940514584). Prosjektleder er Thea"
@@ -3051,6 +3281,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "El cliente Costa Brava SL (org. nº 833355937) tiene una factura pendiente de 45700 NOK sin IVA por \"Asesoría de datos\". "
@@ -3075,6 +3306,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie um pedido para o cliente Solmar Lda (org. nº 867069526) com os produtos Sessão de formação (4466) a 35600 NOK e Lic"
@@ -3099,6 +3331,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create a custom accounting dimension \"Kostsenter\" with the values \"Logistikk\" and \"Produktutvikling\". Then post a vouche"
@@ -3123,6 +3356,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -3164,6 +3398,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "The payment from Brightstone Ltd (org no. 993125393) for the invoice \"Data Advisory\" (27100 NOK excl. VAT) was returned "
@@ -3188,6 +3423,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie três departamentos no Tripletex: \"Administrasjon\", \"Kundeservice\" e \"Drift\"."
@@ -3212,6 +3448,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 3,
       "errors": [
         {
@@ -3270,6 +3507,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Region\" mit den Werten \"Vestlandet\" und \"Midt-Norge\". Buche"
@@ -3294,6 +3532,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Silveroak Ltd with organization number 943413231. Email: faktura@silveroakltd.no."
@@ -3318,6 +3557,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create and send an invoice to the customer Ridgepoint Ltd (org no. 941587437) for 40400 NOK excluding VAT. The invoice i"
@@ -3342,6 +3582,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "We have a new employee named Henry Smith, born 2. December 1988. Please create them as an employee with email henry.smit"
@@ -3366,6 +3607,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett produktet \"Datarådgjeving\" med produktnummer 4993. Prisen er 16250 kr eksklusiv MVA, og standard MVA-sats på 25 "
@@ -3390,6 +3632,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie três departamentos no Tripletex: \"Logistikk\", \"Administrasjon\" e \"Regnskap\"."
@@ -3414,6 +3657,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen und senden Sie eine Rechnung an den Kunden Flussgold GmbH (Org.-Nr. 939332332) über 23500 NOK ohne MwSt. Die R"
@@ -3438,6 +3682,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea y envía una factura al cliente Solmar SL (org. nº 967736430) por 11700 NOK sin IVA. La factura es por Informe de an"
@@ -3462,6 +3707,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Le client Océan SARL (nº org. 910441930) a réclamé concernant la facture pour \"Rapport d'analyse\" (6150 NOK HT). Émettez"
@@ -3486,6 +3732,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett ein faktura til kunden Nordlys AS (org.nr 974956845) med tre produktlinjer: Systemutvikling (8642) til 9550 kr m"
@@ -3510,6 +3757,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crie um pedido para o cliente Solmar Lda (org. nº 867069526) com os produtos Sessão de formação (4466) a 35600 NOK e Lic"
@@ -3534,6 +3782,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create an order for the customer Northwave Ltd (org no. 997677889) with the products Cloud Storage (4257) at 27150 NOK a"
@@ -3558,6 +3807,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett kunden Bølgekraft AS med organisasjonsnummer 812297848. Adressa er Havnegata 113, 7010 Trondheim. E-post: post@b"
@@ -3582,6 +3832,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "We have a new employee named Henry Smith, born 2. December 1988. Please create them as an employee with email henry.smit"
@@ -3606,6 +3857,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         "'Unknown endpoint: POST /employment'"
@@ -3632,6 +3884,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett produktet \"Vedlikehold\" med produktnummer 6794. Prisen er 31600 kr eksklusiv MVA, og standard MVA-sats på 25 % s"
@@ -3656,6 +3909,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Legen Sie einen Festpreis von 473250 NOK für das Projekt \"Datensicherheit\" für Windkraft GmbH (Org.-Nr. 886395582) fest."
@@ -3680,6 +3934,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create a custom accounting dimension \"Region\" with the values \"Vestlandet\" and \"Sør-Norge\". Then post a voucher on accou"
@@ -3704,6 +3959,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie den Kunden Bergwerk GmbH mit der Organisationsnummer 903944145. Die Adresse ist Solveien 52, 9008 Tromsø. "
@@ -3728,6 +3984,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie einen Auftrag für den Kunden Waldstein GmbH (Org.-Nr. 824546835) mit den Produkten Datenberatung (5664) zu"
@@ -3752,6 +4009,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Die Zahlung von Bergwerk GmbH (Org.-Nr. 819152640) für die Rechnung \"Softwarelizenz\" (49750 NOK ohne MwSt.) wurde von de"
@@ -3776,6 +4034,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         {
@@ -3833,6 +4092,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "O pagamento de Montanha Lda (org. nº 912922324) referente à fatura \"Consultoria de dados\" (15400 NOK sem IVA) foi devolv"
@@ -3857,6 +4117,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez trois départements dans Tripletex : \"HR\", \"Lager\" et \"Innkjøp\"."
@@ -3881,6 +4142,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create a custom accounting dimension \"Kostsenter\" with the values \"Logistikk\" and \"Produktutvikling\". Then post a vouche"
@@ -3905,6 +4167,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Tenemos un nuevo empleado llamado Miguel Sánchez, nacido el 20. April 1991. Créelo como empleado con el correo miguel.sa"
@@ -3929,6 +4192,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 19,
       "errors": [
         {
@@ -4027,6 +4291,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Enregistrez une note de frais de déplacement pour Arthur Robert (arthur.robert@example.org) pour \"Visite client Kristian"
@@ -4051,6 +4316,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 3,
       "errors": [
         "'Unknown endpoint: GET /v2/employee'",
@@ -4079,6 +4345,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 6,
       "errors": [
         {
@@ -4176,6 +4443,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registrer ei reiserekning for Bjørn Brekke (bjrn.brekke@example.org) for \"Kundebesøk Bergen\". Reisa varte 4 dagar med di"
@@ -4200,6 +4468,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea una factura para el cliente Sierra SL (org. nº 861379760) con tres líneas de producto: Mantenimiento (2109) a 27500"
@@ -4224,6 +4493,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -4265,6 +4535,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "El cliente Costa Brava SL (org. nº 833355937) tiene una factura pendiente de 45700 NOK sin IVA por \"Asesoría de datos\". "
@@ -4289,6 +4560,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Wir haben einen neuen Mitarbeiter namens Anna Richter, geboren am 24. July 1991. Bitte legen Sie ihn als Mitarbeiter mit"
@@ -4313,6 +4585,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 14,
       "errors": [
         {
@@ -4550,6 +4823,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "The customer Windmill Ltd (org no. 859444598) has an outstanding invoice for 37550 NOK excluding VAT for \"Maintenance\". "
@@ -4574,6 +4848,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett og send ein faktura til kunden Fjelltopp AS (org.nr 927173875) på 42600 kr eksklusiv MVA. Fakturaen gjeld Nettve"
@@ -4598,6 +4873,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         "'Unknown endpoint: GET /v2/employee'",
@@ -4648,6 +4924,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett kunden Skogheim AS med organisasjonsnummer 855954346. Adressa er Parkveien 17, 4611 Kristiansand. E-post: post@s"
@@ -4672,6 +4949,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Tenemos un nuevo empleado llamado Lucía García, nacido el 18. March 1997. Créelo como empleado con el correo lucia.garci"
@@ -4696,6 +4974,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "O cliente Floresta Lda (org. nº 864828442) tem uma fatura pendente de 29100 NOK sem IVA por \"Design web\". Registe o paga"
@@ -4720,6 +4999,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Wir haben einen neuen Mitarbeiter namens Lena Müller, geboren am 18. November 1983. Bitte legen Sie ihn als Mitarbeiter "
@@ -4744,6 +5024,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Registre una nota de gastos de viaje para Laura López (laura.lopez@example.org) por \"Visita cliente Oslo\". El viaje duró"
@@ -4768,6 +5049,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez trois départements dans Tripletex : \"Produksjon\", \"Salg\" et \"Innkjøp\"."
@@ -4792,6 +5074,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -4826,6 +5109,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "El cliente Viento SL (org. nº 908616537) tiene una factura pendiente de 37850 NOK sin IVA por \"Mantenimiento\". Registre "
@@ -4850,6 +5134,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett og send en faktura til kunden Stormberg AS (org.nr 921996144) på 31250 kr eksklusiv MVA. Fakturaen gjelder Opplæ"
@@ -4874,6 +5159,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett og send en faktura til kunden Stormberg AS (org.nr 921996144) på 31250 kr eksklusiv MVA. Fakturaen gjelder Opplæ"
@@ -4898,6 +5184,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Brightstone Ltd with organization number 849923331. Email: faktura@brightstoneltd.no."
@@ -4922,6 +5209,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         {
@@ -4979,6 +5267,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Fixez un prix forfaitaire de 342600 NOK sur le projet \"Sécurité des données\" pour Forêt SARL (nº org. 855570742). Le che"
@@ -5003,6 +5292,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Exécutez la paie de Jules Leroy (jules.leroy@example.org) pour ce mois. Le salaire de base est de 56950 NOK. Ajoutez une"
@@ -5027,6 +5317,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett og send en faktura til kunden Stormberg AS (org.nr 921996144) på 31250 kr eksklusiv MVA. Fakturaen gjelder Opplæ"
@@ -5051,6 +5342,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "El cliente Viento SL (org. nº 908616537) tiene una factura pendiente de 37850 NOK sin IVA por \"Mantenimiento\". Registre "
@@ -5075,6 +5367,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Brightstone Ltd with organization number 849923331. Email: faktura@brightstoneltd.no."
@@ -5099,6 +5392,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         {
@@ -5156,6 +5450,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         "'Unknown endpoint: POST /ledger/voucher/608829939/:reverse'",
@@ -5198,6 +5493,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create the product \"Data Advisory\" with product number 6835. The price is 27500 NOK excluding VAT, using the standard 25"
@@ -5222,6 +5518,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Kunden Elvdal AS (org.nr 812449982) har reklamert på fakturaen for \"Datarådgjeving\" (45300 kr ekskl. MVA). Opprett ei fu"
@@ -5246,6 +5543,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Créez le client Étoile SARL avec le numéro d'organisation 864083323. L'adresse est Kirkegata 121, 7010 Trondheim. E-mail"
@@ -5270,6 +5568,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         {
@@ -5333,6 +5632,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "O cliente Horizonte Lda (org. nº 880951262) reclamou sobre a fatura referente a \"Desenvolvimento de sistemas\" (35700 NOK"
@@ -5357,6 +5657,7 @@
       "checks_passed": 0,
       "checks_total": 0,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         {
@@ -5457,6 +5758,7 @@
         "Check 3: failed",
         "Check 4: failed"
       ],
+      "post_mortem": null,
       "total_errors": 5,
       "errors": [
         {
@@ -5549,6 +5851,7 @@
         "Check 3: failed",
         "Check 4: failed"
       ],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -5602,6 +5905,7 @@
         "Check 4: failed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Kunden Lysgård AS (org.nr 962467210) har reklamert på fakturaen for \"Nettverkstjeneste\" (41600 kr ekskl. MVA). Opprett e"
@@ -5631,6 +5935,7 @@
         "Check 3: failed",
         "Check 4: failed"
       ],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         {
@@ -5709,6 +6014,7 @@
         "Check 3: failed",
         "Check 4: failed"
       ],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -5756,6 +6062,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Silveroak Ltd with organization number 811867500. Email: faktura@silveroakltd.no."
@@ -5780,6 +6087,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Silveroak Ltd with organization number 811867500. Email: faktura@silveroakltd.no."
@@ -5804,6 +6112,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Silveroak Ltd with organization number 811867500. Email: faktura@silveroakltd.no."
@@ -5828,6 +6137,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Erstellen Sie eine Rechnung für den Kunden Bergwerk GmbH (Org.-Nr. 868341580) mit den Produkten Analysebericht (8563) zu"
@@ -5859,6 +6169,7 @@
         "Check 5: failed",
         "Check 6: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Create an invoice for the customer Windmill Ltd (org no. 926849395) with three product lines: Software License (6309) at"
@@ -5887,6 +6198,7 @@
         "Check 2: passed",
         "Check 3: failed"
       ],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         "'Unknown endpoint: POST /invoice/2147527528/:payment'",
@@ -5935,6 +6247,7 @@
         "Check 4: failed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 2,
       "errors": [
         "'Unknown endpoint: POST /invoice/2147527434/:payment'",
@@ -5970,6 +6283,7 @@
         "Check 6: passed",
         "Check 7: passed"
       ],
+      "post_mortem": null,
       "total_errors": 1,
       "errors": [
         {
@@ -6017,6 +6331,7 @@
         "Check 4: passed",
         "Check 5: passed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Crea el producto \"Informe de análisis\" con número de producto 6859. El precio es 34700 NOK sin IVA, utilizando la tasa e"
@@ -6047,6 +6362,7 @@
         "Check 4: passed",
         "Check 5: failed"
       ],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Register the supplier Silveroak Ltd with organization number 811867500. Email: faktura@silveroakltd.no."
@@ -6077,6 +6393,7 @@
         "Check 4: failed",
         "Check 5: passed"
       ],
+      "post_mortem": null,
       "total_errors": 5,
       "errors": [
         "'Unknown endpoint: POST /order/orderLine'",
@@ -6143,6 +6460,7 @@
         "Check 3: failed",
         "Check 4: failed"
       ],
+      "post_mortem": null,
       "total_errors": 4,
       "errors": [
         "`json_body.isCustomer` is read-only in schema `Customer` and should not be sent in write payloads.",
@@ -6208,6 +6526,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Cree una dimensión contable personalizada \"Produktlinje\" con los valores \"Basis\" y \"Premium\". Luego registre un asiento "
@@ -6232,6 +6551,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Root path test"
@@ -6256,6 +6576,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "test"
@@ -6280,6 +6601,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en kunde med navn Routing Test AS og e-post routing@test.no"
@@ -6304,6 +6626,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en kunde med navn Verifikasjon AS og e-post verify@test.no"
@@ -6328,6 +6651,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en ansatt med navn Erik Hansen, e-post erik.hansen@example.com. Han skal ha fødselsdato 1990-05-15 og startdato "
@@ -6352,6 +6676,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en kunde med navn Acme Norge AS og e-post kontakt@acme.no"
@@ -6376,6 +6701,7 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en kunde med navn Test Kunde AS og e-post test@example.com"
@@ -6400,11 +6726,12 @@
       "checks_passed": null,
       "checks_total": null,
       "checks": [],
+      "post_mortem": null,
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Opprett en kunde med navn Test Kunde AS og e-post test@example.com"
     }
   ],
-  "total_runs": 171,
-  "generated_at": "2026-03-21T14:46:57.746392+00:00"
+  "total_runs": 172,
+  "generated_at": "2026-03-21T15:32:55.334549+00:00"
 }
