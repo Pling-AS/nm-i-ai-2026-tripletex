@@ -1,8 +1,8 @@
 import json
 from typing import Any
 
-import httpx
-from tenacity import (
+import httpx  # pyright: ignore[reportMissingImports]
+from tenacity import (  # pyright: ignore[reportMissingImports]
     AsyncRetrying,
     retry_if_exception_type,
     stop_after_attempt,
@@ -60,6 +60,13 @@ class TripletexClient:
     ) -> dict[str, Any] | list[Any] | str | None:
         normalized_method = method.upper()
         normalized_path = path if path.startswith("/") else f"/{path}"
+        import re as _re
+
+        # Strip /v2 prefix if present — base_url already includes /v2
+        normalized_path = _re.sub(r"^/v2/", "/", normalized_path)
+        normalized_path = _re.sub(r"^/v2$", "/", normalized_path)
+        # Fix URL-encoded > in whoAmI path
+        normalized_path = normalized_path.replace("%3E", ">").replace("%3e", ">")
         normalized_params = _normalize_mapping(params)
         cache_key = None
         if normalized_method == "GET":
@@ -112,6 +119,14 @@ class TripletexClient:
             raise TripletexError("Tripletex request produced no response")
 
         body = self._parse_response_body(response)
+        # Fast-fail on expired proxy tokens — retrying is pointless
+        if response.status_code >= 400:
+            body_str = str(body) if body else ""
+            if "invalid or expired proxy token" in body_str.lower() or (
+                "expired" in body_str.lower() and "proxy" in body_str.lower()
+            ):
+                self.error_count += 1
+                raise TripletexApiError(response.status_code, body)
         if response.status_code >= 400:
             self.error_count += 1
             raise TripletexApiError(response.status_code, body)

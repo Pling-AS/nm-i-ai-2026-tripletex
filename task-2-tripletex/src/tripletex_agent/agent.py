@@ -51,6 +51,7 @@ class ExecutionState:
     enforcer_override_count: int = 0
     last_enforcer_suggestion: str = ""
     created_entity_keys: set[str] = field(default_factory=set)
+    advisor_recovery_keys: set[str] = field(default_factory=set)
 
 
 class TripletexAccountingAgent:
@@ -453,6 +454,29 @@ class TripletexAccountingAgent:
         planner: PlannerOutput,
     ) -> list[dict[str, Any]]:
         endpoint_keys: list[str] = get_endpoint_chain(planner.task_type)
+
+        if planner.task_type == "create_invoice":
+            prompt_lower = " ".join(
+                [s.lower() for s in planner.ordered_steps] + [planner.goal.lower()]
+            )
+            timesheet_keywords = [
+                "timer",
+                "hours",
+                "horas",
+                "stunden",
+                "heures",
+                "timesheet",
+                "registrer",
+                "registe",
+                "aktivitet",
+                "activity",
+            ]
+            if any(kw in prompt_lower for kw in timesheet_keywords):
+                ts_chain = get_endpoint_chain("create_invoice_timesheet")
+                if ts_chain:
+                    for ts_key in ts_chain:
+                        if ts_key not in endpoint_keys:
+                            endpoint_keys.append(ts_key)
 
         for step in planner.ordered_steps:
             match = re.search(r"(GET|POST|PUT|DELETE)\s+(/\S+)", step)
@@ -981,14 +1005,6 @@ class TripletexAccountingAgent:
                         tripletex,
                         execution_state,
                     )
-                    trace.write(
-                        "tool_result",
-                        {
-                            "tool_call_key": tool_call_key,
-                            "tool_name": tool_name,
-                            "result": tool_result,
-                        },
-                    )
                     if (
                         not tool_result.get("ok")
                         and tool_result.get("status_code") in (409, 422)
@@ -999,6 +1015,69 @@ class TripletexAccountingAgent:
                             f"Follow its suggestion: {execution_state.last_enforcer_suggestion}"
                         )
 
+                    if (
+                        tool_name == "tripletex_request"
+                        and not tool_result.get("ok")
+                        and tool_result.get("status_code") == 422
+                        and tool_call_key not in execution_state.advisor_recovery_keys
+                    ):
+                        execution_state.advisor_recovery_keys.add(tool_call_key)
+                        validation_summary = tool_result.get("validation_summary") or []
+                        validation_text = "; ".join(
+                            f"{item.get('field', '')}: {item.get('message', '')}"
+                            for item in validation_summary
+                            if isinstance(item, dict)
+                        )
+                        if not validation_text:
+                            validation_text = str(tool_result.get("error") or "")[:800]
+                        advisor_question = (
+                            f"I attempted {arguments.get('method', 'GET')} {arguments.get('path', '')} "
+                            f"for Tripletex task_type={planner.task_type}. Prompt: {request.prompt}. "
+                            f"The request failed with 422 validation errors: {validation_text}. "
+                            f"Arguments were: {json.dumps(arguments, ensure_ascii=False)}. "
+                            "Recommend the exact next Tripletex call or payload correction to make, "
+                            "using the minimum-change fix."
+                        )
+                        trace.write(
+                            "api_advisor_query",
+                            {"question": advisor_question[:2000], "automatic": True},
+                        )
+                        advisor_result = await self._ask_api_advisor(
+                            openrouter,
+                            question=advisor_question,
+                            planner=planner,
+                            request_prompt=request.prompt,
+                        )
+                        trace.write(
+                            "api_advisor_response",
+                            {
+                                "endpoints_found": advisor_result.get("endpoints_found", 0),
+                                "response_preview": (
+                                    advisor_result.get("advisor_response")
+                                    or advisor_result.get("error")
+                                    or ""
+                                )[:200],
+                                "automatic": True,
+                            },
+                        )
+                        if advisor_result.get("ok"):
+                            tool_result["advisor_guidance"] = (
+                                advisor_result.get("advisor_response") or ""
+                            )[:2000]
+                            tool_result["advisor_endpoints_found"] = advisor_result.get(
+                                "endpoints_found", 0
+                            )
+                            existing_hint = str(tool_result.get("hint") or "").strip()
+                            advisor_hint = (
+                                "Review advisor_guidance before retrying. Make the minimum correction "
+                                "it recommends instead of guessing."
+                            )
+                            tool_result["hint"] = (
+                                f"{existing_hint} {advisor_hint}".strip()
+                                if existing_hint
+                                else advisor_hint
+                            )
+
                     blocking_issue = _detect_blocking_issue(
                         planner=planner,
                         request_prompt=request.prompt,
@@ -1008,7 +1087,7 @@ class TripletexAccountingAgent:
                     )
                     if blocking_issue is not None:
                         trace.write("blocked_warning", blocking_issue)
-                        tool_result["warning"] = blocking_issue["message"]
+                        tool_result["warning"] = blocking_issue.get("message")
                         tool_result["hint"] = (
                             "This may indicate an external prerequisite. "
                             "Try completing what you can or find an alternative approach."
@@ -1029,14 +1108,14 @@ class TripletexAccountingAgent:
                         )
                         recovery_result = {
                             "ok": False,
-                            "error": drift_issue["message"],
-                            "hint": drift_issue["hint"],
-                            "grounded_primary_resource": drift_issue[
+                            "error": drift_issue.get("message"),
+                            "hint": drift_issue.get("hint"),
+                            "grounded_primary_resource": drift_issue.get(
                                 "grounded_primary_resource"
-                            ],
-                            "grounded_linked_resources": drift_issue[
+                            ),
+                            "grounded_linked_resources": drift_issue.get(
                                 "grounded_linked_resources"
-                            ],
+                            ),
                             "grounded_candidate_endpoints": grounded_candidate_endpoints,
                         }
                         trace.write("recovery", recovery_result)
@@ -1150,6 +1229,12 @@ class TripletexAccountingAgent:
                 execution_state.cached_tool_results[tool_call_key] = result
                 return result
             if tool_name == "tripletex_request":
+                raw_path = arguments.get("path", "")
+                if raw_path.startswith("/v2/"):
+                    arguments["path"] = raw_path[3:]
+                elif raw_path.startswith("v2/"):
+                    arguments["path"] = raw_path[2:]
+
                 preflight_error, endpoint = self._validate_tripletex_request(
                     arguments,
                     execution_state,
@@ -1316,14 +1401,14 @@ class TripletexAccountingAgent:
                         "Auto-stripped field '%s' from %s payload: %s",
                         field,
                         schema_name,
-                        p["message"],
+                        p.get("message"),
                     )
 
         if structural:
             primary_problem = structural[0]
             return {
                 "ok": False,
-                "error": primary_problem["message"],
+                "error": primary_problem.get("message"),
                 "schema_validation_errors": structural[:5],
                 "stripped_fields": [
                     p.get("field_name") for p in strippable if p.get("field_name")
@@ -2613,9 +2698,17 @@ def _detect_off_target_drift(
             "invoice",
             "ledger",
             "hourlyRates",
+            "token",
         },
-        "create_employee": {"employee", "department"},
-        "create_travel_expense": {"travelExpense", "employee", "currency"},
+        "create_employee": {"employee", "department", "token"},
+        "update_employee": {"employee", "token"},
+        "create_travel_expense": {
+            "travelExpense",
+            "employee",
+            "currency",
+            "token",
+            "department",
+        },
         "delete_travel_expense": {"travelExpense", "employee"},
         "bank_reconciliation": {
             "bank",

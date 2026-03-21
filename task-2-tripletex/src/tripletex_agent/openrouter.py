@@ -361,14 +361,23 @@ class OpenRouterClient:
         )
 
         if _is_anthropic_model(model):
-            return await self._claude_chat_completion(
-                model=model,
-                messages=messages,
-                tools=tools,
-                temperature=temp,
-                max_tokens=max_tokens,
-                enable_thinking=enable_thinking,
+            # Only use specialized Claude path if we have a direct client configured
+            vertex_model = _normalize_claude_model_for_vertex(model)
+            vertex_available = (
+                self._vertex_client is not None and vertex_model is not None
             )
+            azure_available = self._azure_anthropic_client is not None
+
+            if vertex_available or azure_available:
+                return await self._claude_chat_completion(
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    temperature=temp,
+                    max_tokens=max_tokens,
+                    enable_thinking=enable_thinking,
+                )
+
         return await self._openai_chat_completion(
             model=model,
             messages=messages,

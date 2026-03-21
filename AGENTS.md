@@ -101,7 +101,7 @@ nm-i-ai/
 
 ### Task 3 — Astar Island (Norse World Prediction)
 
-**STATUS: VERIFIED (Score 91.55)**
+**STATUS: RUNNING AUTONOMOUSLY | Best: 94.1 (R8) | Rank: #11 | Autorun on GCP**
 
 | Aspect | Detail |
 |--------|--------|
@@ -139,3 +139,91 @@ uv run main.py easy                # Run bot on easy difficulty
 cd task-1-norgesgruppen
 # See docs/submission.md for ZIP upload format
 ```
+
+## ASTAR ISLAND — DEEP KNOWLEDGE (Task 3)
+
+### Architecture
+- **Dirichlet posterior**: p_k = (n_k + τ·m_k) / (N + τ)
+- **Adaptive τ per archetype**: JSD-based, range [12, 40], round-level τ is weighted median
+- **SHRINKAGE_KAPPA = 10.0** for prior blending (λ = arch_n/(arch_n + κ))
+- **Same-terrain neighbor pseudo-counts**: λ=0.5, cap=2.0 — borrows neighbor observations
+- **Terrain-aware spatial smoothing**: β=0.15, always-on, only same-terrain neighbors
+- **Coverage**: 3×3 tiling (9 viewports × 5 seeds = 45 queries) + 5 VOI repeats
+- **Interleaved queries** across seeds so partial budget gives partial coverage of ALL seeds
+- **Leave-one-out**: Target cell's counts subtracted from archetype pool before building prior
+- **Archetype backoff**: Full 4-tuple → drop coastal → drop dist → terrain only
+- **Floor**: ε=0.001 additive floor, then renormalize
+
+### Score History
+| Round | Raw Score | Rank | Weighted (×1.05^r) | Map Type |
+|-------|-----------|------|---------------------|----------|
+| R1 | missed | — | 0 | — |
+| R2 | 74.40 | #41/153 | 82.0 | — |
+| R3 | 88.24 | #2/100 | 102.2 | moderate |
+| R4 | 90.53 | #10/86 | 110.0 | easy |
+| R5 | missed | — | 0 | — |
+| R6 | 86.90 | #4/186 | 116.5 | moderate |
+| R7 | 66.38 | #26/199 | 93.4 | hard |
+| R8 | 93.90 | #5/214 | 138.8 | easy |
+| R9 | 92.90 | #9/221 | 144.1 | easy |
+| R10 | 88.96 | ?/? | 144.9 | moderate |
+
+### Error Profiles (vary per round — no single fix works)
+| Round | Empty | Settlement | Port | Ruin | Forest | Dominant |
+|-------|-------|------------|------|------|--------|----------|
+| R3 | 12% | 8% | -1% | 6% | 75% | Forest |
+| R4 | 36% | 23% | 12% | 15% | 14% | Empty |
+| R6 | 16% | 24% | 16% | 16% | 29% | Forest |
+| R7 | -13% | 78% | 15% | 9% | 10% | Settlement |
+| R8 | 17% | 48% | 5% | 24% | 5% | Settlement |
+| R9 | 47% | -12% | 12% | 9% | 43% | Empty |
+
+### CRITICAL FINDINGS
+1. **Predictions are 97% prior-dominated** — with τ≈36 and N≈1.5, observations get only 2.7% weight
+2. **Shrinkage blend already adapts priors perfectly** — λ=0.997 on R8 means prior is 99.7% from current round data
+3. **ALL cells are observed** (0 unobserved) — error is 100% from model inaccuracy, not missing data
+4. **Within-archetype variance is the bottleneck** — cells in same archetype have different true distributions
+5. **Leaderboard uses MAX scoring** — best(round_score × 1.05^round_number)
+6. **Coastal-wrap bug was false alarm** — all maps are islands, edges ALL ocean
+7. **Settlement dynamics vary 100× across rounds** — d=2 settlement rate: 0.001 (R3) to 0.266 (R6)
+
+### WHAT WAS TRIED AND FAILED (DO NOT RETRY)
+| Approach | Result | Why it failed |
+|----------|--------|---------------|
+| Spatial residual field | Neutral | N=1 observation noise overwhelms spatial signal |
+| Global class tilt | -1 to -3 pts | Over-corrects well-calibrated archetype priors |
+| Surprise-based τ | +1.2 hard / -0.3 easy | Net negative under MAX scoring |
+| Empirical Bayes τ (MML) | -0.7 to +1.6 | Degenerate with N≈1.5 observations |
+| Terrain-level hedge | Zero effect | Redundant with Dirichlet prior mass |
+| Fixed low TAU_OBS | -1 to -6 pts easy | Amplifies noise on easy maps |
+
+### WHAT WORKS (currently deployed)
+| Feature | Impact on backtests |
+|---------|---------------------|
+| Same-terrain neighbor pseudo-counts (λ=0.5) | R4 +0.07, R6 +0.30, R7 +1.14 |
+| Terrain-aware spatial smooth (β=0.15) | R4 +0.04, R6 +0.03, R7 +0.06 |
+
+### GCP VM
+- Name: `astar-autorun`, zone: `europe-north1-b`, type: `e2-small`
+- Python 3.11 via uv, tmux session: `autorun`
+- Code: `~/astar/`, log: `~/autorun.log`
+- gcloud: `/opt/homebrew/share/google-cloud-sdk/bin/gcloud`
+- Project: `ainm26osl-753`
+
+### Autorun Controls
+| Action | Command |
+|--------|---------|
+| Pause (before next round) | `gcloud compute ssh astar-autorun --zone=europe-north1-b --command="touch ~/astar/PAUSE"` |
+| Resume | `gcloud compute ssh astar-autorun --zone=europe-north1-b --command="rm ~/astar/PAUSE"` |
+| Check log | `gcloud compute ssh astar-autorun --zone=europe-north1-b --command="tail -20 ~/autorun.log"` |
+| Deploy file | `gcloud compute scp --zone=europe-north1-b <local> astar-autorun:~/astar/<remote>` |
+| Restart autorun | `gcloud compute ssh astar-autorun --zone=europe-north1-b --command="tmux kill-session -t autorun; cd ~/astar && tmux new-session -d -s autorun 'export PATH=\"/home/m/.local/bin:\$PATH\" && uv run autorun.py 2>&1 \| tee ~/autorun.log'"` |
+
+### Spatial Residual Field Design (SAVED, NOT DEPLOYED)
+Full design saved in `.sisyphus/plans/spatial-residual-field.md` — tested and found neutral.
+
+### Remaining Ideas (untested, lower confidence)
+1. **Query strategy optimization** — variable viewport sizes for repeats
+2. **Use settlement stats from simulate API** — population, food, wealth, defense, owner_id
+3. **Finer archetypes** — add dist_to_ruin, direction features
+4. **Per-cell logistic regression** from calibration data (continuous instead of bucketed)

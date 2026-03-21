@@ -75,7 +75,7 @@ async def log_all_requests(request: Request, call_next):
         "status_code": response.status_code,
         "elapsed_seconds": elapsed,
         "headers": {
-            k: v
+            k: (v if k.lower() != "authorization" else "[REDACTED]")
             for k, v in request.headers.items()
             if k.lower()
             in (
@@ -87,7 +87,7 @@ async def log_all_requests(request: Request, call_next):
                 "ngrok-skip-browser-warning",
             )
         },
-        "body_preview": body_preview,
+        "body_preview": _redact_body(body_preview),
     }
     logger.info(
         "HTTP %s %s → %d (%.3fs)", request.method, path, response.status_code, elapsed
@@ -98,6 +98,25 @@ async def log_all_requests(request: Request, call_next):
     except OSError:
         pass
     return response
+
+
+def _redact_body(body_str: str) -> str:
+    """Redact sensitive fields from JSON body preview."""
+    if not body_str.strip().startswith("{"):
+        return body_str
+    try:
+        data = json.loads(body_str)
+        if "tripletex_credentials" in data:
+            creds = data["tripletex_credentials"]
+            if isinstance(creds, dict):
+                # Redact session_token if present
+                if "session_token" in creds:
+                    creds["session_token"] = "[REDACTED]"
+                # Also prevent logging base_url if sensitive (usually not, but consistent)
+            data["tripletex_credentials"] = creds
+        return json.dumps(data)
+    except Exception:
+        return body_str
 
 
 def get_agent(
@@ -178,19 +197,3 @@ async def root_solve_endpoint(
     agent: TripletexAccountingAgent = Depends(get_agent),
 ) -> SolveResponse:
     return await solve_endpoint(payload, settings, agent)
-
-
-@app.get("/api/raw-requests")
-async def get_raw_requests() -> JSONResponse:
-    entries: list[dict] = []
-    if RAW_LOG_PATH.exists():
-        try:
-            with RAW_LOG_PATH.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        entries.append(json.loads(line))
-        except (json.JSONDecodeError, OSError):
-            pass
-    entries.reverse()
-    return JSONResponse({"requests": entries[:200]})

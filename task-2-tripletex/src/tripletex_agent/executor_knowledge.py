@@ -39,6 +39,12 @@ FIELD_RULES: dict[str, list[str]] = {
         'When POSTing, ALWAYS include department={"id": dept_id}. Create department first if needed.',
         "userType should be 'STANDARD' unless admin is explicitly requested.",
     ],
+    "PUT /employee/{id}": [
+        "For update tasks, GET /employee with fields=* first so you have id and version.",
+        "PUT /employee/{id} MUST include id and version from the GET response.",
+        "Only send the fields the prompt explicitly asks to change.",
+        "If the prompt asks for admin/access privileges, use grant_employee_entitlements instead of guessing employee fields.",
+    ],
     # ---- Customer / Supplier ----
     "POST /customer": [
         "When email is provided, ALWAYS set BOTH email AND invoiceEmail to the same value.",
@@ -48,6 +54,8 @@ FIELD_RULES: dict[str, list[str]] = {
     "POST /supplier": [
         "When email is provided, ALWAYS set BOTH email AND invoiceEmail to the same value.",
         "Do NOT send isSupplier (it's readOnly).",
+        "ALWAYS include phoneNumber if provided in the prompt — scoring checks phone.",
+        "ALWAYS include postalAddress with addressLine1, postalCode, city, country={id: 161} when address info is provided.",
     ],
     # ---- Product ----
     "POST /product": [
@@ -91,6 +99,8 @@ FIELD_RULES: dict[str, list[str]] = {
         'Requires employee={"id": employee_id}.',
         "Set title, departureDateTime, returnDateTime.",
         "DateTime format: 'YYYY-MM-DDT08:00:00' (not just date).",
+        'ALWAYS include project={"id": project_id} if prompt mentions a project.',
+        "Paths must NOT include /v2/ prefix — use /travelExpense not /v2/travelExpense.",
     ],
     "POST /travelExpense/cost": [
         "Use amountCurrencyIncVat (NOT amount, NOT amountExcludingVat).",
@@ -102,7 +112,14 @@ FIELD_RULES: dict[str, list[str]] = {
     "POST /project": [
         'Requires customer={"id": customer_id} and projectManager={"id": employee_id}.',
         "startDate is REQUIRED — use today_iso from execution_brief if prompt doesn't specify a date.",
-        "For fixed-price projects: isFixedPrice=true, fixedprice=<amount>.",
+        "If the prompt mentions a project number (prosjektnummer), set number=<project_number>.",
+        "isInternal should be false unless explicitly stated as internal project.",
+        "If description text is provided, set description=<text>.",
+        "For fixed-price projects, set isFixedPrice=true and fixedprice=<amount>.",
+    ],
+    "POST /project/projectActivity": [
+        'Requires project={"id": project_id} and activity={"id": activity_id}.',
+        "If activity already linked (409), ignore the error and proceed.",
     ],
     "POST /project/hourlyRates": [
         "If a default hourly rate already exists (409 Duplicate entry), GET /project/hourlyRates?projectId=... then PUT to update it.",
@@ -118,8 +135,9 @@ FIELD_RULES: dict[str, list[str]] = {
         "For project activities, set activityType='PROJECT_GENERAL_ACTIVITY'.",
     ],
     "POST /timesheet/entry": [
+        "Requires project, activity, employee, date, hours.",
         "Only one entry per employee/date/activity/project combination.",
-        "Requires project, activity, date, hours, employee refs.",
+        "hours is a decimal number (e.g. 8.0, 7.5).",
     ],
     # ---- Ledger Account ----
     "PUT /ledger/account/{id}": [
@@ -148,6 +166,7 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
         "POST /supplier",
     ],
     "create_employee": [
+        "GET /employee",
         "POST /department",
         "POST /employee",
     ],
@@ -216,11 +235,25 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
     ],
     "create_project": [
         "POST /customer",
+        "GET /employee",
         "POST /department",
         "POST /employee",
         "POST /project",
         "POST /project/projectActivity",
         "POST /project/hourlyRates",
+    ],
+    "register_timesheet": [
+        "GET /employee",
+        "POST /customer",
+        "POST /project",
+        "POST /project/projectActivity",
+        "POST /activity",
+        "POST /timesheet/entry",
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
     ],
     "create_travel_expense": [
         "POST /department",
@@ -251,9 +284,37 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
         "GET /supplier",
         "PUT /supplier/{id}",
     ],
+    "update_product": [
+        "GET /product",
+        "PUT /product/{id}",
+    ],
+    "update_order": [
+        "GET /order",
+        "PUT /order/{id}",
+    ],
+    "update_invoice": [
+        "GET /invoice",
+        "PUT /invoice/{id}",
+    ],
     "update_contact": [
         "GET /contact",
         "PUT /contact/{id}",
+    ],
+    "create_invoice_timesheet": [
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /customer",
+        "GET /employee",
+        "POST /department",
+        "POST /employee",
+        "POST /project",
+        "POST /activity",
+        "POST /project/projectActivity",
+        "POST /project/hourlyRates",
+        "POST /timesheet/entry",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
     ],
     "enable_module": [
         "GET /token/session/>whoAmI",
@@ -638,7 +699,7 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
         ],
     },
     "create_project": {
-        "description": "Create project with customer and project manager. 3-5 API calls.",
+        "description": "Create project with customer and project manager — all scored fields. 3-5 API calls.",
         "calls": [
             {
                 "step": 1,
@@ -650,13 +711,13 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                 "step": 2,
                 "method": "GET",
                 "path": "/employee?email=<email>",
-                "note": "Check if employee exists first — sandbox pre-seeds employees",
+                "note": "Check if employee exists first",
             },
             {
                 "step": 3,
                 "method": "POST",
                 "path": "/department",
-                "note": "Only if employee not found — create dept before employee",
+                "note": "Only if employee not found",
             },
             {
                 "step": 4,
@@ -670,12 +731,75 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                 "path": "/project",
                 "body_shape": {
                     "name": "str",
+                    "number": "str (project number if provided)",
+                    "description": "str (if provided)",
                     "customer": {"id": "from_step1"},
                     "projectManager": {"id": "from_step2_or_4"},
                     "isInternal": False,
                     "startDate": "today_iso",
+                    "projectCategory": {"id": "from_search (optional)"},
                 },
-                "note": "startDate is REQUIRED",
+                "note": "startDate is REQUIRED. name must EXACTLY match prompt.",
+            },
+        ],
+    },
+    "register_timesheet": {
+        "description": "Register hours on project activity then create invoice. 8-12 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/employee?email=<email>",
+                "note": "Find employee",
+            },
+            {
+                "step": 2,
+                "method": "POST",
+                "path": "/customer",
+                "body_shape": {"name": "str", "organizationNumber": "str"},
+            },
+            {
+                "step": 3,
+                "method": "POST",
+                "path": "/project",
+                "body_shape": {
+                    "name": "str",
+                    "customer": {"id": "from_step2"},
+                    "projectManager": {"id": "from_step1"},
+                    "startDate": "today_iso",
+                },
+            },
+            {
+                "step": 4,
+                "method": "POST",
+                "path": "/activity",
+                "body_shape": {
+                    "name": "str",
+                    "activityType": "PROJECT_GENERAL_ACTIVITY",
+                },
+                "note": "If activity already exists (422), GET /activity?name=... and reuse",
+            },
+            {
+                "step": 5,
+                "method": "POST",
+                "path": "/project/projectActivity",
+                "body_shape": {
+                    "project": {"id": "from_step3"},
+                    "activity": {"id": "from_step4"},
+                },
+            },
+            {
+                "step": 6,
+                "method": "POST",
+                "path": "/timesheet/entry",
+                "body_shape": {
+                    "employee": {"id": "from_step1"},
+                    "project": {"id": "from_step3"},
+                    "activity": {"id": "from_step4"},
+                    "date": "today_iso",
+                    "hours": "number",
+                },
+                "note": "One entry per day. hours is a decimal number.",
             },
         ],
     },

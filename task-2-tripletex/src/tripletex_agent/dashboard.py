@@ -8,14 +8,53 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import APIRouter
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from tripletex_agent.config import get_settings
+from tripletex_agent.config import get_settings, Settings
 from tripletex_agent.prompts import EXECUTOR_SYSTEM_PROMPT
 from tripletex_agent.trace import RunTrace, RUNS_DIR
 
 logger = logging.getLogger(__name__)
+
+security = HTTPBasic(auto_error=False)
+
+
+def verify_dashboard_access(
+    credentials: HTTPBasicCredentials | None = Depends(security),
+    settings: Settings = Depends(get_settings),
+) -> str:
+    """Verify dashboard access using Basic Auth against APP_API_KEY.
+
+    If APP_API_KEY is not set, allow access (dev mode).
+    If set, require Basic Auth with any username and password=APP_API_KEY.
+    """
+    if not settings.app_api_key:
+        return "admin"
+
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    current_password_bytes = credentials.password.encode("utf8")
+    correct_password_bytes = settings.app_api_key.encode("utf8")
+    is_correct_password = secrets.compare_digest(
+        current_password_bytes, correct_password_bytes
+    )
+
+    if not is_correct_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 # --- Cached competition submissions for run matching ---
 _submissions_cache: list[dict[str, Any]] = []
@@ -126,7 +165,7 @@ def _match_submission_to_run(
     return best_match
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_dashboard_access)])
 
 
 def _parse_trace_file(path: Path) -> list[dict[str, Any]]:
@@ -194,7 +233,7 @@ def _summarize_run(path: Path, events: list[dict[str, Any]]) -> dict[str, Any]:
         status = "completed"
     elif error_event:
         status = "error"
-    elif run_id in RunTrace._active:
+    elif run_id in RunTrace.get_active_runs():
         status = "running"
     elif events:
         last_event = events[-1]["event_type"]
@@ -682,6 +721,24 @@ async def competition_batch_stop() -> JSONResponse:
     global _batch_runner_active
     _batch_runner_active = False
     return JSONResponse({"stopped": True, "progress": _batch_runner_progress})
+
+
+@router.get("/api/raw-requests")
+async def get_raw_requests() -> JSONResponse:
+    from tripletex_agent.main import RAW_LOG_PATH
+
+    entries: list[dict] = []
+    if RAW_LOG_PATH.exists():
+        try:
+            with RAW_LOG_PATH.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        entries.append(json.loads(line))
+        except (json.JSONDecodeError, OSError):
+            pass
+    entries.reverse()
+    return JSONResponse({"requests": entries[:200]})
 
 
 async def _run_batch(count: int, delay: int) -> None:

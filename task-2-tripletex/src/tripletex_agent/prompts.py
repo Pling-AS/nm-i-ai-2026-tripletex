@@ -39,6 +39,9 @@ Task type MUST be EXACTLY one of these values (no other_ prefix, no invented typ
 create_employee, create_customer, create_product, create_supplier, create_invoice, register_supplier_invoice, register_payment, create_travel_expense, delete_travel_expense, create_project, create_department, enable_module, update_employee, update_customer, update_supplier, update_product, update_order, update_invoice, update_contact, create_credit_note, create_order, delete_invoice, reverse_voucher, create_voucher, bank_reconciliation, ledger_error_correction, year_end_closing
 
 If the task involves registering/booking a supplier invoice or incoming invoice → use "register_supplier_invoice".
+If the task involves running payroll / salary / lønn / nómina / paie / Gehalt for an employee → use "create_voucher".
+If the task involves payroll/salary (lønn/løn/nómina/paie/Gehalt/folha) → use "create_voucher".
+If the task involves registering hours/time (timer/horas/Stunden/heures) on a project → use "create_invoice" (with timesheet sub-steps in ordered_steps).
 If no exact match exists, pick the CLOSEST match from the list above. NEVER invent a new task_type.
 
 Extraction rules:
@@ -199,6 +202,19 @@ You have extended thinking enabled. Before EACH tool call, reason step by step:
    - GET /invoice/paymentType
    - PUT /invoice/{id}/:payment with query params paymentDate, paymentTypeId, paidAmount or paidAmountCurrency.
 
+### Register Hours / Timesheet then Invoice
+1. Find or create employee: GET /employee?email=<email>, or POST /employee if needed.
+2. Create customer: POST /customer.
+3. Create project: POST /project with name, customer, projectManager, startDate.
+4. Create activity: POST /activity with name and activityType="PROJECT_GENERAL_ACTIVITY".
+   - If 422 "Navnet er i bruk", GET /activity?name=... and reuse.
+5. Link activity to project: POST /project/projectActivity with project and activity refs.
+6. Register timesheet entries: POST /timesheet/entry for each day/batch of hours.
+   - Each entry needs employee, project, activity, date, hours.
+   - hours is a decimal number (e.g., 8.0 for a full day).
+7. If invoice is also requested: Follow the Create Invoice chain starting from bank setup.
+8. If fixed price is mentioned: POST /project/hourlyRates or set isFixedPrice+fixedprice on project.
+
 ### Register Payment (COMPLETE REWRITE, EMPTY-SANDBOX SAFE)
 1. Setup bank account first:
    - GET /ledger/account?number=1920
@@ -238,12 +254,20 @@ You have extended thinking enabled. Before EACH tool call, reason step by step:
 ### Create Department
 1. POST /department with name and departmentNumber when provided.
 
-### Create Project (COMPLETE REWRITE)
+### Create Project (ALL SCORED FIELDS)
 1. Create customer: POST /customer with name and organizationNumber when provided; do NOT send isCustomer.
 2. Check if employee exists: GET /employee?email=<email> — sandbox often pre-seeds employees. If found, reuse.
-3. If employee NOT found: POST /department (name="Avdeling", departmentNumber="1"), then POST /employee with firstName, lastName, email, userType="STANDARD", department={"id": dept_id}.
-4. Create project: POST /project with name, customer={"id": customer_id}, projectManager={"id": employee_id}, startDate=today_iso.
-5. startDate is REQUIRED by the API — always include it (use today_iso from execution_brief if prompt doesn't specify).
+3. If employee NOT found: POST /department, then POST /employee.
+4. Create project: POST /project with ALL these fields:
+   - name: EXACT project name from prompt (this IS scored)
+   - customer: {"id": customer_id} (this IS scored)
+   - projectManager: {"id": employee_id} (this IS scored)
+   - startDate: today_iso or from prompt (REQUIRED by API)
+   - isInternal: false (unless explicitly stated)
+   - number: project number if provided in prompt
+   - description: project description if provided in prompt
+5. startDate is REQUIRED by the API — always include it.
+6. The project NAME must match the prompt EXACTLY — this is a scored field.
 
 ### Create Order
 1. Create customer: POST /customer with name, organizationNumber, email, invoiceEmail.

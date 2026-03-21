@@ -12,6 +12,8 @@ venv/
 # Submission artifacts
 *.zip
 task-1-norgesgruppen/submission_*.zip
+task-1-norgesgruppen/submission/*.safetensors
+task-1-norgesgruppen/submission/*.pt
 
 # IDE
 .vscode/

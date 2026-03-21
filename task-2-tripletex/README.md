@@ -66,9 +66,20 @@ python3 -m compileall src tests
 
 If you install dev dependencies, you can also run `pytest`.
 
+## Dashboard
+
+The agent includes a real-time monitoring dashboard accessible at `/dashboard`.
+
+Features:
+- **Active Runs**: Watch agent steps, tool calls, and reasoning in real-time.
+- **Run History**: View all past runs with detailed traces and error logs.
+- **Competition Integration**: If `AINM_JWT_TOKEN` is set, it pulls submission scores and matches them to local runs.
+- **Batch Runner**: Trigger multiple competition submissions automatically.
+
 ## Endpoint contract
 
 ### `POST /solve`
+
 
 Request body:
 
