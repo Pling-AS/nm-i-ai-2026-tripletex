@@ -60,11 +60,26 @@
 | `/tmp/build_from_original/classifier_v2.safetensors` | 83MB | DINOv2 ViT-S, 90.2% val acc | **PROVEN best classifier** |
 | `/tmp/classifier_refmix_vits.safetensors` | 83MB | DINOv2 ViT-S + ref images, 71.6% val acc | **BAD — confirmed in sim** |
 
-### New Models (Training/Planned)
-| Model | Status | Expected File | Notes |
-|-------|--------|---------------|-------|
-| RT-DETR-L | 🔄 TRAINING | `rtdetr_l_stripped.pt` ~64MB | Transformer detector for ensemble diversity |
-| CLIP+DINOv2 ensemble classifier | 🔄 TRAINING | `classifier_clip_dino.safetensors` ~218MB | 1152-dim combined features |
+### New Models (Training on A100 Fleet)
+| Model | VM | Status | ETA | Expected File | Size | Notes |
+|-------|-----|--------|-----|---------------|------|-------|
+| RT-DETR-L fulldata | yolo-train-a100-2 | 🔄 Epoch 60/200 | ~30 min | `rtdetr_l_fulldata.pt` | ~64MB | Transformer detector, native in ultralytics 8.1.0 |
+| CLIP+DINOv2 classifier | train-cls | 🔄 Epoch 13/30 (head) | ~1.5h | `classifier_clip_dino.safetensors` | ~218MB | ⚠️ TOO BIG for 420MB budget with 2 YOLO models |
+| RT-DETR-L 80/20 | train-fold1 | 🔄 Starting | ~1h | `rtdetr_l_8020.pt` | ~64MB | Held-out diversity (like l_80/20) |
+| RT-DETR-X fulldata | train-fold2 | 🔄 Starting | ~1.5h | `rtdetr_x_fulldata.pt` | ~100MB | Larger transformer detector |
+| DINOv2 ViT-B classifier | train-fold3 | 🔄 Epoch 1/50 | ~1.5h | `classifier_vitb.safetensors` | ~173MB | Fits budget: 131+84+173=388MB ✅ |
+| Faster R-CNN ResNet50-FPNv2 | train-fold4 | 🔄 Epoch 7/60 | ~20 min | `fasterrcnn_best.pt` | ~110MB | Two-stage detector, max diversity |
+
+### Weight Budget Combinations (420MB max, 3 files)
+| Combo | File 1 | File 2 | File 3 | Total | Fits? |
+|-------|--------|--------|--------|-------|-------|
+| Current best | x_v2 (131MB) | l_80/20 (84MB) | cls_v2 (83MB) | 298MB | ✅ |
+| ViT-B classifier | x_v2 (131MB) | l_80/20 (84MB) | cls_vitb (173MB) | 388MB | ✅ |
+| CLIP+DINOv2 cls | x_v2 (131MB) | l_80/20 (84MB) | cls_clip_dino (218MB) | 433MB | ❌ |
+| RT-DETR + YOLO | x_v2 (131MB) | rtdetr_l (64MB) | cls_v2 (83MB) | 278MB | ✅ |
+| RT-DETR + l_80/20 | rtdetr_l (64MB) | l_80/20 (84MB) | cls_v2 (83MB) | 231MB | ✅ |
+| 3 detectors no cls | x_v2 (131MB) | l_80/20 (84MB) | rtdetr_l (64MB) | 279MB | ✅ |
+| FRCNN + YOLO | x_v2 (131MB) | frcnn (110MB) | cls_v2 (83MB) | 324MB | ✅ |
 
 ---
 

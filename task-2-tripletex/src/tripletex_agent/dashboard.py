@@ -480,6 +480,10 @@ async def enrich_runs() -> JSONResponse:
 
 
 async def _do_enrich_runs() -> JSONResponse:
+    import platform as _platform
+
+    local_hostname = _platform.node()
+
     store = get_run_store()
     submissions = await _get_cached_submissions(force_refresh=True)
     enriched_count = 0
@@ -495,6 +499,11 @@ async def _do_enrich_runs() -> JSONResponse:
             detail = store.get_detail(run_id)
             events = detail[1] if detail else store.parse_trace_file(path)
             if not events:
+                continue
+            summary = detail[0] if detail else {}
+            run_hostname = summary.get("metadata", {}).get("hostname", "")
+            if run_hostname and run_hostname != local_hostname:
+                skipped_count += 1
                 continue
             result = _enrich_run_file(path, events, submissions)
             if result and result.get("pending_match"):
@@ -519,6 +528,9 @@ async def _do_enrich_runs() -> JSONResponse:
                     continue
 
                 summary, events = detail
+                run_hostname = summary.get("metadata", {}).get("hostname", "")
+                if run_hostname and run_hostname != local_hostname:
+                    continue
                 if summary.get("source") != "competition":
                     continue
                 if summary.get("status") not in ("completed", "error"):
