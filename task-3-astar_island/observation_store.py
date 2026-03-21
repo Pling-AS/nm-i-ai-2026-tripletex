@@ -190,14 +190,26 @@ class ObservationStore:
                 ", has_adjacent_ruin=False", ""
             )
 
-        # Regex to extract fields
-        # pattern: initial_terrain=(\d+), is_coastal=(True|False), dist_settlement_bucket=(\d+), has_adjacent_settlement=(True|False)
+        # Try new format with pressure_bucket first
+        m = re.search(
+            r"initial_terrain=(\d+).*is_coastal=(True|False).*dist_settlement_bucket=(\d+).*has_adjacent_settlement=(True|False).*pressure_bucket=(\d+)",
+            key,
+        )
+        if m:
+            return CellArchetype(
+                initial_terrain=int(m.group(1)),
+                is_coastal=m.group(2) == "True",
+                dist_settlement_bucket=int(m.group(3)),
+                has_adjacent_settlement=m.group(4) == "True",
+                pressure_bucket=int(m.group(5)),
+            )
+
+        # Fallback: old format without pressure_bucket
         m = re.search(
             r"initial_terrain=(\d+).*is_coastal=(True|False).*dist_settlement_bucket=(\d+).*has_adjacent_settlement=(True|False)",
             key,
         )
         if not m:
-            # Fallback for empty/malformed keys (should not happen in valid saves)
             raise ValueError(f"Could not parse archetype key: {key}")
 
         return CellArchetype(
@@ -205,6 +217,7 @@ class ObservationStore:
             is_coastal=m.group(2) == "True",
             dist_settlement_bucket=int(m.group(3)),
             has_adjacent_settlement=m.group(4) == "True",
+            pressure_bucket=2,  # default medium for legacy data
         )
 
     @classmethod

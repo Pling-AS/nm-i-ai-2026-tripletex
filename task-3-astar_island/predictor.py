@@ -347,13 +347,20 @@ MIN_ARCHETYPE_BLEND = 5
 
 
 def _archetype_backoff_chain(archetype: CellArchetype) -> list[CellArchetype]:
-    """Progressively coarser archetypes: full → drop coastal → drop dist → terrain only."""
-    t, coast, dist, adj_sett = archetype
+    """Progressively coarser archetypes for backoff with 5-field tuple."""
+    t, coast, dist, adj_sett, pressure = archetype
     return [
         archetype,
-        CellArchetype(t, False, dist, adj_sett),
-        CellArchetype(t, False, 3, adj_sett),
-        CellArchetype(t, False, 3, False),
+        # Drop pressure
+        CellArchetype(t, coast, dist, adj_sett, 2),
+        # Drop coastal + pressure
+        CellArchetype(t, False, dist, adj_sett, 2),
+        # Drop adj_sett
+        CellArchetype(t, False, dist, False, 2),
+        # Coarsen dist (far bucket)
+        CellArchetype(t, False, min(dist, 8), False, 2),
+        # Terrain only
+        CellArchetype(t, False, 8, False, 2),
     ]
 
 

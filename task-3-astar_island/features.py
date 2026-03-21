@@ -37,18 +37,30 @@ class CellArchetype(NamedTuple):
 
     initial_terrain: int
     is_coastal: bool
-    dist_settlement_bucket: int  # 0=on, 1=adjacent, 2=near(2-4), 3=far(5+)
+    dist_settlement_bucket: int  # 0-7 fine buckets, 8=far(8+)
     has_adjacent_settlement: bool
+    pressure_bucket: int  # 0=none, 1=low, 2=med, 3=high settlement pressure
 
 
 def _distance_bucket(dist: float) -> int:
+    """Fine-grained distance bucket: 0=on, 1-7=exact distance, 8=far."""
     if dist <= 0:
         return 0
-    if dist <= 1.5:
-        return 1
-    if dist <= 4.5:
-        return 2
-    return 3
+    d = int(dist + 0.5)  # round to nearest int
+    if d <= 7:
+        return d
+    return 8
+
+
+def _pressure_bucket(pressure: float) -> int:
+    """Bucket settlement expansion pressure into 4 levels."""
+    if pressure < 0.3:
+        return 0  # no pressure
+    if pressure < 1.0:
+        return 1  # low
+    if pressure < 2.5:
+        return 2  # medium
+    return 3  # high
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +238,16 @@ class SeedAnalysis:
 
         has_adj_settlement = self.dist_to_settlement <= 1.5
 
+        # Compute expansion pressure field: sum of exp(-dist/3) over all settlements
+        pressure_map = np.zeros((h, w), dtype=np.float64)
+        for s in self.settlements:
+            sx, sy = s["x"], s["y"]
+            yy, xx = np.ogrid[0:h, 0:w]
+            d = np.maximum(np.abs(xx - sx), np.abs(yy - sy)).astype(np.float64)
+            pressure_map += np.exp(-d / 3.0)
+
+        self.pressure_map = pressure_map  # save for later use
+
         for y in range(h):
             for x in range(w):
                 archetypes[y, x] = CellArchetype(
@@ -235,6 +257,7 @@ class SeedAnalysis:
                         self.dist_to_settlement[y, x]
                     ),
                     has_adjacent_settlement=bool(has_adj_settlement[y, x]),
+                    pressure_bucket=_pressure_bucket(pressure_map[y, x]),
                 )
         return archetypes
 
