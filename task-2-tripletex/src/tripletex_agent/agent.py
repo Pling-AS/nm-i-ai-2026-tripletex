@@ -20,7 +20,11 @@ from tripletex_agent.openrouter import (
     OpenRouterError,
     _is_anthropic_model,
 )
-from tripletex_agent.prompts import PLANNER_SYSTEM_PROMPT, build_executor_system_prompt
+from tripletex_agent.prompts import (
+    EXECUTOR_PLAYBOOKS,
+    PLANNER_SYSTEM_PROMPT,
+    build_executor_system_prompt,
+)
 from tripletex_agent.schemas import PlannerOutput, SolveRequest
 from tripletex_agent.executor_knowledge import (
     get_endpoint_chain,
@@ -66,6 +70,9 @@ class ExecutionState:
     total_api_errors: int = 0
     advisor_422_endpoints: set[str] = field(default_factory=set)
     created_resources: list[CreatedResource] = field(default_factory=list)
+    sandbox_discovery: dict[str, Any] = field(default_factory=dict)
+    reclassification_done: bool = False
+    off_plan_api_calls: int = 0
 
 
 class TripletexAccountingAgent:
@@ -140,7 +147,17 @@ class TripletexAccountingAgent:
             )
             trace.write("planner", planner.model_dump())
 
-            # Classify task tier and build executor model chain
+            sandbox_discovery = await self._discover_sandbox_entities(
+                tripletex,
+                planner,
+                execution_state,
+                trace,
+            )
+
+            corrected = _maybe_correct_task_type(planner, trace)
+            if corrected:
+                planner = corrected
+
             task_tier = _classify_task_tier(planner.task_type)
             executor_chain = _build_executor_model_chain(self._settings, task_tier)
             logger.info(
@@ -151,7 +168,6 @@ class TripletexAccountingAgent:
                 executor_chain[0],
             )
 
-            # Update trace metadata with routing decisions
             trace.update_metadata(
                 {
                     "task_tier": task_tier,
@@ -160,6 +176,8 @@ class TripletexAccountingAgent:
                     "planner_chain": planner_chain,
                 }
             )
+
+            execution_state.sandbox_discovery = sandbox_discovery
 
             await self._execute(
                 openrouter,
@@ -748,6 +766,8 @@ class TripletexAccountingAgent:
             planner=planner,
             request_prompt=request.prompt,
         )
+        if execution_state.sandbox_discovery:
+            execution_brief["sandbox_discovery"] = execution_state.sandbox_discovery
         trace.write(
             "execution_brief",
             {
@@ -1272,6 +1292,46 @@ class TripletexAccountingAgent:
                             }
                         )
                         continue
+                    if (
+                        tool_name == "tripletex_request"
+                        and not execution_state.reclassification_done
+                        and (arguments.get("method") or "").upper() in ("POST", "PUT")
+                        and tool_result.get("ok")
+                    ):
+                        call_path = (arguments.get("path") or "").rstrip("/")
+                        planned_paths = {
+                            ep.get("path", "").rstrip("/")
+                            for ep in execution_brief.get("planned_endpoints", [])
+                        }
+                        if call_path and call_path not in planned_paths:
+                            execution_state.off_plan_api_calls += 1
+                        if execution_state.off_plan_api_calls >= 3:
+                            alt_type = getattr(planner, "alternative_task_type", None)
+                            if alt_type:
+                                alt_rules = select_field_rules(
+                                    [f"POST {p}" for p in get_endpoint_chain(alt_type)]
+                                )
+                                alt_playbook = EXECUTOR_PLAYBOOKS.get(alt_type, "")
+                                reclass_msg = (
+                                    f"[RECLASSIFICATION] Your API calls don't match the planned "
+                                    f"task_type '{planner.task_type}'. The alternative classification "
+                                    f"'{alt_type}' may be more appropriate. "
+                                )
+                                if alt_playbook:
+                                    reclass_msg += f"Playbook for {alt_type}: {alt_playbook[:500]} "
+                                if alt_rules:
+                                    reclass_msg += f"Field rules: {json.dumps(alt_rules[:5], ensure_ascii=False)}"
+                                tool_result["reclassification_hint"] = reclass_msg
+                                trace.write(
+                                    "reclassification",
+                                    {
+                                        "original_type": planner.task_type,
+                                        "suggested_type": alt_type,
+                                        "off_plan_calls": execution_state.off_plan_api_calls,
+                                    },
+                                )
+                                execution_state.reclassification_done = True
+
                     messages.append(
                         {
                             "role": "tool",
@@ -1591,6 +1651,120 @@ class TripletexAccountingAgent:
             )
 
         return None
+
+    async def _discover_sandbox_entities(
+        self,
+        tripletex: TripletexClient,
+        planner: PlannerOutput,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+    ) -> dict[str, Any]:
+        _ROLE_QUERY_MAP: dict[str, tuple[str, str, str]] = {
+            "customer": ("/customer", "organizationNumber", "organization_number"),
+            "client": ("/customer", "organizationNumber", "organization_number"),
+            "supplier": ("/supplier", "organizationNumber", "organization_number"),
+            "vendor": ("/supplier", "organizationNumber", "organization_number"),
+            "employee": ("/employee", "email", "email"),
+        }
+        discovery: dict[str, dict[str, Any]] = {}
+        entities = getattr(planner, "entities", [])
+        if not entities:
+            return {}
+
+        for entity in entities:
+            role_lower = entity.role.lower()
+            mapping = _ROLE_QUERY_MAP.get(role_lower)
+            if mapping is None:
+                continue
+            endpoint, query_param, slot_field = mapping
+            identifier = getattr(entity, slot_field, None)
+            if not identifier:
+                if (
+                    role_lower in ("customer", "client", "supplier", "vendor")
+                    and entity.name
+                ):
+                    query_param = "name"
+                    identifier = entity.name
+                else:
+                    continue
+
+            try:
+                result = await tripletex.request(
+                    method="GET",
+                    path=endpoint,
+                    params={query_param: identifier, "count": 5},
+                )
+            except Exception:
+                continue
+
+            values = []
+            if isinstance(result, dict):
+                values = result.get("values") or []
+            if not isinstance(values, list):
+                values = []
+
+            track_key = f"GET:{endpoint}?{query_param}={identifier}"
+            execution_state.created_entity_keys.add(track_key)
+
+            if not values:
+                discovery[role_lower] = {
+                    "exists": False,
+                    "identifier": identifier,
+                    "endpoint": endpoint,
+                }
+                continue
+
+            existing = values[0]
+            existing_id = existing.get("id")
+            mismatched_fields: dict[str, dict[str, Any]] = {}
+
+            if entity.name and existing.get("name"):
+                if entity.name.strip().lower() != existing["name"].strip().lower():
+                    mismatched_fields["name"] = {
+                        "expected": entity.name,
+                        "actual": existing["name"],
+                    }
+            if entity.email:
+                for f in ("email", "invoiceEmail"):
+                    actual = existing.get(f)
+                    if (
+                        actual
+                        and entity.email.strip().lower() != actual.strip().lower()
+                    ):
+                        mismatched_fields[f] = {
+                            "expected": entity.email,
+                            "actual": actual,
+                        }
+            if entity.phone and existing.get("phoneNumber"):
+                if entity.phone.strip() != existing["phoneNumber"].strip():
+                    mismatched_fields["phoneNumber"] = {
+                        "expected": entity.phone,
+                        "actual": existing["phoneNumber"],
+                    }
+
+            for li in getattr(planner, "line_items", []):
+                if li.unit_price_excluding_vat is not None and endpoint == "/product":
+                    break
+            else:
+                li = None
+
+            discovery[role_lower] = {
+                "exists": True,
+                "id": existing_id,
+                "identifier": identifier,
+                "endpoint": endpoint,
+                "matches_task": len(mismatched_fields) == 0,
+                "mismatched_fields": mismatched_fields if mismatched_fields else None,
+                "key_fields": {
+                    k: v
+                    for k, v in existing.items()
+                    if k in _KEY_FIELD_NAMES and v is not None
+                },
+            }
+
+        if discovery:
+            trace.write("sandbox_discovery", discovery)
+        return discovery
 
     async def _verify_and_repair(
         self,
@@ -3422,6 +3596,40 @@ def _preflight_enforce(
                     "suggestion": f"GET /activity?name={name} first. Reuse if found.",
                 }
 
+    if method == "POST" and path.rstrip("/") == "/customer":
+        org_num = body.get("organizationNumber")
+        if org_num:
+            get_key = f"GET:/customer?organizationNumber={org_num}"
+            if get_key not in execution_state.created_entity_keys:
+                return {
+                    "rejected": True,
+                    "reason": (
+                        f"Customer with org number {org_num} may already exist. "
+                        "Check before creating to avoid duplicates."
+                    ),
+                    "suggestion": (
+                        f'GET /customer with params {{"organizationNumber": "{org_num}"}}. '
+                        "Reuse if found, only POST if not."
+                    ),
+                }
+
+    if method == "POST" and path.rstrip("/") == "/supplier":
+        org_num = body.get("organizationNumber")
+        if org_num:
+            get_key = f"GET:/supplier?organizationNumber={org_num}"
+            if get_key not in execution_state.created_entity_keys:
+                return {
+                    "rejected": True,
+                    "reason": (
+                        f"Supplier with org number {org_num} may already exist. "
+                        "Check before creating to avoid duplicates."
+                    ),
+                    "suggestion": (
+                        f'GET /supplier with params {{"organizationNumber": "{org_num}"}}. '
+                        "Reuse if found, only POST if not."
+                    ),
+                }
+
     if method == "GET":
         params = arguments.get("params") or {}
         if "/product" in path and "number" in params:
@@ -3435,6 +3643,14 @@ def _preflight_enforce(
         if "/activity" in path and "name" in params:
             execution_state.created_entity_keys.add(
                 f"GET:/activity?name={params['name']}"
+            )
+        if "/customer" in path and "organizationNumber" in params:
+            execution_state.created_entity_keys.add(
+                f"GET:/customer?organizationNumber={params['organizationNumber']}"
+            )
+        if "/supplier" in path and "organizationNumber" in params:
+            execution_state.created_entity_keys.add(
+                f"GET:/supplier?organizationNumber={params['organizationNumber']}"
             )
 
     return None
@@ -3590,6 +3806,54 @@ def _build_validation_hint(
 # ---------------------------------------------------------------------------
 # Multi-model routing
 # ---------------------------------------------------------------------------
+
+_TASK_TYPE_EXPECTED_ROLES: dict[str, frozenset[str]] = {
+    "create_invoice": frozenset({"customer", "client"}),
+    "create_order": frozenset({"customer", "client"}),
+    "register_supplier_invoice": frozenset({"supplier", "vendor"}),
+    "create_customer": frozenset({"customer", "client"}),
+    "create_supplier": frozenset({"supplier", "vendor"}),
+    "create_employee": frozenset({"employee"}),
+    "register_payment": frozenset({"customer", "client", "supplier", "vendor"}),
+}
+
+
+def _maybe_correct_task_type(
+    planner: PlannerOutput,
+    trace: RunTrace,
+) -> PlannerOutput | None:
+    expected_roles = _TASK_TYPE_EXPECTED_ROLES.get(planner.task_type)
+    if expected_roles is None:
+        return None
+
+    actual_roles = frozenset(e.role.lower() for e in getattr(planner, "entities", []))
+    if not actual_roles:
+        return None
+
+    if actual_roles & expected_roles:
+        return None
+
+    alt = getattr(planner, "alternative_task_type", None)
+    if not alt:
+        return None
+
+    alt_expected = _TASK_TYPE_EXPECTED_ROLES.get(alt)
+    if alt_expected and (actual_roles & alt_expected):
+        trace.write(
+            "task_type_correction",
+            {
+                "original": planner.task_type,
+                "corrected": alt,
+                "reason": f"Entity roles {sorted(actual_roles)} match alternative '{alt}' better than primary '{planner.task_type}'",
+            },
+        )
+        data = planner.model_dump()
+        data["task_type"] = alt
+        data["alternative_task_type"] = planner.task_type
+        return PlannerOutput.model_validate(data)
+
+    return None
+
 
 _TIER_1_TASK_TYPES: frozenset[str] = frozenset(
     {

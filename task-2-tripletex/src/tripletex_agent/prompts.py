@@ -32,7 +32,8 @@ Return ONLY valid JSON matching PlannerOutput exactly (no markdown, no prose, no
   ],
   "actions": [str],
   "extracted_dates": {"label": "YYYY-MM-DD or exact literal if non-ISO"},
-  "ordered_steps": [str]
+  "ordered_steps": [str],
+  "alternative_task_type": str|null
 }
 
 Task type MUST be EXACTLY one of these values (no other_ prefix, no invented types):
@@ -43,6 +44,7 @@ If the task involves running payroll / salary / lønn / nómina / paie / Gehalt 
 If the task involves payroll/salary (lønn/løn/nómina/paie/Gehalt/folha) → use "create_voucher".
 If the task involves registering hours/time (timer/horas/Stunden/heures) on a project → use "create_invoice" (with timesheet sub-steps in ordered_steps).
 If no exact match exists, pick the CLOSEST match from the list above. NEVER invent a new task_type.
+If you are uncertain between two task types, set alternative_task_type to your second choice. Leave null if confident.
 
 Extraction rules:
 1) Extract ALL explicit entities and fields from prompt. Do not drop secondary people/companies.
@@ -335,13 +337,26 @@ EXECUTOR_PLAYBOOKS: dict[str, str] = {
 }
 
 
+_GENERIC_PLAYBOOK = """\
+## GENERIC TASK PLAYBOOK (no task-specific playbook matched)
+
+Follow this structured approach:
+
+1. **Parse the prompt carefully.** Identify every entity to create/update and every field value specified.
+2. **Check execution_brief.entities and line_items** — the planner already extracted structured data. Use these as your source of truth for names, amounts, dates, and identifiers.
+3. **Check execution_brief.sandbox_discovery** if present — it shows what already exists in the sandbox. Reuse existing entities when they match, but verify key fields (prices, names) before reusing.
+4. **Follow execution_brief.ordered_steps** in sequence. Each step maps to one or more API calls.
+5. **Use prefetched_schemas** for exact field names and types. Do NOT guess field names — check the schema.
+6. **Resolve dependencies first.** If creating an invoice requires a customer ID, create/find the customer first.
+7. **Verify each mutation succeeded** before proceeding to the next step. Check the response for the created resource ID.
+8. **For unknown endpoints**, call search_tripletex_api to find the correct path before making requests.
+"""
+
+
 def build_executor_system_prompt(task_type: str) -> str:
     playbook = EXECUTOR_PLAYBOOKS.get(task_type, "")
     if not playbook:
-        return (
-            EXECUTOR_CORE_PROMPT
-            + "\n\nNo specific playbook for this task type. Use execution_brief endpoints and field_rules to guide your approach."
-        )
+        return EXECUTOR_CORE_PROMPT + "\n\n" + _GENERIC_PLAYBOOK
     return EXECUTOR_CORE_PROMPT + "\n\n" + playbook
 
 
