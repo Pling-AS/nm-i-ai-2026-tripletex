@@ -33,7 +33,7 @@ export function Header({
   activeView, onViewChange, plannerModel, tier1Model, tier2Model, tier3Model,
   activeCount, totalCount, bestScore, connectionStatus, soundEnabled,
 }: HeaderProps) {
-  const { toggleSound } = useStore()
+  const { toggleSound, addPendingRun } = useStore()
   const [simLoading, setSimLoading] = useState(false)
   const [submitLoading, setSubmitLoading] = useState(false)
   const [batchMenu, setBatchMenu] = useState(false)
@@ -50,7 +50,8 @@ export function Header({
   async function handleQuickSubmit() {
     setSubmitLoading(true)
     try {
-      await api.submit()
+      const res = await api.submit()
+      if (res.submission_id) addPendingRun(res.submission_id)
     } catch (e) { console.error(e) }
     setTimeout(() => setSubmitLoading(false), 2000)
   }

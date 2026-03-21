@@ -69,6 +69,26 @@ class ConnectionManager:
 
 _ws_manager: ConnectionManager | None = None
 
+from collections import deque
+
+_pending_submissions: deque[dict[str, Any]] = deque(maxlen=50)
+
+
+def register_pending_submission(submission_id: str) -> None:
+    _pending_submissions.append(
+        {
+            "submission_id": submission_id,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
+def pop_pending_submission() -> str | None:
+    if _pending_submissions:
+        entry = _pending_submissions.popleft()
+        return entry["submission_id"]
+    return None
+
 
 def get_ws_manager() -> ConnectionManager:
     global _ws_manager
@@ -239,9 +259,14 @@ def _attach_competition_scores(
     used_sub_ids: set[str] = set()
 
     def _match_and_attach(run: dict[str, Any]) -> None:
-        match = _match_submission_to_run(
-            run["started_at"], run.get("duration_seconds"), submissions
-        )
+        run_sub_id = run.get("metadata", {}).get("submission_id")
+        match = None
+        if run_sub_id:
+            match = next((s for s in submissions if s.get("id") == run_sub_id), None)
+        if not match:
+            match = _match_submission_to_run(
+                run["started_at"], run.get("duration_seconds"), submissions
+            )
         if match and match.get("id") not in used_sub_ids:
             used_sub_ids.add(match["id"])
             feedback = match.get("feedback", {})
@@ -835,13 +860,16 @@ async def competition_submit(request_body: dict | None = None) -> JSONResponse:
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
 
-    # Invalidate cache so next poll picks up the new submission
     global _submissions_cache_ts
     _submissions_cache_ts = 0
 
+    sub_id = data.get("id", "")
+    if sub_id:
+        register_pending_submission(sub_id)
+
     return JSONResponse(
         {
-            "submission_id": data.get("id"),
+            "submission_id": sub_id,
             "status": data.get("status"),
             "daily_submissions_used": data.get("daily_submissions_used"),
             "daily_submissions_max": data.get("daily_submissions_max"),
@@ -1131,12 +1159,19 @@ def _enrich_run_file(
         attempts = int(retry_state.get("attempts", 0))
 
         if now_monotonic >= next_retry_at:
-            match = _match_submission_to_run(
-                summary["started_at"],
-                summary.get("duration_seconds"),
-                submissions,
-                run_endpoint_url=run_endpoint_url,
-            )
+            run_sub_id = summary.get("metadata", {}).get("submission_id")
+            match = None
+            if run_sub_id:
+                match = next(
+                    (s for s in submissions if s.get("id") == run_sub_id), None
+                )
+            if not match:
+                match = _match_submission_to_run(
+                    summary["started_at"],
+                    summary.get("duration_seconds"),
+                    submissions,
+                    run_endpoint_url=run_endpoint_url,
+                )
 
             if match:
                 sub_status = match.get("status", "")

@@ -95,7 +95,7 @@ function TimelineEvent({ event }: { event: TraceEvent }) {
       >
         <span className={cn('h-2 w-2 rounded-full shrink-0', actualDotColor)} />
         <span className="text-[10px] text-[var(--text2)] font-mono w-16 shrink-0">{time}</span>
-        <span className="text-[11px] font-medium text-[var(--text)] w-24 shrink-0 truncate">{event.event_type}</span>
+        <span className="text-[11px] font-medium text-[var(--text)] shrink-0 whitespace-nowrap">{event.event_type}</span>
         <span className="min-w-0 flex-1 truncate"><InlineToolInfo event={event} /></span>
         <span className="ml-auto text-[var(--text2)] shrink-0">
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -134,12 +134,32 @@ export function Timeline({ events, isRunning }: TimelineProps) {
       {visible.map((event, i) => (
         <TimelineEvent key={`${event.timestamp}-${i}`} event={event} />
       ))}
-      {isRunning && (
-        <div className="flex items-center gap-2 px-2 py-2 text-xs text-[var(--blue)] animate-pulse">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Waiting for next event...
-        </div>
-      )}
+      {isRunning && (() => {
+        const last = events[events.length - 1]
+        const et = last?.event_type ?? ''
+        const p = last?.payload ?? {}
+        const label =
+          et === 'thinking' ? 'Thinking...' :
+          et === 'assistant_reasoning' ? 'Reasoning...' :
+          et === 'planner' ? 'Executing plan...' :
+          et === 'tool_start' && p.tool_name === 'tripletex_request' ? `Waiting for ${p.arguments?.method ?? ''} ${p.arguments?.path ?? ''}...` :
+          et === 'tool_start' ? `Waiting for ${p.tool_name}...` :
+          et === 'tool_result' ? 'Thinking about next step...' :
+          et === 'init' ? 'Creating plan...' :
+          et === 'attachments_prepared' ? 'Creating plan...' :
+          et === 'execution_brief' ? 'Starting execution...' :
+          et === 'api_advisor_query' ? 'Waiting for API advisor...' :
+          et === 'api_advisor_response' ? 'Thinking about next step...' :
+          et === 'enforcer_passed' ? 'Executing API call...' :
+          et === 'metadata_update' ? 'Creating plan...' :
+          'Working...'
+        return (
+          <div className="flex items-center gap-2 px-2 py-2 text-xs text-[var(--blue)] animate-pulse">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {label}
+          </div>
+        )
+      })()}
       {!showAll && events.length > 200 && (
         <button type="button" onClick={() => setShowAll(true)}
           className="w-full text-center py-2 text-xs text-[var(--blue)] hover:underline">

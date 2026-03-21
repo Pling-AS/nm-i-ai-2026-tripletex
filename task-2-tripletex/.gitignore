@@ -8,5 +8,9 @@ build/
 dist/
 *.egg-info/
 .DS_Store
+runs/overview.json
+dashboard/out/
+dashboard/node_modules/
+dashboard/.next/
 
 references/

@@ -80,7 +80,10 @@ export function RunDetail({ runId }: RunDetailProps) {
     setDeleting(false)
   }, [runId, removeRun])
 
+  const isPending = runId.startsWith('pending-')
+
   const fetchDetail = useCallback((showLoader: boolean) => {
+    if (runId.startsWith('pending-')) return
     if (showLoader) setLoading(true)
     api.getRunDetail(runId).then(data => {
       if (data?.summary) {
@@ -116,6 +119,16 @@ export function RunDetail({ runId }: RunDetailProps) {
     else if (storeScoreStatus && storeScoreStatus !== localScoreStatus) fetchDetail(false)
     else if (storeScoreId && !summary.competition_score) fetchDetail(false)
   }, [storeStatus, storeScoreId, storeScoreStatus, localScoreStatus, summary, fetchDetail])
+
+  if (isPending) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--blue)]" />
+        <p className="text-sm text-[var(--text2)]">Waiting for competition to start the run...</p>
+        <p className="text-xs text-[var(--text2)]">The run will appear here once the platform calls our endpoint</p>
+      </div>
+    )
+  }
 
   if (loading) {
     return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[var(--text2)]" /></div>
@@ -246,6 +259,14 @@ export function RunDetail({ runId }: RunDetailProps) {
                 <h3 className="text-xs font-semibold uppercase text-[var(--text2)] mb-2">Planner</h3>
                 <pre className="text-[11px] text-[var(--text2)] font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
                   {JSON.stringify(s.planner_payload, null, 2)}
+                </pre>
+              </div>
+            )}
+            {s.executor_system_prompt && (
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                <h3 className="text-xs font-semibold uppercase text-[var(--text2)] mb-2">System Prompt</h3>
+                <pre className="text-[11px] text-[var(--text2)] font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                  {s.executor_system_prompt}
                 </pre>
               </div>
             )}
