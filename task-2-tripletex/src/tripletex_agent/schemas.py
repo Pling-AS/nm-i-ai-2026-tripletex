@@ -81,6 +81,10 @@ class PlannerOutput(BaseModel):
         default_factory=list,
         description="Ordered list of concrete API steps the executor should follow.",
     )
+    alternative_task_type: str | None = Field(
+        default=None,
+        description="Second-best task_type classification if the primary is uncertain.",
+    )
 
 
 class ToolExecutionResult(BaseModel):

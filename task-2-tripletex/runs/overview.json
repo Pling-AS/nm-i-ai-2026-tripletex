@@ -1,6 +1,826 @@
 {
   "runs": [
     {
+      "filename": "20260321-200145_600b17b3a3b34121b7fde2d635cf7ffd.jsonl",
+      "run_id": "600b17b3a3b34121b7fde2d635cf7ffd",
+      "started_at": "2026-03-21T20:01:45.550198+00:00",
+      "task_type": "create_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 152.9,
+      "api_calls": 13,
+      "api_errors": 0,
+      "tool_calls": 11,
+      "preflight_rejections": 0,
+      "score_raw": null,
+      "score_max": null,
+      "normalized_score": null,
+      "checks_passed": null,
+      "checks_total": null,
+      "checks": [],
+      "post_mortem": null,
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Erfassen Sie 25 Stunden für Anna Becker (anna.becker@example.org) auf der Aktivität \"Testing\" im Projekt \"Website-Redesi"
+    },
+    {
+      "filename": "20260321-195956_334f419794ab418aac45bf9c801ba0ff.jsonl",
+      "run_id": "334f419794ab418aac45bf9c801ba0ff",
+      "started_at": "2026-03-21T20:00:05.083757+00:00",
+      "task_type": "create_customer",
+      "task_tier": 1,
+      "executor_model": "claude-sonnet-4-6",
+      "status": "completed",
+      "source": "simulation",
+      "duration_seconds": 19.1,
+      "api_calls": 4,
+      "api_errors": 1,
+      "tool_calls": 1,
+      "preflight_rejections": 0,
+      "score_raw": null,
+      "score_max": null,
+      "normalized_score": null,
+      "checks_passed": null,
+      "checks_total": null,
+      "checks": [],
+      "post_mortem": null,
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": ""
+    },
+    {
+      "filename": "20260321-195728_b16afae135e84d7d953a37ed264341f7.jsonl",
+      "run_id": "b16afae135e84d7d953a37ed264341f7",
+      "started_at": "2026-03-21T19:57:28.133100+00:00",
+      "task_type": "register_payment",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 129.2,
+      "api_calls": 8,
+      "api_errors": 0,
+      "tool_calls": 7,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 7.0,
+      "normalized_score": 0.2857,
+      "checks_passed": 1,
+      "checks_total": 2,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed"
+      ],
+      "post_mortem": {
+        "headline": "Invoice created but payment registration failed — only 1/2 checks passed (score 0.29)",
+        "what_went_wrong": [
+          "PUT /invoice/2147631930/:payment call likely failed or used wrong parameters — the payment amount, paymentTypeId, or paymentDate may not have been included in the request body.",
+          "The PUT /:payment endpoint requires specific fields (amount, paymentTypeId, paymentDate) but the trace shows no body logged for this call, suggesting it was sent without required parameters.",
+          "Check 2 (payment registration) failed entirely, meaning the invoice remained UNPAID despite the agent believing it succeeded — no error was caught because the call returned a non-4xx response."
+        ],
+        "what_worked": [
+          "Invoice creation pipeline worked perfectly: order, orderline, and invoice all created successfully.",
+          "Bank account configuration and customer lookup were correct (0 errors in 8 calls)."
+        ],
+        "what_to_try_next": [
+          "Ensure PUT /invoice/{id}/:payment body includes required fields: {paymentTypeId: 28100438, paymentDate: '2026-03-21', paidAmount: 19000.0} — verify exact field names against API spec.",
+          "Log and validate the response body of the payment call explicitly; a 200 response with an error message in the body could explain why the payment wasn't registered.",
+          "Consider using POST /ledger/voucher for payment registration as an alternative if PUT /:payment continues to fail silently."
+        ],
+        "confidence": "high",
+        "root_cause_category": "wrong_payload",
+        "api_call_count": 8,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "GET /ledger/account — if customer ID is already known, bank account config could be skipped or cached from prior runs.",
+          "PUT /ledger/account/373304590 — bank account configuration is likely already set in sandbox and doesn't need to be repeated each run."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Kunden Polaris AS (org.nr 896571559) har en utestående faktura på 15200 kr eksklusiv MVA for \"Datarådgivning\". Registrer"
+    },
+    {
+      "filename": "20260321-194513_f00bae17697040c4916838b685b88c27.jsonl",
+      "run_id": "f00bae17697040c4916838b685b88c27",
+      "started_at": "2026-03-21T19:45:13.796337+00:00",
+      "task_type": "create_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "error",
+      "source": "competition",
+      "duration_seconds": 175.8,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 15,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 11.0,
+      "normalized_score": 0.5455,
+      "checks_passed": 2,
+      "checks_total": 7,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed",
+        "Check 7: failed"
+      ],
+      "post_mortem": {
+        "headline": "Rate limit hit mid-execution; only 2/7 checks passed before scoring cutoff.",
+        "what_went_wrong": [
+          "LLM rate limit (429) hit during supplier cost registration, halting execution before supplier invoice, order, and customer invoice were created.",
+          "Excessive tool introspection calls (inspect_tripletex_endpoint, search_tripletex_api) consumed tokens unnecessarily before the rate limit was hit.",
+          "Two redundant GET /employee calls were made at startup instead of one, wasting tokens and time.",
+          "GET /ledger/account was called twice (once at start, once before supplier invoice), adding unnecessary token usage."
+        ],
+        "what_worked": [
+          "Customer, supplier, project, activity, and both timesheet entries were created successfully.",
+          "Enforcer overrides were handled correctly and entity creation proceeded without duplicate errors."
+        ],
+        "what_to_try_next": [
+          "Reduce token usage by eliminating duplicate GET /employee calls and the second GET /ledger/account; cache results from the first call.",
+          "Avoid mid-flow tool introspection (inspect_tripletex_endpoint/search_tripletex_api) — know the /incomingInvoice or voucher schema in advance to avoid extra LLM token consumption.",
+          "After timesheet entries, immediately POST /incomingInvoice with supplier/project/amount, then POST /order and POST /invoice without exploratory detours to stay under rate limits."
+        ],
+        "confidence": "high",
+        "root_cause_category": "timeout",
+        "api_call_count": 14,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "Second GET /employee call — duplicate of the first, same data already retrieved.",
+          "Second GET /ledger/account call — account ID already known from first call.",
+          "inspect_tripletex_endpoint + search_tripletex_api tool calls — consumed tokens without advancing task state."
+        ]
+      },
+      "total_errors": 1,
+      "errors": [
+        "LLM request failed with status 429: {'error': {'code': 'RateLimitReached', 'message': 'Rate limit of 50000 per 60s exceeded for UserByModelByMinuteUncachedInputTokens. Please wait 25 seconds before retrying.', 'details': 'Rate limit of 50000 per 60s exceeded for UserByModelByMinuteUncachedInputTokens. Please wait 25 seconds before retrying.'}}"
+      ],
+      "prompt_preview": "Execute o ciclo de vida completo do projeto 'Migração Cloud Horizonte' (Horizonte Lda, org. nº 857400526): 1) O projeto "
+    },
+    {
+      "filename": "20260321-194058_1482158c312143cf835a2c780f8998fe.jsonl",
+      "run_id": "1482158c312143cf835a2c780f8998fe",
+      "started_at": "2026-03-21T19:40:58.205636+00:00",
+      "task_type": "create_department",
+      "task_tier": 1,
+      "executor_model": "claude-sonnet-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 41.0,
+      "api_calls": 3,
+      "api_errors": 0,
+      "tool_calls": 3,
+      "preflight_rejections": 0,
+      "score_raw": 7.0,
+      "score_max": 7.0,
+      "normalized_score": 1.3333,
+      "checks_passed": 3,
+      "checks_total": 3,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed"
+      ],
+      "post_mortem": {
+        "headline": "Perfect run: all 3 departments created in 3 parallel API calls with zero errors.",
+        "what_went_wrong": [],
+        "what_worked": [
+          "All three departments created successfully in a single parallel wave with 0 errors.",
+          "Minimal API calls (3 total) matching the theoretical optimum for this task."
+        ],
+        "what_to_try_next": [
+          "Skip the departmentNumber fields if not required — they add payload complexity but may not be needed, though they caused no issues here.",
+          "Consider omitting the verification GET /v2/department call (planned but not executed) — the planner suggested it but the agent wisely skipped it, saving a call.",
+          "This run is already near-optimal; maintain this parallel execution pattern for future multi-entity creation tasks."
+        ],
+        "confidence": "high",
+        "root_cause_category": "perfect_run",
+        "api_call_count": 3,
+        "error_call_count": 0,
+        "unnecessary_calls": []
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Créez trois départements dans Tripletex : \"HR\", \"Lager\" et \"Innkjøp\"."
+    },
+    {
+      "filename": "20260321-193539_27ff4fc18bef4296b623cff9ce8e64db.jsonl",
+      "run_id": "27ff4fc18bef4296b623cff9ce8e64db",
+      "started_at": "2026-03-21T19:35:39.315740+00:00",
+      "task_type": "create_employee",
+      "task_tier": 1,
+      "executor_model": "claude-sonnet-4-6",
+      "status": "error",
+      "source": "competition",
+      "duration_seconds": 104.0,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 9,
+      "preflight_rejections": 0,
+      "score_raw": 7.0,
+      "score_max": 14.0,
+      "normalized_score": 1.5,
+      "checks_passed": 5,
+      "checks_total": 10,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: failed",
+        "Check 6: failed",
+        "Check 7: failed",
+        "Check 8: failed",
+        "Check 9: passed",
+        "Check 10: failed"
+      ],
+      "post_mortem": {
+        "headline": "Rate limit cut off execution mid-task; employment details and working hours not fully configured",
+        "what_went_wrong": [
+          "LLM rate limit (429) hit after POST /employee/employment/details, halting execution before working hours and salary could be verified/completed.",
+          "POST /employee/employment/details used 'salary' field which may not be the correct field name for annualSalary; checks 5-8 and 10 failed suggesting salary/details misconfiguration.",
+          "Two failed POST /employee attempts (with userType=STANDARD and without userType) wasted tokens and time, contributing to hitting the rate limit.",
+          "Standard working hours (7.5h/day) were never configured — no call to /employee/standardTime or equivalent endpoint was made before cutoff."
+        ],
+        "what_worked": [
+          "Department 'Produksjon' created successfully and employee Chloé Petit created with correct department assignment.",
+          "Employment record created with correct startDate, employmentType, remunerationType, workingHoursScheme, and employmentPercentage=100.0."
+        ],
+        "what_to_try_next": [
+          "Start with userType=NO_ACCESS immediately (skip STANDARD attempt) to avoid wasted calls and token burn before hitting rate limits.",
+          "After creating employment, call POST /employee/employment/details with 'annualSalary' (not 'salary') and then POST /employee/standardTime with hoursPerDay=7.5 before any other calls.",
+          "Reduce parallel/exploratory GET calls (employmentType, remunerationType, workingHoursScheme) by caching known IDs from prior runs to stay under token rate limits."
+        ],
+        "confidence": "high",
+        "root_cause_category": "timeout",
+        "api_call_count": 10,
+        "error_call_count": 2,
+        "unnecessary_calls": [
+          "POST /employee with userType=STANDARD — known to fail without email; should go straight to NO_ACCESS",
+          "POST /employee without userType — also fails; second wasted attempt before correct NO_ACCESS call",
+          "GET /employee/employment/remunerationType and GET /employee/employment/workingHoursScheme — IDs (100, 50) could be hardcoded from known schema"
+        ]
+      },
+      "total_errors": 1,
+      "errors": [
+        "LLM request failed with status 429: {'error': {'code': 'RateLimitReached', 'message': 'Rate limit of 50000 per 60s exceeded for UserByModelByMinuteUncachedInputTokens. Please wait 58 seconds before retrying.', 'details': 'Rate limit of 50000 per 60s exceeded for UserByModelByMinuteUncachedInputTokens. Please wait 58 seconds before retrying.'}}"
+      ],
+      "prompt_preview": "Vous avez recu une lettre d'offre (voir PDF ci-joint) pour un nouvel employe. Effectuez l'integration complete : creez l"
+    },
+    {
+      "filename": "20260321-192952_59aa9b569a964f69b20b96508fbd16f0.jsonl",
+      "run_id": "59aa9b569a964f69b20b96508fbd16f0",
+      "started_at": "2026-03-21T19:29:52.996722+00:00",
+      "task_type": "year_end_closing",
+      "task_tier": 3,
+      "executor_model": "gpt-5.4",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 60.5,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 0,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 10.0,
+      "normalized_score": 0.6,
+      "checks_passed": 1,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: passed",
+        "Check 6: failed"
+      ],
+      "post_mortem": {
+        "headline": "Agent refused to act due to perceived missing data, making 0 API calls and failing 5/6 checks.",
+        "what_went_wrong": [
+          "Agent incorrectly concluded the prompt was missing required data (expense account, credit account, salary amount) and made zero API calls.",
+          "The salary accrual amount was not specified in the prompt, but the agent should have queried existing accounts/vouchers or used reasonable defaults rather than blocking entirely.",
+          "Agent failed to identify that 'expense' for accrual reversal likely maps to a standard expense account discoverable via API, and accumulated depreciation is a standard account (e.g., 1709 or similar).",
+          "No API calls were made at all — the agent never attempted to fetch ledger accounts, open periods, or existing vouchers to gather missing context."
+        ],
+        "what_worked": [
+          "Correctly calculated monthly depreciation: 156750 / 10 / 12 = 1306.25 NOK.",
+          "Zero 4xx errors due to making zero API calls."
+        ],
+        "what_to_try_next": [
+          "Always attempt to fetch chart of accounts and existing vouchers first to resolve ambiguous account references before declaring the task blocked.",
+          "For missing salary accrual amount, query existing accrual vouchers or salary postings in prior months to infer the amount rather than refusing to proceed.",
+          "Use standard Norwegian accounting conventions: accumulated depreciation typically goes to account 1700-series credit side; make reasonable assumptions and proceed with voucher creation."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 0,
+        "error_call_count": 0,
+        "unnecessary_calls": []
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Perform month-end closing for March 2026. Post accrual reversal (5450 NOK per month from account 1700 to expense). Recor"
+    },
+    {
+      "filename": "20260321-192934_d5bd0098a87043b686b7e78166b0b51a.jsonl",
+      "run_id": "d5bd0098a87043b686b7e78166b0b51a",
+      "started_at": "2026-03-21T19:29:34.517757+00:00",
+      "task_type": "year_end_closing",
+      "task_tier": 3,
+      "executor_model": "gpt-5.4",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 117.7,
+      "api_calls": 2,
+      "api_errors": 0,
+      "tool_calls": 26,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 10.0,
+      "normalized_score": 0.6,
+      "checks_passed": 1,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: passed",
+        "Check 6: failed"
+      ],
+      "post_mortem": {
+        "headline": "Agent abandoned task citing missing info, but all needed data was in the prompt",
+        "what_went_wrong": [
+          "Agent incorrectly claimed the salary provision amount was missing — the prompt clearly states debit 5000, credit 2900, but no amount was given; agent should have used a reasonable default or asked, not abandoned.",
+          "Agent never created any vouchers (POST /ledger/voucher) despite having enough info for regularization (1700→charges, 14300 NOK) and depreciation (6010, 2491.67 NOK).",
+          "Agent spent excessive time on account lookups (12+ GET /ledger/account calls) and tool searches instead of proceeding to POST vouchers with available data.",
+          "Only 2 actual API calls were recorded in DONE log despite many tool calls, suggesting most calls were simulated/not executed, leading to 0 vouchers created."
+        ],
+        "what_worked": [
+          "Correctly calculated monthly depreciation: 269100 / 9 / 12 = 2491.67 NOK.",
+          "Confirmed March 2026 accounting period exists and is open (isClosed=false)."
+        ],
+        "what_to_try_next": [
+          "Proceed with available data: create voucher for regularization (debit expense account, credit 1700, 14300 NOK) and depreciation (debit 6010, credit accumulated depreciation, 2491.67 NOK) without waiting for 'missing' info.",
+          "For salary provision with no amount specified, use a placeholder or ask scorer — do not abandon the entire task; partial completion scores better than zero vouchers.",
+          "Reduce account lookup calls: trust that accounts 1700, 5000, 2900, 6010 exist as stated in the prompt and go directly to POST /ledger/voucher with those account numbers."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 2,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "Multiple duplicate GET /ledger/account?number=1700&from=0&count=10 calls — same account queried twice with identical params.",
+          "GET /ledger/account?number=1780 and GET /ledger/account?number=2960 — these accounts were not mentioned in the task prompt.",
+          "Multiple search_tripletex_api tool calls for endpoint discovery when the agent already knew the required endpoints."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Effectuez la clôture mensuelle de mars 2026. Comptabilisez la régularisation (14300 NOK par mois du compte 1700 vers cha"
+    },
+    {
+      "filename": "20260321-192634_bc413575e6794633b56898532b60938b.jsonl",
+      "run_id": "bc413575e6794633b56898532b60938b",
+      "started_at": "2026-03-21T19:26:34.776659+00:00",
+      "task_type": "year_end_closing",
+      "task_tier": 3,
+      "executor_model": "gpt-5.4",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 138.3,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 11,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
+      "post_mortem": {
+        "headline": "Agent refused to post any vouchers, scoring 0/6 checks due to logic paralysis",
+        "what_went_wrong": [
+          "Agent made 0 actual Tripletex API calls (calls=0) — it only used tool inspection/search but never POSTed any vouchers, resulting in complete failure.",
+          "Agent incorrectly concluded it lacked the 'counteraccount for 1700 prepaid expenses' — the task clearly states to reverse 64750 NOK on account 1700, implying debit expense/credit 1700 or vice versa, a standard reversal.",
+          "Agent incorrectly concluded it lacked the taxable profit figure for the tax provision — it should have queried the ledger balance to compute net income before posting 8700/2920.",
+          "The planner correctly calculated all three depreciation amounts (24588.89, 105150, 112662.50 NOK) but the agent abandoned execution citing missing info instead of proceeding with what was known."
+        ],
+        "what_worked": [
+          "Depreciation amounts were correctly calculated in the planning phase (221300/9, 420600/4, 450650/4).",
+          "The agent correctly identified the required accounts (6010, 1209, 1700, 8700, 2920) and inspected relevant endpoints."
+        ],
+        "what_to_try_next": [
+          "Always POST the vouchers for tasks that are fully specified (depreciation entries were fully known) — never abandon partial execution; post what you can.",
+          "For the tax provision, query GET /ledger/balance or /ledger/postingByDate to compute net income for 2025, then calculate 22% and post to 8700/2920.",
+          "For prepaid expense reversal on account 1700, use the standard year-end entry: debit the relevant expense account (e.g. 6xxx) and credit 1700 for 64750 NOK — the counteraccount can be inferred or queried from existing postings."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 0,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "inspect_tripletex_endpoint GET /ledger/postingByDate — inspected but never used to query actual balances",
+          "inspect_tripletex_endpoint GET /ledger/accountingPeriod — inspected but the GET call result was never acted upon",
+          "search_tripletex_api for 'ledger fiscal year' — broad search that added latency without enabling any action"
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Führen Sie den vereinfachten Jahresabschluss für 2025 durch: 1) Berechnen und buchen Sie die jährliche Abschreibung für "
+    },
+    {
+      "filename": "20260321-192319_2ddb03b7f48047c3b90b185a5510901b.jsonl",
+      "run_id": "2ddb03b7f48047c3b90b185a5510901b",
+      "started_at": "2026-03-21T19:23:19.206997+00:00",
+      "task_type": "create_voucher",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 156.4,
+      "api_calls": 6,
+      "api_errors": 1,
+      "tool_calls": 8,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed"
+      ],
+      "post_mortem": {
+        "headline": "All 5 checks failed despite successful voucher creation — likely wrong account, date, or VAT type",
+        "what_went_wrong": [
+          "Account 6540 (Inventar) may be wrong for a whiteboard — scorer may expect office supplies account like 6800 or similar equipment account; whiteboard could be classified differently.",
+          "Receipt date used was 2026-06-16 but the actual receipt date may differ, or the scorer expects today's date (2026-03-21) as the voucher date.",
+          "VAT type 3 (25% inngående MVA) may be incorrect — whiteboard purchase VAT treatment might require a different vatType id in this Tripletex instance.",
+          "First POST /ledger/voucher failed with balance error (1 error call), wasting a call; the single-posting approach was incorrect from the start."
+        ],
+        "what_worked": [
+          "Department 'Administrasjon' was successfully created and linked to the voucher posting.",
+          "Correctly isolated only the Whiteboard line item (8,600 kr gross) from the receipt, excluding other items."
+        ],
+        "what_to_try_next": [
+          "Verify the correct expense account for a whiteboard — try account 6800 (Kontorrekvisita) or 6900 (Annen driftskostnad) instead of 6540 (Inventar), as scorers may classify whiteboards as office supplies.",
+          "Check the receipt date carefully — if the receipt shows a different date than 2026-06-16, use that date; also verify whether the scorer expects the posting date vs receipt date.",
+          "Inspect available vatType IDs more carefully — query /ledger/vatType to confirm which ID corresponds to 25% input VAT for purchases, as id:3 may map to a different rate in this environment."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "logic_error",
+        "api_call_count": 6,
+        "error_call_count": 1,
+        "unnecessary_calls": [
+          "GET /ledger/account (first call) — redundant since a second and third account lookup were also made; could consolidate into one call with better query params.",
+          "POST /ledger/voucher (first attempt with single posting) — failed with balance error; knowing the field rules should have prevented this attempt."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "We need the Whiteboard expense from this receipt posted to department Administrasjon. Use the correct expense account an"
+    },
+    {
+      "filename": "20260321-192042_8ef7ccd480a04309920e798ce485f05f.jsonl",
+      "run_id": "8ef7ccd480a04309920e798ce485f05f",
+      "started_at": "2026-03-21T19:20:42.204441+00:00",
+      "task_type": "ledger_error_correction",
+      "task_tier": 3,
+      "executor_model": "gpt-5.4",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 121.4,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 15,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
+      "post_mortem": {
+        "headline": "Agent failed all 4 checks by giving up after mistaking tool inspection errors for real API failures",
+        "what_went_wrong": [
+          "Agent confused 'Unknown endpoint' errors from the tool inspection layer with actual API unavailability, abandoning the task prematurely without making real API calls.",
+          "The DONE log shows calls=0 errors=0, meaning no actual Tripletex API calls were executed — the agent only used inspect/search tools and never called the real endpoints.",
+          "Agent did not attempt POST /ledger/voucher to create corrective postings despite having enough task description to construct them (accounts, amounts, and error types were all specified).",
+          "Agent failed to distinguish between tool-layer inspection failures and actual HTTP API call failures, leading to a false conclusion that the environment was broken."
+        ],
+        "what_worked": [
+          "Agent correctly identified the 4 error types and the relevant accounts (7140/7100, 6540, 4500/2710, 6860) from the task description.",
+          "Planning phase was thorough and correctly outlined the corrective posting strategy."
+        ],
+        "what_to_try_next": [
+          "Actually execute GET /ledger/posting with dateFrom/dateTo/accountNumber query params as real API calls — the CALL log shows these were queued but never completed (calls=0 in DONE).",
+          "If ledger reads fail, use the task description's explicit amounts and accounts to construct corrective vouchers directly via POST /ledger/voucher without needing to look up originals.",
+          "Separate tool inspection failures from real API call failures — inspect_tripletex_endpoint returning 'Unknown endpoint' does not mean the actual API endpoint is unavailable."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 0,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "Multiple inspect_tripletex_endpoint calls that confused the agent into thinking endpoints were unavailable",
+          "search_tripletex_api calls that delayed execution without contributing to actual API calls"
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Descobrimos erros no livro razão de janeiro e fevereiro de 2026. Revise todos os vouchers e encontre os 4 erros: um lanç"
+    },
+    {
+      "filename": "20260321-191731_a779f2b047354ba0a6e8340a769941b1.jsonl",
+      "run_id": "a779f2b047354ba0a6e8340a769941b1",
+      "started_at": "2026-03-21T19:17:31.789695+00:00",
+      "task_type": "register_supplier_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 149.2,
+      "api_calls": 5,
+      "api_errors": 1,
+      "tool_calls": 5,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
+      "post_mortem": {
+        "headline": "All 4 scoring checks failed despite successful voucher creation — likely wrong invoice method",
+        "what_went_wrong": [
+          "Used POST /ledger/voucher (manual journal) instead of the dedicated supplier invoice endpoint POST /purchaseOrder or POST /invoice/supplier, which is likely what the scorer checks.",
+          "VAT type ID 1 may be incorrect for 25% input VAT on purchases; the agent was uncertain about VAT type mapping and the first voucher attempt failed silently.",
+          "The first POST /ledger/voucher call failed (1 error counted), wasting a call and indicating the single-posting approach was wrong from the start.",
+          "Supplier invoice registration via voucher bypasses Tripletex's supplier invoice module, so checks for invoice number INV-2026-8172, supplier linkage, and VAT fields all fail verification."
+        ],
+        "what_worked": [
+          "Supplier Nordlicht GmbH was created successfully (ID: 108402846) and account 6500 was resolved correctly.",
+          "Net/VAT calculation was correct: 15,280 NOK net + 3,820 NOK VAT = 19,100 NOK gross at 25%."
+        ],
+        "what_to_try_next": [
+          "Use POST /supplierInvoice (or the correct Tripletex supplier invoice endpoint) instead of /ledger/voucher — the scorer likely checks the supplier invoice module specifically.",
+          "Investigate the correct VAT type ID for 25% input VAT in Tripletex by calling GET /ledger/vatType and matching the correct code before posting.",
+          "Skip the first failed single-posting voucher attempt by directly using the two-posting approach or the supplier invoice endpoint, reducing calls and errors."
+        ],
+        "confidence": "high",
+        "root_cause_category": "wrong_endpoint",
+        "api_call_count": 5,
+        "error_call_count": 1,
+        "unnecessary_calls": [
+          "First POST /ledger/voucher with single posting — failed and should have been skipped in favor of correct endpoint",
+          "Second GET /ledger/account for account 2400 — could be avoided if correct supplier invoice endpoint was used from the start"
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Wir haben die Rechnung INV-2026-8172 vom Lieferanten Nordlicht GmbH (Org.-Nr. 803273723) über 19100 NOK einschließlich M"
+    },
+    {
+      "filename": "20260321-191527_886b4c02a4c746b593bf69d168770bae.jsonl",
+      "run_id": "886b4c02a4c746b593bf69d168770bae",
+      "started_at": "2026-03-21T19:15:27.962504+00:00",
+      "task_type": "create_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 114.1,
+      "api_calls": 9,
+      "api_errors": 0,
+      "tool_calls": 9,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 8.0,
+      "normalized_score": 0.5,
+      "checks_passed": 1,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
+      "post_mortem": {
+        "headline": "Project created but invoice checks failed — likely wrong field names or missing project link",
+        "what_went_wrong": [
+          "Check 2 likely failed because 'fixedprice' field name is wrong — Tripletex API may require 'fixedPrice' (camelCase) or a different field for fixed price amount.",
+          "Check 3 likely failed because the invoice orderline amount 120763.5 may not match expected value exactly, or VAT type ID 3 is incorrect for this context.",
+          "Check 4 likely failed because the invoice may not be properly linked to the project, or the send endpoint returned an unexpected state.",
+          "The project fixed price field 'fixedprice' (lowercase p) may have been silently ignored, leaving the project without a fixed price set correctly."
+        ],
+        "what_worked": [
+          "Customer creation, employee lookup, and order/invoice flow executed without any 4xx errors (0 errors in 9 calls).",
+          "Bank account setup and project creation API calls all returned success responses."
+        ],
+        "what_to_try_next": [
+          "Verify the correct field name for fixed price on POST /project — try 'fixedPrice' (camelCase) instead of 'fixedprice', and confirm the API accepts it via GET /project/{id} after creation.",
+          "Check the exact VAT type ID required — use GET /vat/type to find the correct ID for standard Norwegian MVA instead of hardcoding ID 3.",
+          "After creating the project, do a GET /project/{id} to confirm fixedPrice=365950 is actually stored before proceeding to invoice creation."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "wrong_payload",
+        "api_call_count": 9,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "PUT /ledger/account/374127714 — bank account setup may not be required for invoice scoring checks and adds an unnecessary call.",
+          "GET /ledger/account — only needed if bank account setup is required; can be skipped if not scored."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Sett fastpris 365950 kr på prosjektet \"Digital transformasjon\" for Fossekraft AS (org.nr 858742048). Prosjektleiar er Gu"
+    },
+    {
+      "filename": "20260321-191414_c54954df05e7432cbcef43988499cb6f.jsonl",
+      "run_id": "c54954df05e7432cbcef43988499cb6f",
+      "started_at": "2026-03-21T19:14:14.609745+00:00",
+      "task_type": "create_project",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 50.7,
+      "api_calls": 3,
+      "api_errors": 0,
+      "tool_calls": 3,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 7.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
+      "post_mortem": {
+        "headline": "All 4 checks failed despite seemingly correct API calls — likely wrong customer or employee IDs used",
+        "what_went_wrong": [
+          "GET /employee was called without any filter (no email/name query), likely returning a list and the agent picked the wrong employee ID for Nathan Martin.",
+          "POST /customer may have created a duplicate or returned an existing customer with a different ID than expected by the scorer.",
+          "The agent did not verify that the customer returned matched org number 960461940 — it may have used a wrong/pre-existing customer ID.",
+          "No validation was done after project creation to confirm the project fields (customer, projectManager) were correctly linked."
+        ],
+        "what_worked": [
+          "Zero 4xx errors — all API calls returned successfully.",
+          "Efficient 3-call execution with parallel customer/employee lookups."
+        ],
+        "what_to_try_next": [
+          "Use GET /customer?organizationNumber=960461940 to find or confirm the correct customer before creating, and use GET /employee?email=nathan.martin@example.org to find the exact employee.",
+          "After POST /customer, check if the customer already existed (scorer may expect a specific pre-existing customer ID) — use search first, create only if missing.",
+          "After POST /project, do a GET /project/{id} to verify all fields are correctly set and match expected values before finalizing."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 3,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "GET /employee (no filter params) — should be GET /employee?email=nathan.martin@example.org to find the correct employee."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Créez le projet \"Intégration Montagne\" lié au client Montagne SARL (nº org. 960461940). Le chef de projet est Nathan Mar"
+    },
+    {
+      "filename": "20260321-191250_3b9d0ac7f57344ce8af4e59152367a44.jsonl",
+      "run_id": "3b9d0ac7f57344ce8af4e59152367a44",
+      "started_at": "2026-03-21T19:12:50.221664+00:00",
+      "task_type": "create_voucher",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 70.4,
+      "api_calls": 6,
+      "api_errors": 0,
+      "tool_calls": 6,
+      "preflight_rejections": 0,
+      "score_raw": 13.0,
+      "score_max": 13.0,
+      "normalized_score": 3.5,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed"
+      ],
+      "post_mortem": {
+        "headline": "Perfect run: all 6 checks passed with 6 API calls and 0 errors.",
+        "what_went_wrong": [],
+        "what_worked": [
+          "Parallelized account lookups and dimension name creation, minimizing sequential dependencies.",
+          "Correctly used dimensionIndex=1 and freeAccountingDimension1 to link 'Premium' to the voucher posting."
+        ],
+        "what_to_try_next": [
+          "Attempt to merge the two GET /ledger/account calls into one request (e.g., batch or filter by multiple numbers) if the API supports it, to reduce total calls from 6 to 5.",
+          "Pre-validate whether the dimension module is already active to skip any module-enable step, keeping call count minimal.",
+          "Consider caching known account IDs (e.g., 1920 bank) across runs to eliminate redundant lookups and further improve efficiency bonus."
+        ],
+        "confidence": "high",
+        "root_cause_category": "perfect_run",
+        "api_call_count": 6,
+        "error_call_count": 0,
+        "unnecessary_calls": []
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Créez une dimension comptable personnalisée \"Produktlinje\" avec les valeurs \"Premium\" et \"Basis\". Puis comptabilisez une"
+    },
+    {
+      "filename": "20260321-190937_c6b749284c454224b1aeadbcb15e58cb.jsonl",
+      "run_id": "c6b749284c454224b1aeadbcb15e58cb",
+      "started_at": "2026-03-21T19:09:37.943573+00:00",
+      "task_type": "create_voucher",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 161.4,
+      "api_calls": 16,
+      "api_errors": 0,
+      "tool_calls": 17,
+      "preflight_rejections": 0,
+      "score_raw": 10.0,
+      "score_max": 10.0,
+      "normalized_score": 3.6,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed"
+      ],
+      "post_mortem": {
+        "headline": "Perfect run: all 6 checks passed with 16 API calls and 0 errors.",
+        "what_went_wrong": [],
+        "what_worked": [
+          "All 3 vouchers created correctly with proper accounts, amounts, and dates; trial balance verified as zero.",
+          "Missing accounts 6030 and 1209 were created proactively before voucher posting, avoiding errors."
+        ],
+        "what_to_try_next": [
+          "Reduce the 6 parallel GET /ledger/account calls to a single call with broader filters (e.g., fetch all accounts at once) to cut ~5 redundant calls.",
+          "Combine the two GET /balanceSheet calls into one by requesting sufficient fields/count in the first call, saving 1 call.",
+          "Pre-check which accounts exist with a single broad account list fetch before deciding to create 6030/1209, rather than making separate lookups for 1020, 1200, 1209 individually."
+        ],
+        "confidence": "high",
+        "root_cause_category": "perfect_run",
+        "api_call_count": 16,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "Second GET /balanceSheet call — first call had enough data; pagination/fields param could have retrieved all rows in one request.",
+          "Separate GET /ledger/account for 1020 and 1200 — a single broader account list fetch would have covered all needed account lookups.",
+          "Multiple parallel GET /ledger/account calls (6 total) — one call with no number filter returns all accounts, eliminating 5 of these calls."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Führen Sie den Monatsabschluss für März 2026 durch. Buchen Sie die Rechnungsabgrenzung (4200 NOK pro Monat von Konto 170"
+    },
+    {
       "filename": "20260321-185032_dc691aa22d214b10b39b598f9c2e7bd4.jsonl",
       "run_id": "dc691aa22d214b10b39b598f9c2e7bd4",
       "started_at": "2026-03-21T18:50:32.897914+00:00",
@@ -59,6 +879,61 @@
       "prompt_preview": "Has recibido una factura de proveedor (ver PDF adjunto). Registra la factura en Tripletex. Crea el proveedor si no exist"
     },
     {
+      "filename": "20260321-184738_4f6cd3c6144c43e284295ad51af193cc.jsonl",
+      "run_id": "4f6cd3c6144c43e284295ad51af193cc",
+      "started_at": "2026-03-21T18:47:38.890065+00:00",
+      "task_type": "register_payment",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 139.0,
+      "api_calls": 11,
+      "api_errors": 0,
+      "tool_calls": 11,
+      "preflight_rejections": 0,
+      "score_raw": 5.0,
+      "score_max": 10.0,
+      "normalized_score": 1.5,
+      "checks_passed": 2,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: passed",
+        "Check 4: failed"
+      ],
+      "post_mortem": {
+        "headline": "Payment registered but invoice rate and disagio account checks failed (2/4 checks passed)",
+        "what_went_wrong": [
+          "Check 2 failed: Invoice was likely not created with the correct exchange rate of 10.11 NOK/EUR. The POST /invoice endpoint may need an explicit currency rate field to set the invoice rate.",
+          "Check 4 failed: Disagio was expected to be booked to a specific account (likely 8060 or 8160 for valutatap), but the auto-booking by Tripletex may have used the wrong account or the manual voucher was required.",
+          "The agent assumed Tripletex auto-books disagio correctly when paidAmount and paidAmountCurrency differ, but the scoring suggests the disagio account used was incorrect or the booking didn't happen as expected.",
+          "No explicit currency rate was set on the order or invoice creation — Tripletex may have used the system rate instead of 10.11 NOK/EUR, causing the invoice NOK value to be wrong."
+        ],
+        "what_worked": [
+          "Customer creation, order, order line, invoice creation and sending all succeeded with 0 errors.",
+          "Payment registration with paidAmount (NOK) and paidAmountCurrency (EUR) was accepted by the API."
+        ],
+        "what_to_try_next": [
+          "Set the currency rate explicitly on the order (currencyExchangeRate: 10.11) when creating the order in EUR so the invoice reflects the correct NOK value of 27,458.76.",
+          "After payment registration, manually create a voucher/ledger posting to account 8060 (Valutatap) for the disagio of 2,118.48 NOK if Tripletex does not auto-book to the correct account.",
+          "Verify which account Tripletex uses for auto-disagio and if it differs from the expected account, post a manual journal entry to correct it using POST /ledger/voucher."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "wrong_payload",
+        "api_call_count": 11,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "GET /ledger/account called twice (duplicate call at 18:48:36 and 18:48:55) — one call is sufficient.",
+          "PUT /ledger/account/467893671 to configure bank account may be unnecessary if already configured in prior runs."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Me sende ein faktura på 2716 EUR til Fossekraft AS (org.nr 928230651) då kursen var 10.11 NOK/EUR. Kunden har no betalt,"
+    },
+    {
       "filename": "20260321-184618_1f2cc85ff6fa43d7be6e8e9c230fa945.jsonl",
       "run_id": "1f2cc85ff6fa43d7be6e8e9c230fa945",
       "started_at": "2026-03-21T18:46:18.417808+00:00",
@@ -105,6 +980,57 @@
         "Failed to parse JSON from LLM output: ```json\n{\n  \"task_type\": \"bank_reconciliation\",\n  \"goal\": \"Reconciliar o extrato bancário CSV (janeiro/fevereiro 2026) com faturas em aberto no Tripletex: associar pagamentos recebidos de clientes às faturas correspondentes e pagamentos efetuados a fornecedores às suas faturas, tratando pagamentos p"
       ],
       "prompt_preview": "Reconcilie o extrato bancario (CSV anexo) com as faturas em aberto no Tripletex. Relacione os pagamentos recebidos com a"
+    },
+    {
+      "filename": "20260321-184459_ea8e0314a163400fa32c17bdd9467209.jsonl",
+      "run_id": "ea8e0314a163400fa32c17bdd9467209",
+      "started_at": "2026-03-21T18:44:59.610429+00:00",
+      "task_type": "",
+      "task_tier": null,
+      "executor_model": "",
+      "status": "error",
+      "source": "competition",
+      "duration_seconds": 163.6,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 0,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 7.0,
+      "normalized_score": 0.2857,
+      "checks_passed": 1,
+      "checks_total": 2,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed"
+      ],
+      "post_mortem": {
+        "headline": "Auth header error prevented invoice payment registration; only partial score achieved.",
+        "what_went_wrong": [
+          "Bearer token was empty or malformed ('Bearer ' with no token value), causing an illegal header value error on all API calls.",
+          "The agent failed to register the payment for the invoice, causing Check 2 to fail (only 1/2 checks passed).",
+          "No API calls were successfully made due to the authentication failure at initialization."
+        ],
+        "what_worked": [
+          "Check 1 passed, suggesting the invoice or customer entity was found/verified through some other means or pre-existing state.",
+          "The agent correctly parsed the task: customer Viento SL, org 908616537, 37850 NOK invoice for Mantenimiento."
+        ],
+        "what_to_try_next": [
+          "Ensure the Bearer token is properly injected into the session before making API calls — verify the token environment variable is set and non-empty.",
+          "After fixing auth, find the invoice via GET /invoice with customerId or organizationNumber filter, then POST /ledger/payment or use paymentTypeId to register full payment.",
+          "Add a pre-flight check that validates the Authorization header is non-empty before proceeding with any API calls."
+        ],
+        "confidence": "high",
+        "root_cause_category": "auth_issue",
+        "api_call_count": 0,
+        "error_call_count": 1,
+        "unnecessary_calls": []
+      },
+      "total_errors": 1,
+      "errors": [
+        "Illegal header value b'Bearer '"
+      ],
+      "prompt_preview": "El cliente Viento SL (org. nº 908616537) tiene una factura pendiente de 37850 NOK sin IVA por \"Mantenimiento\". Registre "
     },
     {
       "filename": "20260321-184416_23ecd668bfa442519810417148741e40.jsonl",
@@ -226,52 +1152,58 @@
       "prompt_preview": "Gjennomfør heile prosjektsyklusen for 'Dataplattform Strandvik' (Strandvik AS, org.nr 982465958): 1) Prosjektet har buds"
     },
     {
-      "filename": "20260321-182251_326eeb176c3a4fa79da26ceb4b1826db.jsonl",
-      "run_id": "326eeb176c3a4fa79da26ceb4b1826db",
-      "started_at": "2026-03-21T18:22:51.214545+00:00",
+      "filename": "20260321-184008_982d3cd082c844bf967a019501757db9.jsonl",
+      "run_id": "982d3cd082c844bf967a019501757db9",
+      "started_at": "2026-03-21T18:40:08.745057+00:00",
       "task_type": "",
       "task_tier": null,
       "executor_model": "",
       "status": "error",
       "source": "competition",
-      "duration_seconds": 70.4,
+      "duration_seconds": 462.2,
       "api_calls": 0,
       "api_errors": 0,
       "tool_calls": 0,
       "preflight_rejections": 0,
-      "score_raw": 0.0,
-      "score_max": 10.0,
-      "normalized_score": 0.0,
-      "checks_passed": 0,
-      "checks_total": 2,
+      "score_raw": 2.0,
+      "score_max": 8.0,
+      "normalized_score": 0.5,
+      "checks_passed": 1,
+      "checks_total": 4,
       "checks": [
-        "Check 1: failed",
-        "Check 2: failed"
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
       ],
       "post_mortem": {
-        "headline": "Agent failed immediately due to JSON parse error in LLM output, scoring 0/10.",
+        "headline": "Auth header error caused agent to fail 3/4 checks on project fixed-price billing task",
         "what_went_wrong": [
-          "LLM output contained markdown code fences (```json ... ```) which caused JSON parsing to fail before any API calls were made.",
-          "No API calls were executed at all — the agent crashed at the planning/initialization stage.",
-          "Both scoring checks failed (0/2) resulting in 0.0 normalized score with no partial credit."
+          "Bearer token was empty/missing, causing 'Illegal header value b\\'Bearer \\'' error before any API calls could be made",
+          "Agent could not authenticate with Tripletex API, preventing project fixed-price setup, project leader assignment, and invoice creation",
+          "3 out of 4 checks failed: fixed price not set, project leader not assigned, partial invoice not created",
+          "Only 1 check passed (likely project lookup or basic entity check), scoring 0.5 normalized due to auth failure"
         ],
-        "what_worked": [],
+        "what_worked": [
+          "One check passed, suggesting partial task completion or basic entity identification succeeded",
+          "Task was correctly parsed and initialized before the auth error occurred"
+        ],
         "what_to_try_next": [
-          "Strip markdown code fences (```json and ```) from LLM output before attempting JSON parsing to handle this common LLM formatting habit.",
-          "Add a fallback JSON extraction step using regex to find the JSON object within the LLM response even if wrapped in markdown.",
-          "Implement retry logic: if initial JSON parse fails, re-prompt the LLM asking for raw JSON without markdown formatting."
+          "Ensure the Bearer token is properly configured and non-empty before agent execution; validate auth credentials at startup",
+          "Implement a pre-flight auth check that verifies the token is valid before proceeding with any API calls",
+          "After fixing auth, set project fixed price (363850 kr), assign Ingrid Moe as project leader, then create a 75% partial invoice (272887.50 kr)"
         ],
         "confidence": "high",
-        "root_cause_category": "logic_error",
+        "root_cause_category": "auth_issue",
         "api_call_count": 0,
-        "error_call_count": 0,
+        "error_call_count": 1,
         "unnecessary_calls": []
       },
       "total_errors": 1,
       "errors": [
-        "Failed to parse JSON from LLM output: ```json\n{\n  \"task_type\": \"bank_reconciliation\",\n  \"goal\": \"Avstem bankutskrift (CSV) mot opne fakturaer i Tripletex: match innbetalingar til kundefakturaer og utbetalingar til leverandørfakturaer, med korrekt handtering av delbetalingar og renter.\",\n  \"likely_resources\": [\n    \"bank/statement (CSV i"
+        "Illegal header value b'Bearer '"
       ],
-      "prompt_preview": "Avstem bankutskrifta (vedlagt CSV) mot opne fakturaer i Tripletex. Match innbetalingar til kundefakturaer og utbetalinga"
+      "prompt_preview": "Sett fastpris 363850 kr på prosjektet \"Nettbutikk-utvikling\" for Havbris AS (org.nr 876325497). Prosjektleder er Ingrid "
     },
     {
       "filename": "20260321-181034_4a62f0df2f324e9c902a0f5639bcb132.jsonl",
@@ -8818,6 +9750,6 @@
       "prompt_preview": "Opprett en kunde med navn Test Kunde AS og e-post test@example.com"
     }
   ],
-  "total_runs": 158,
-  "generated_at": "2026-03-21T19:34:16.949106+00:00"
+  "total_runs": 176,
+  "generated_at": "2026-03-21T20:04:28.689937+00:00"
 }
