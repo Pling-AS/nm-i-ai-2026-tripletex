@@ -317,12 +317,26 @@ class OpenRouterClient:
             return token
 
     def _fetch_gcloud_token(self) -> str:
-        result = subprocess.run(
-            [self._settings.vertex_ai_gcloud_bin, "auth", "print-access-token"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
+        bin_path = self._settings.vertex_ai_gcloud_bin
+        if not bin_path:
+            raise OpenRouterError(
+                "Vertex AI enabled but 'vertex_ai_gcloud_bin' is empty"
+            )
+
+        try:
+            result = subprocess.run(
+                [bin_path, "auth", "print-access-token"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except FileNotFoundError:
+            raise OpenRouterError(
+                f"gcloud binary not found at '{bin_path}'. Please install gcloud or set VERTEX_AI_GCLOUD_BIN correctly."
+            )
+        except subprocess.TimeoutExpired:
+            raise OpenRouterError("gcloud token fetch timed out after 15s")
+
         if result.returncode != 0:
             raise OpenRouterError(
                 f"gcloud token fetch failed (exit {result.returncode}): {result.stderr.strip()}",
