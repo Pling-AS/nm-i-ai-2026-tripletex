@@ -23,6 +23,46 @@ logger = logging.getLogger(__name__)
 RAW_LOG_PATH = RUNS_DIR / "raw_requests.jsonl"
 
 
+def _maybe_rebuild_dashboard() -> None:
+    dashboard_dir = Path(__file__).resolve().parents[2] / "dashboard"
+    out_dir = dashboard_dir / "out"
+    pkg_json = dashboard_dir / "package.json"
+    if not pkg_json.exists():
+        return
+    src_dir = dashboard_dir / "src"
+    if not src_dir.exists():
+        return
+
+    needs_build = False
+    if not out_dir.exists():
+        needs_build = True
+    else:
+        out_mtime = out_dir.stat().st_mtime
+        for f in src_dir.rglob("*"):
+            if f.is_file() and f.stat().st_mtime > out_mtime:
+                needs_build = True
+                break
+
+    if needs_build:
+        import subprocess
+
+        logger.info("Dashboard source changed — rebuilding Next.js...")
+        try:
+            subprocess.run(
+                ["npm", "run", "build"],
+                cwd=str(dashboard_dir),
+                check=True,
+                capture_output=True,
+                timeout=120,
+            )
+            logger.info("Dashboard rebuild complete")
+        except Exception as exc:
+            logger.warning("Dashboard rebuild failed: %s", exc)
+
+
+_maybe_rebuild_dashboard()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()

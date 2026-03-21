@@ -1111,6 +1111,26 @@ class TripletexAccountingAgent:
                         tripletex,
                         execution_state,
                     )
+                    trace.write(
+                        "tool_result",
+                        {
+                            "tool_name": tool_name,
+                            "result": {
+                                "ok": tool_result.get("ok", True),
+                                "status_code": tool_result.get("status_code"),
+                                "summary": tool_result.get("summary", "")[:300]
+                                if isinstance(tool_result.get("summary"), str)
+                                else "",
+                                "error": tool_result.get("error", "")[:500]
+                                if isinstance(tool_result.get("error"), str)
+                                else str(tool_result.get("error", ""))[:500],
+                                "resource_id": tool_result.get("resource_id"),
+                                "validation_summary": tool_result.get(
+                                    "validation_summary"
+                                ),
+                            },
+                        },
+                    )
                     if (
                         not tool_result.get("ok")
                         and tool_result.get("status_code") in (409, 422)
