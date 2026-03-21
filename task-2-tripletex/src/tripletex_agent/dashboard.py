@@ -246,9 +246,10 @@ async def dashboard_ws(websocket: WebSocket) -> None:
         submissions = await _get_cached_submissions()
         used_sub_ids: set[str] = set()
         for run in runs:
-            if run.get("source") != "competition":
+            if run.get("source") != "competition" or run.get("status") == "error":
                 run["competition_score"] = None
                 continue
+
             match = _match_submission_to_run(
                 run["started_at"], run.get("duration_seconds"), submissions
             )
@@ -342,7 +343,7 @@ async def broadcast_run_list_update() -> None:
     submissions = await _get_cached_submissions()
     used_sub_ids: set[str] = set()
     for run in runs:
-        if run.get("source") != "competition":
+        if run.get("source") != "competition" or run.get("status") == "error":
             run["competition_score"] = None
             continue
         match = _match_submission_to_run(
@@ -446,7 +447,7 @@ async def list_runs() -> JSONResponse:
     submissions = await _get_cached_submissions()
     used_sub_ids: set[str] = set()
     for run in runs:
-        if run.get("source") != "competition":
+        if run.get("source") != "competition" or run.get("status") == "error":
             run["competition_score"] = None
             continue
         match = _match_submission_to_run(
@@ -534,7 +535,7 @@ async def _do_enrich_runs() -> JSONResponse:
                 summary, events = detail
                 if summary.get("source") != "competition":
                     continue
-                if summary.get("status") not in ("completed", "error"):
+                if summary.get("status") != "completed":
                     continue
 
                 event_types = {e["event_type"] for e in events}
@@ -579,15 +580,13 @@ async def _do_enrich_runs() -> JSONResponse:
 
 @router.get("/api/runs/overview")
 async def runs_overview() -> JSONResponse:
-    """Return the overview JSON for all runs."""
     overview_path = RUNS_DIR / "overview.json"
-    if overview_path.exists():
+    if overview_path.exists() and not _is_overview_stale():
         try:
             with overview_path.open("r", encoding="utf-8") as f:
                 return JSONResponse(json.load(f))
         except (json.JSONDecodeError, OSError):
             pass
-    # Generate fresh if missing
     overview = _generate_overview()
     return JSONResponse(overview)
 
@@ -598,8 +597,7 @@ async def get_run(run_id: str) -> JSONResponse:
     result = store.get_detail(run_id)
     if result:
         summary, events = result
-        # Attach competition score if available
-        if summary.get("source") == "competition":
+        if summary.get("source") == "competition" and summary.get("status") != "error":
             submissions = await _get_cached_submissions()
             match = _match_submission_to_run(
                 summary["started_at"],
@@ -628,6 +626,25 @@ async def get_run(run_id: str) -> JSONResponse:
             }
         )
     return JSONResponse({"error": "Run not found"}, status_code=404)
+
+
+@router.delete("/api/runs/{run_id}")
+async def delete_run(run_id: str) -> JSONResponse:
+    store = get_run_store()
+    cached = store._by_run_id.get(run_id)
+    if not cached:
+        for s in store.list_summaries():
+            if s["run_id"] == run_id:
+                cached = store._by_run_id.get(run_id)
+                break
+    if not cached:
+        return JSONResponse({"error": "Run not found"}, status_code=404)
+    try:
+        cached.path.unlink()
+        store.invalidate_run(run_id)
+        return JSONResponse({"status": "deleted", "run_id": run_id})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 @router.post("/api/runs/{run_id}/postmortem")
@@ -689,6 +706,59 @@ async def generate_run_postmortem(run_id: str) -> JSONResponse:
         store.invalidate_run(run_id)
 
     return JSONResponse({"status": "generated", "post_mortem": analysis})
+
+
+@router.post("/api/runs/simulate")
+async def simulate_run() -> JSONResponse:
+    import asyncio
+    import random as _random
+
+    from tripletex_agent.agent import TripletexAccountingAgent
+    from tripletex_agent.config import get_settings as _get_settings
+    from tripletex_agent.schemas import SolveRequest, TripletexCredentials
+
+    settings = _get_settings()
+    if (
+        not settings.tripletex_sandbox_api_url
+        or not settings.tripletex_sandbox_api_session_token
+    ):
+        return JSONResponse(
+            {"error": "No sandbox credentials configured in .env"}, status_code=400
+        )
+
+    store = get_run_store()
+    summaries = store.list_summaries()
+    competition_prompts = [
+        s["prompt"]
+        for s in summaries
+        if s.get("source") == "competition" and s.get("prompt")
+    ]
+    if not competition_prompts:
+        return JSONResponse(
+            {"error": "No previous competition prompts to simulate from"},
+            status_code=400,
+        )
+
+    prompt = _random.choice(competition_prompts)
+
+    async def _run_sim() -> None:
+        agent = TripletexAccountingAgent(settings)
+        try:
+            req = SolveRequest(
+                prompt=prompt,
+                tripletex_credentials=TripletexCredentials(
+                    base_url=str(settings.tripletex_sandbox_api_url or ""),
+                    session_token=str(
+                        settings.tripletex_sandbox_api_session_token or ""
+                    ),
+                ),
+            )
+            await agent.solve(req)
+        except Exception as exc:
+            logger.warning("Simulation run failed: %s", exc)
+
+    asyncio.create_task(_run_sim())
+    return JSONResponse({"status": "started", "prompt_preview": prompt[:200]})
 
 
 @router.get("/api/settings")
@@ -788,8 +858,8 @@ async def competition_submit(request_body: dict | None = None) -> JSONResponse:
 
     # Default endpoint URL from settings
     body = request_body or {}
-    endpoint_url = body.get("endpoint_url", settings.local_solve_url)
-    endpoint_api_key = body.get("endpoint_api_key", settings.app_api_key)
+    endpoint_url = body.get("endpoint_url") or settings.local_solve_url
+    endpoint_api_key = body.get("endpoint_api_key") or settings.app_api_key
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -1184,6 +1254,27 @@ def _enrich_run_file(
     }
 
 
+def _is_overview_stale() -> bool:
+    overview_path = RUNS_DIR / "overview.json"
+    if not overview_path.exists():
+        return True
+    overview_mtime = overview_path.stat().st_mtime
+    run_files = list(RUNS_DIR.glob("*.jsonl"))
+    run_files = [f for f in run_files if f.name != "raw_requests.jsonl"]
+    if not run_files:
+        return False
+    try:
+        with overview_path.open() as f:
+            overview = json.load(f)
+        overview_count = overview.get("total_runs", 0)
+    except Exception:
+        return True
+    if len(run_files) != overview_count:
+        return True
+    newest_run_mtime = max(f.stat().st_mtime for f in run_files)
+    return newest_run_mtime > overview_mtime
+
+
 def _generate_overview() -> dict[str, Any]:
     """Generate overview.json with one entry per run."""
     runs_data: list[dict[str, Any]] = []
@@ -1255,6 +1346,11 @@ def _generate_overview() -> dict[str, Any]:
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard() -> HTMLResponse:
+    nextjs_index = (
+        Path(__file__).resolve().parents[2] / "dashboard" / "out" / "index.html"
+    )
+    if nextjs_index.exists():
+        return HTMLResponse(nextjs_index.read_text(encoding="utf-8"))
     return HTMLResponse(DASHBOARD_HTML)
 
 

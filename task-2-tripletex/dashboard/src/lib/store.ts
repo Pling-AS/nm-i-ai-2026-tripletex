@@ -12,6 +12,7 @@ interface DashboardState {
   
   setRuns: (runs: RunSummary[], activeCount: number, totalCount: number) => void
   updateRun: (runId: string, updates: Partial<RunSummary>) => void
+  removeRun: (runId: string) => void
   setSettings: (settings: Settings) => void
   setConnectionStatus: (status: 'connecting' | 'live' | 'reconnecting' | 'offline') => void
   toggleSound: () => void
@@ -30,6 +31,10 @@ export const useStore = create<DashboardState>((set) => ({
   setRuns: (runs, activeCount, totalCount) => set({ runs, activeCount, totalCount }),
   updateRun: (runId, updates) => set((state) => ({
     runs: state.runs.map(r => r.run_id === runId ? { ...r, ...updates } : r)
+  })),
+  removeRun: (runId) => set((state) => ({
+    runs: state.runs.filter(r => r.run_id !== runId),
+    totalCount: state.totalCount - 1,
   })),
   setSettings: (settings) => set({ settings }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
