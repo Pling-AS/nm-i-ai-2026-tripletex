@@ -68,7 +68,9 @@ class TripletexAccountingAgent:
         self._settings = settings
         self._spec_index = TripletexSpecIndex(settings.tripletex_api_spec_path)
 
-    async def solve(self, request: SolveRequest) -> AgentRunResult:
+    async def solve(
+        self, request: SolveRequest, submission_id: str | None = None
+    ) -> AgentRunResult:
         execution_state = ExecutionState(start_time=time.monotonic())
         credentials = request.tripletex_credentials
         if credentials is None:
@@ -82,7 +84,7 @@ class TripletexAccountingAgent:
             self._settings, fast=is_simple_prompt
         )
 
-        metadata = {
+        metadata: dict[str, Any] = {
             "model": self._settings.openrouter_model,
             "planner_model": planner_chain[0],
             "max_steps": self._settings.agent_max_steps,
@@ -91,6 +93,8 @@ class TripletexAccountingAgent:
             "max_attachment_chars": self._settings.max_attachment_text_chars,
             "source": "competition" if is_competition else "simulation",
         }
+        if submission_id:
+            metadata["submission_id"] = submission_id
         trace = RunTrace(metadata=metadata, prompt=request.prompt)
         trace.write(
             "init",

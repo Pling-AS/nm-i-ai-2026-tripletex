@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from tripletex_agent.agent import TripletexAccountingAgent
 from tripletex_agent.config import Settings, get_settings
-from tripletex_agent.dashboard import router as dashboard_router
+from tripletex_agent.dashboard import router as dashboard_router, pop_pending_submission
 from tripletex_agent.openrouter import OpenRouterError
 from tripletex_agent.schemas import SolveRequest, SolveResponse, TripletexCredentials
 from tripletex_agent.trace import RUNS_DIR
@@ -184,8 +184,14 @@ async def solve_endpoint(
                 )
             }
         )
+    linked_submission_id = (
+        pop_pending_submission()
+        if payload.tripletex_credentials
+        and "tx-proxy" in str(payload.tripletex_credentials.base_url)
+        else None
+    )
     try:
-        await agent.solve(payload)
+        await agent.solve(payload, submission_id=linked_submission_id)
     except OpenRouterError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
