@@ -24,6 +24,10 @@ from client import AstarClient
 PAUSE_FILE = Path.home() / "astar" / "PAUSE"
 PAUSE_TIMEOUT_SECONDS = 30 * 60
 
+# Circuit breaker: auto-pause if a round scores below this threshold.
+# Prevents catastrophic code from submitting bad predictions on subsequent rounds.
+SCORE_FLOOR = 75.0
+
 
 def ts() -> str:
     return datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
@@ -186,6 +190,35 @@ def check_pause(round_info: dict) -> None:
     log("▶  PAUSE file removed — proceeding with pipeline")
 
 
+def check_score_circuit_breaker(client: AstarClient, round_id: str) -> None:
+    """Auto-pause if last round scored below SCORE_FLOOR.
+
+    This protects against broken code submitting bad predictions on
+    every subsequent round.  Creates PAUSE file and logs a warning.
+    Remove the PAUSE file to resume after investigating.
+    """
+    try:
+        my_rounds = client.get_my_rounds()
+        r = next((r for r in my_rounds if r["id"] == round_id), None)
+        if not r:
+            return
+        score = r.get("round_score")
+        if score is None:
+            return
+        rank = r.get("rank", "?")
+        total = r.get("total_teams", "?")
+        log(f"Round scored: {score:.2f} (rank #{rank}/{total})")
+        if score < SCORE_FLOOR:
+            log(
+                f"⚠ CIRCUIT BREAKER: score {score:.2f} < floor {SCORE_FLOOR}! "
+                f"Creating PAUSE file to prevent further submissions. "
+                f"SSH in, investigate, and remove ~/astar/PAUSE to resume."
+            )
+            PAUSE_FILE.touch()
+    except Exception as e:
+        log(f"Score check error (non-fatal): {e}")
+
+
 def find_active_round(client: AstarClient) -> dict | None:
     """Find the current active round."""
     try:
@@ -259,6 +292,7 @@ def main() -> None:
 
         wait_for_round_completion(client, round_id)
         wait_for_scoring_done(client, round_id)
+        check_score_circuit_breaker(client, round_id)
         run_analysis()
         resubmit_active_if_needed(client)
 

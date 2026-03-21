@@ -8,14 +8,16 @@ import type { TraceEvent, PostMortemPayload } from '@/lib/types'
 interface PostMortemProps {
   events: TraceEvent[]
   runId: string
+  hasScore?: boolean
 }
 
-export function PostMortem({ events, runId }: PostMortemProps) {
+export function PostMortem({ events, runId, hasScore }: PostMortemProps) {
   const [loading, setLoading] = useState(false)
   const [localPm, setLocalPm] = useState<PostMortemPayload | null>(null)
 
   const pmEvent = events.find(e => e.event_type === 'post_mortem')
   const pm: PostMortemPayload | null = localPm ?? (pmEvent ? pmEvent.payload as PostMortemPayload : null)
+  const awaitingScore = !hasScore && !pm
 
   async function handleGenerate() {
     setLoading(true)
@@ -32,17 +34,27 @@ export function PostMortem({ events, runId }: PostMortemProps) {
   if (!pm) {
     return (
       <div className="rounded-lg border border-dashed border-[var(--border)] p-6 text-center">
-        <Search className="h-8 w-8 mx-auto mb-2 text-[var(--text2)]" />
-        <p className="text-sm text-[var(--text2)] mb-3">No post-mortem analysis yet</p>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={loading}
-          className="rounded-md bg-[var(--purple)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}
-          {loading ? 'Analyzing...' : 'Generate Analysis'}
-        </button>
+        {awaitingScore ? (
+          <>
+            <Loader2 className="h-8 w-8 mx-auto mb-2 text-[var(--yellow)] animate-spin" />
+            <p className="text-sm text-[var(--yellow)] mb-1">Waiting for score enrichment</p>
+            <p className="text-xs text-[var(--text2)]">Post-mortem analysis will be available after scoring completes</p>
+          </>
+        ) : (
+          <>
+            <Search className="h-8 w-8 mx-auto mb-2 text-[var(--text2)]" />
+            <p className="text-sm text-[var(--text2)] mb-3">No post-mortem analysis yet</p>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={loading}
+              className="rounded-md bg-[var(--purple)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : null}
+              {loading ? 'Analyzing...' : 'Generate Analysis'}
+            </button>
+          </>
+        )}
       </div>
     )
   }

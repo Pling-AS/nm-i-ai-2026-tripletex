@@ -233,6 +233,47 @@ def _match_submission_to_run(
     return best_match
 
 
+def _attach_competition_scores(
+    runs: list[dict[str, Any]], submissions: list[dict[str, Any]]
+) -> None:
+    used_sub_ids: set[str] = set()
+
+    def _match_and_attach(run: dict[str, Any]) -> None:
+        match = _match_submission_to_run(
+            run["started_at"], run.get("duration_seconds"), submissions
+        )
+        if match and match.get("id") not in used_sub_ids:
+            used_sub_ids.add(match["id"])
+            feedback = match.get("feedback", {})
+            checks = feedback.get("checks", [])
+            passed = sum(1 for c in checks if "passed" in c.lower())
+            run["competition_score"] = {
+                "score_raw": match.get("score_raw", 0),
+                "score_max": match.get("score_max", 0),
+                "normalized_score": match.get("normalized_score", 0),
+                "checks_passed": passed,
+                "checks_total": len(checks),
+                "comment": feedback.get("comment", ""),
+                "checks": checks,
+                "submission_id": match["id"],
+                "status": match.get("status", "unknown"),
+            }
+        else:
+            if "competition_score" not in run:
+                run["competition_score"] = None
+
+    for run in runs:
+        if run.get("source") != "competition":
+            run["competition_score"] = None
+            continue
+        if run.get("status") != "error":
+            _match_and_attach(run)
+
+    for run in runs:
+        if run.get("source") == "competition" and run.get("status") == "error":
+            _match_and_attach(run)
+
+
 router = APIRouter(dependencies=[Depends(verify_dashboard_access)])
 
 
@@ -244,34 +285,7 @@ async def dashboard_ws(websocket: WebSocket) -> None:
         runs = store.list_summaries()
 
         submissions = await _get_cached_submissions()
-        used_sub_ids: set[str] = set()
-        for run in runs:
-            if run.get("source") != "competition" or run.get("status") == "error":
-                run["competition_score"] = None
-                continue
-
-            match = _match_submission_to_run(
-                run["started_at"], run.get("duration_seconds"), submissions
-            )
-            if match and match.get("id") not in used_sub_ids:
-                used_sub_ids.add(match["id"])
-                feedback = match.get("feedback", {})
-                checks = feedback.get("checks", [])
-                passed = sum(1 for c in checks if "passed" in c.lower())
-                run["competition_score"] = {
-                    "score_raw": match.get("score_raw", 0),
-                    "score_max": match.get("score_max", 0),
-                    "normalized_score": match.get("normalized_score", 0),
-                    "checks_passed": passed,
-                    "checks_total": len(checks),
-                    "comment": feedback.get("comment", ""),
-                    "checks": checks,
-                    "submission_id": match["id"],
-                    "status": match.get("status", "unknown"),
-                }
-            else:
-                if "competition_score" not in run:
-                    run["competition_score"] = None
+        _attach_competition_scores(runs, submissions)
 
         active_count = len(RunTrace.get_active_runs())
         await websocket.send_json(
@@ -341,33 +355,7 @@ async def broadcast_run_list_update() -> None:
     runs = store.list_summaries()
 
     submissions = await _get_cached_submissions()
-    used_sub_ids: set[str] = set()
-    for run in runs:
-        if run.get("source") != "competition" or run.get("status") == "error":
-            run["competition_score"] = None
-            continue
-        match = _match_submission_to_run(
-            run["started_at"], run.get("duration_seconds"), submissions
-        )
-        if match and match.get("id") not in used_sub_ids:
-            used_sub_ids.add(match["id"])
-            feedback = match.get("feedback", {})
-            checks = feedback.get("checks", [])
-            passed = sum(1 for c in checks if "passed" in c.lower())
-            run["competition_score"] = {
-                "score_raw": match.get("score_raw", 0),
-                "score_max": match.get("score_max", 0),
-                "normalized_score": match.get("normalized_score", 0),
-                "checks_passed": passed,
-                "checks_total": len(checks),
-                "comment": feedback.get("comment", ""),
-                "checks": checks,
-                "submission_id": match["id"],
-                "status": match.get("status", "unknown"),
-            }
-        else:
-            if "competition_score" not in run:
-                run["competition_score"] = None
+    _attach_competition_scores(runs, submissions)
 
     active_count = len(RunTrace.get_active_runs())
     await manager.broadcast(
@@ -443,35 +431,8 @@ async def list_runs() -> JSONResponse:
             summary["status"] = "running"
             runs.insert(0, summary)
 
-    # Match competition runs with submission scores
     submissions = await _get_cached_submissions()
-    used_sub_ids: set[str] = set()
-    for run in runs:
-        if run.get("source") != "competition" or run.get("status") == "error":
-            run["competition_score"] = None
-            continue
-        match = _match_submission_to_run(
-            run["started_at"], run.get("duration_seconds"), submissions
-        )
-        if match and match.get("id") not in used_sub_ids:
-            used_sub_ids.add(match["id"])
-            feedback = match.get("feedback", {})
-            checks = feedback.get("checks", [])
-            passed = sum(1 for c in checks if "passed" in c.lower())
-            run["competition_score"] = {
-                "score_raw": match.get("score_raw", 0),
-                "score_max": match.get("score_max", 0),
-                "normalized_score": match.get("normalized_score", 0),
-                "checks_passed": passed,
-                "checks_total": len(checks),
-                "comment": feedback.get("comment", ""),
-                "checks": checks,
-                "submission_id": match["id"],
-                "status": match.get("status", "unknown"),
-            }
-        else:
-            if "competition_score" not in run:
-                run["competition_score"] = None
+    _attach_competition_scores(runs, submissions)
 
     active_count = len(RunTrace.get_active_runs())
     has_pending = any(
@@ -535,13 +496,18 @@ async def _do_enrich_runs() -> JSONResponse:
                 summary, events = detail
                 if summary.get("source") != "competition":
                     continue
-                if summary.get("status") != "completed":
+                if summary.get("status") not in ("completed", "error"):
                     continue
 
                 event_types = {e["event_type"] for e in events}
                 if "post_mortem" in event_types:
                     continue
                 if "competition_scoring" not in event_types:
+                    continue
+                scoring_evt = next(
+                    e for e in events if e["event_type"] == "competition_scoring"
+                )
+                if scoring_evt.get("payload", {}).get("score_raw") is None:
                     continue
 
                 logger.debug(
@@ -566,6 +532,9 @@ async def _do_enrich_runs() -> JSONResponse:
             await openrouter.close()
 
     overview = _generate_overview()
+
+    if enriched_count > 0 or postmortem_count > 0:
+        await broadcast_run_list_update()
 
     return JSONResponse(
         {
@@ -597,28 +566,9 @@ async def get_run(run_id: str) -> JSONResponse:
     result = store.get_detail(run_id)
     if result:
         summary, events = result
-        if summary.get("source") == "competition" and summary.get("status") != "error":
+        if summary.get("source") == "competition":
             submissions = await _get_cached_submissions()
-            match = _match_submission_to_run(
-                summary["started_at"],
-                summary.get("duration_seconds"),
-                submissions,
-            )
-            if match:
-                feedback = match.get("feedback", {})
-                checks = feedback.get("checks", [])
-                passed = sum(1 for c in checks if "passed" in c.lower())
-                summary["competition_score"] = {
-                    "score_raw": match.get("score_raw", 0),
-                    "score_max": match.get("score_max", 0),
-                    "normalized_score": match.get("normalized_score", 0),
-                    "checks_passed": passed,
-                    "checks_total": len(checks),
-                    "comment": feedback.get("comment", ""),
-                    "checks": checks,
-                    "submission_id": match["id"],
-                    "status": match.get("status", "unknown"),
-                }
+            _attach_competition_scores([summary], submissions)
         return JSONResponse(
             {
                 "summary": summary,
@@ -1123,7 +1073,12 @@ def _enrich_run_file(
     ):
         return None
 
-    has_scoring = "competition_scoring" in existing_types
+    existing_scoring = next(
+        (e for e in events if e["event_type"] == "competition_scoring"), None
+    )
+    has_final_scoring = existing_scoring is not None and existing_scoring.get(
+        "payload", {}
+    ).get("status") in ("completed", "failed")
     has_error_summary = "error_summary" in existing_types
 
     run_endpoint_url = ""
@@ -1166,7 +1121,7 @@ def _enrich_run_file(
     scoring_data: dict[str, Any] = {}
     should_write_scoring = False
 
-    if not has_scoring:
+    if not has_final_scoring:
         retry_state = _enrichment_retry_state.get(
             run_id, {"attempts": 0, "next_retry_at": 0.0}
         )
@@ -1183,22 +1138,26 @@ def _enrich_run_file(
             )
 
             if match:
-                feedback = match.get("feedback", {})
-                checks = feedback.get("checks", [])
-                passed = sum(1 for c in checks if "passed" in c.lower())
-                scoring_data = {
-                    "submission_id": match.get("id"),
-                    "status": match.get("status"),
-                    "score_raw": match.get("score_raw", 0),
-                    "score_max": match.get("score_max", 0),
-                    "normalized_score": match.get("normalized_score", 0),
-                    "checks_passed": passed,
-                    "checks_total": len(checks),
-                    "checks": checks,
-                    "comment": feedback.get("comment", ""),
-                }
-                should_write_scoring = True
-                _enrichment_retry_state.pop(run_id, None)
+                sub_status = match.get("status", "")
+                if sub_status in ("completed", "failed"):
+                    feedback = match.get("feedback", {})
+                    checks = feedback.get("checks", [])
+                    passed = sum(1 for c in checks if "passed" in c.lower())
+                    scoring_data = {
+                        "submission_id": match.get("id"),
+                        "status": sub_status,
+                        "score_raw": match.get("score_raw", 0),
+                        "score_max": match.get("score_max", 0),
+                        "normalized_score": match.get("normalized_score", 0),
+                        "checks_passed": passed,
+                        "checks_total": len(checks),
+                        "checks": checks,
+                        "comment": feedback.get("comment", ""),
+                    }
+                    should_write_scoring = True
+                    _enrichment_retry_state.pop(run_id, None)
+                else:
+                    pending_match = True
             else:
                 pending_match = True
                 attempts += 1

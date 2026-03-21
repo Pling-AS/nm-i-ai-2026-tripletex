@@ -1,11 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { cn, formatDuration, formatTimeAgo, truncate } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import type { RunSummary } from '@/lib/types'
+
+function useElapsed(startedAt: string | undefined, isRunning: boolean) {
+  const [elapsed, setElapsed] = useState<number | null>(null)
+  useEffect(() => {
+    if (!isRunning || !startedAt) { setElapsed(null); return }
+    const start = new Date(startedAt).getTime()
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [startedAt, isRunning])
+  return elapsed
+}
 
 const statusColors: Record<string, string> = {
   running: 'bg-[var(--blue)]',
@@ -25,6 +38,8 @@ export function RunCard({ run, isSelected, onClick }: RunCardProps) {
   const { removeRun } = useStore()
   const [deleting, setDeleting] = useState(false)
   const score = run.competition_score
+  const isRunning = run.status === 'running'
+  const elapsed = useElapsed(run.started_at, isRunning)
   const isRecent = run.started_at ? (Date.now() - new Date(run.started_at).getTime()) < 10 * 60 * 1000 : false
   const isAwaitingScore = run.source === 'competition' && run.status === 'completed' && !score && isRecent
   const scoreStatus = score?.status
@@ -79,8 +94,10 @@ export function RunCard({ run, isSelected, onClick }: RunCardProps) {
       </div>
 
       <div className="flex items-center gap-3 text-[11px] text-[var(--text2)]">
-        <span>{formatDuration(run.duration_seconds)}</span>
-        <span>{run.tripletex_call_count} calls</span>
+        <span className={isRunning ? 'text-[var(--blue)] tabular-nums' : 'tabular-nums'}>
+          {isRunning && elapsed != null ? formatDuration(elapsed) : formatDuration(run.duration_seconds)}
+        </span>
+        <span className={cn(isRunning && 'text-[var(--blue)]')}>{run.tripletex_call_count} calls</span>
         {run.tripletex_error_count > 0 && (
           <span className="text-[var(--red)]">{run.tripletex_error_count} err</span>
         )}

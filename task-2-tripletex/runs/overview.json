@@ -1,6 +1,167 @@
 {
   "runs": [
     {
+      "filename": "20260321-182251_326eeb176c3a4fa79da26ceb4b1826db.jsonl",
+      "run_id": "326eeb176c3a4fa79da26ceb4b1826db",
+      "started_at": "2026-03-21T18:22:51.214545+00:00",
+      "task_type": "",
+      "task_tier": null,
+      "executor_model": "",
+      "status": "error",
+      "source": "competition",
+      "duration_seconds": 70.4,
+      "api_calls": 0,
+      "api_errors": 0,
+      "tool_calls": 0,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 2,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed"
+      ],
+      "post_mortem": {
+        "headline": "Agent failed immediately due to JSON parse error in LLM output, scoring 0/10.",
+        "what_went_wrong": [
+          "LLM output contained markdown code fences (```json ... ```) which caused JSON parsing to fail before any API calls were made.",
+          "No API calls were executed at all — the agent crashed at the planning/initialization stage.",
+          "Both scoring checks failed (0/2) resulting in 0.0 normalized score with no partial credit."
+        ],
+        "what_worked": [],
+        "what_to_try_next": [
+          "Strip markdown code fences (```json and ```) from LLM output before attempting JSON parsing to handle this common LLM formatting habit.",
+          "Add a fallback JSON extraction step using regex to find the JSON object within the LLM response even if wrapped in markdown.",
+          "Implement retry logic: if initial JSON parse fails, re-prompt the LLM asking for raw JSON without markdown formatting."
+        ],
+        "confidence": "high",
+        "root_cause_category": "logic_error",
+        "api_call_count": 0,
+        "error_call_count": 0,
+        "unnecessary_calls": []
+      },
+      "total_errors": 1,
+      "errors": [
+        "Failed to parse JSON from LLM output: ```json\n{\n  \"task_type\": \"bank_reconciliation\",\n  \"goal\": \"Avstem bankutskrift (CSV) mot opne fakturaer i Tripletex: match innbetalingar til kundefakturaer og utbetalingar til leverandørfakturaer, med korrekt handtering av delbetalingar og renter.\",\n  \"likely_resources\": [\n    \"bank/statement (CSV i"
+      ],
+      "prompt_preview": "Avstem bankutskrifta (vedlagt CSV) mot opne fakturaer i Tripletex. Match innbetalingar til kundefakturaer og utbetalinga"
+    },
+    {
+      "filename": "20260321-181034_4a62f0df2f324e9c902a0f5639bcb132.jsonl",
+      "run_id": "4a62f0df2f324e9c902a0f5639bcb132",
+      "started_at": "2026-03-21T18:10:34.818272+00:00",
+      "task_type": "register_supplier_invoice",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 601.9,
+      "api_calls": 5,
+      "api_errors": 1,
+      "tool_calls": 5,
+      "preflight_rejections": 0,
+      "score_raw": 2.0,
+      "score_max": 10.0,
+      "normalized_score": 0.6,
+      "checks_passed": 1,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
+      "post_mortem": {
+        "headline": "Supplier created but invoice registration failed 5/6 checks, likely wrong API endpoint or structure",
+        "what_went_wrong": [
+          "Only 1/6 checks passed (supplier creation), suggesting the voucher-based approach is wrong — Tripletex likely expects POST /invoice/supplier or similar dedicated supplier invoice endpoint, not /ledger/voucher.",
+          "First voucher POST failed with balance error ('postings don't sum to zero'), wasting a call and indicating the single-posting approach was incorrect.",
+          "The vendor invoice number, due date, and supplier linkage may not be recognized by the scoring system when registered as a generic voucher rather than a proper supplier invoice object.",
+          "Account 6300 may be 'Leie lokale' (rent) rather than a network services account — but more critically, the invoice structure (date, due date, invoice number) likely needs the /invoice/supplier endpoint to be scored correctly."
+        ],
+        "what_worked": [
+          "Supplier Greenfield Ltd was successfully created with correct org number, address, and bank account (Check 1 passed).",
+          "Parallel API calls for supplier creation and account lookup were efficient."
+        ],
+        "what_to_try_next": [
+          "Use POST /invoice/supplier (or equivalent Tripletex supplier invoice endpoint) instead of /ledger/voucher — this likely captures invoiceNumber, invoiceDate, dueDate, and supplier as first-class fields that the scorer checks.",
+          "Verify the correct endpoint for supplier invoices: check if Tripletex has /purchaseOrder or /invoice/supplier with fields like invoiceNumber, invoiceDate, dueDate, amountExcludingVat, amountIncludingVat, and vatAmount.",
+          "If voucher is the only option, ensure vendorInvoiceNumber, due date (paymentDueDate), and supplier are set at the voucher level (not just posting level) and confirm the VAT type ID for 25% input VAT is correct."
+        ],
+        "confidence": "high",
+        "root_cause_category": "wrong_endpoint",
+        "api_call_count": 5,
+        "error_call_count": 1,
+        "unnecessary_calls": [
+          "First POST /ledger/voucher with single debit posting — failed predictably; should have included AP credit posting from the start.",
+          "Second GET /ledger/account for account 2400 — could have been fetched in the initial parallel batch alongside account 6300."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "You received a supplier invoice (see attached PDF). Register the invoice in Tripletex. Create the supplier if it does no"
+    },
+    {
+      "filename": "20260321-180231_6e456124be0945088ea54584f2d26b3e.jsonl",
+      "run_id": "6e456124be0945088ea54584f2d26b3e",
+      "started_at": "2026-03-21T18:02:31.477835+00:00",
+      "task_type": "create_order",
+      "task_tier": 2,
+      "executor_model": "claude-opus-4-6",
+      "status": "completed",
+      "source": "competition",
+      "duration_seconds": 113.1,
+      "api_calls": 10,
+      "api_errors": 0,
+      "tool_calls": 10,
+      "preflight_rejections": 0,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed"
+      ],
+      "post_mortem": {
+        "headline": "All 5 checks failed despite seemingly correct execution flow — likely wrong product prices or VAT handling",
+        "what_went_wrong": [
+          "All 5 scoring checks failed (0/8 points) despite completing all steps — suggests fundamental data mismatch, possibly product prices set incorrectly or wrong product IDs reused.",
+          "The agent reused existing sandbox products (IDs 84409948, 84409950) but the task specifies product numbers 6065 and 2511 as identifiers — the existing products may have different prices/names that conflicted with requirements.",
+          "VAT type ID 3 was assumed to be 25% VAT without verification — if the wrong VAT type was applied, invoice totals would be wrong causing payment registration to fail checks.",
+          "The customer creation may have succeeded but the scoring check for customer (org.nr 908252764) may have failed if the customer was already pre-seeded and a duplicate was created instead of reusing the existing one."
+        ],
+        "what_worked": [
+          "Zero 4xx errors across 10 API calls — clean execution with no HTTP failures.",
+          "Correct workflow sequence: bank setup → customer → products → order → orderlines → invoice → payment."
+        ],
+        "what_to_try_next": [
+          "Before reusing existing products, verify their name and price match the task requirements; if they differ, update them with PUT /product/{id} to set correct unitPrice before creating orderlines.",
+          "Verify VAT type by calling GET /product/vatType to confirm which ID corresponds to 25% MVA, rather than assuming ID 3.",
+          "Check if customer Bølgekraft AS already exists via GET /customer?organizationNumber=908252764 before POST to avoid duplicates, and reuse the existing customer ID if found."
+        ],
+        "confidence": "medium",
+        "root_cause_category": "logic_error",
+        "api_call_count": 10,
+        "error_call_count": 0,
+        "unnecessary_calls": [
+          "GET /product called twice separately — could be combined into one call with query params for both product numbers.",
+          "PUT /ledger/account/373944680 bank account setup may be unnecessary if account is already configured as a bank account in the sandbox."
+        ]
+      },
+      "total_errors": 0,
+      "errors": [],
+      "prompt_preview": "Opprett ein ordre for kunden Bølgekraft AS (org.nr 908252764) med produkta Nettverksteneste (6065) til 25500 kr og Syste"
+    },
+    {
       "filename": "20260321-170257_98367d8db5e040aa804596084c5a66b4.jsonl",
       "run_id": "98367d8db5e040aa804596084c5a66b4",
       "started_at": "2026-03-21T17:02:57.127121+00:00",
@@ -52,56 +213,6 @@
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Um dos seus clientes tem uma fatura vencida. Encontre a fatura vencida e registe uma taxa de lembrete de 35 NOK. Debito "
-    },
-    {
-      "filename": "20260321-165151_bd311b1b41784e4f9ef16cac5ecdb04e.jsonl",
-      "run_id": "bd311b1b41784e4f9ef16cac5ecdb04e",
-      "started_at": "2026-03-21T16:51:51.695921+00:00",
-      "task_type": "create_product",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "simulation",
-      "duration_seconds": 21.5,
-      "api_calls": 2,
-      "api_errors": 0,
-      "tool_calls": 2,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Create the product \"Training Session\" with product number 2451. The price is 20350 NOK excluding VAT, using the standard"
-    },
-    {
-      "filename": "20260321-164704_2ccf726110d3437db2fea204c4b9d941.jsonl",
-      "run_id": "2ccf726110d3437db2fea204c4b9d941",
-      "started_at": "2026-03-21T16:47:04.712760+00:00",
-      "task_type": "",
-      "task_tier": null,
-      "executor_model": "",
-      "status": "incomplete",
-      "source": "simulation",
-      "duration_seconds": 0.0,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 0,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "We have received invoice INV-2026-8735 from the supplier Brightstone Ltd (org no. 913701585) for 8500 NOK including VAT."
     },
     {
       "filename": "20260321-164603_d315065743d945e0a643d41106382c0c.jsonl",
@@ -162,31 +273,6 @@
       "total_errors": 0,
       "errors": [],
       "prompt_preview": "Du har mottatt et tilbudsbrev (se vedlagt PDF) for en ny ansatt. Utfor komplett onboarding: opprett den ansatte, tilknyt"
-    },
-    {
-      "filename": "20260321-163153_d6efeba02a9841159f89fcbc51f6c39c.jsonl",
-      "run_id": "d6efeba02a9841159f89fcbc51f6c39c",
-      "started_at": "2026-03-21T16:31:53.574512+00:00",
-      "task_type": "ledger_error_correction",
-      "task_tier": 3,
-      "executor_model": "gpt-5.4",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 96.8,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 20,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Hemos descubierto errores en el libro mayor de enero y febrero de 2026. Revise todos los comprobantes y encuentre los 4 "
     },
     {
       "filename": "20260321-152933_8e9bebc8973e486ebd2b501618916ca9.jsonl",
@@ -251,12 +337,15 @@
       "api_errors": 2,
       "tool_calls": 21,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
+      "checks_passed": 0,
+      "checks_total": 2,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed"
+      ],
       "post_mortem": {
         "headline": "Agent gave up on bank reconciliation after failing to list invoices, scoring 0/0.",
         "what_went_wrong": [
@@ -295,12 +384,17 @@
       "api_errors": 0,
       "tool_calls": 13,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 4.0,
+      "score_max": 8.0,
+      "normalized_score": 1.0,
+      "checks_passed": 2,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks were evaluated.",
         "what_went_wrong": [
@@ -339,12 +433,28 @@
       "api_errors": 2,
       "tool_calls": 29,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 18.0,
+      "score_max": 22.0,
+      "normalized_score": 2.4545,
+      "checks_passed": 13,
+      "checks_total": 15,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed",
+        "Check 7: passed",
+        "Check 8: passed",
+        "Check 9: passed",
+        "Check 10: failed",
+        "Check 11: passed",
+        "Check 12: passed",
+        "Check 13: failed",
+        "Check 14: passed",
+        "Check 15: passed"
+      ],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks, suggesting evaluation issue",
         "what_went_wrong": [
@@ -383,12 +493,19 @@
       "api_errors": 1,
       "tool_calls": 12,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 2.0,
+      "score_max": 10.0,
+      "normalized_score": 0.6,
+      "checks_passed": 1,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
       "post_mortem": {
         "headline": "Invoice registered via manual 3-posting voucher after failed auto-VAT and incomingInvoice attempts",
         "what_went_wrong": [
@@ -427,12 +544,19 @@
       "api_errors": 0,
       "tool_calls": 9,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring system returned no checks (0/0 evaluated).",
         "what_went_wrong": [
@@ -470,12 +594,18 @@
       "api_errors": 2,
       "tool_calls": 9,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 10.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 5,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed"
+      ],
       "post_mortem": {
         "headline": "Voucher created successfully after 2 failed attempts due to vatType auto-generation confusion",
         "what_went_wrong": [
@@ -513,12 +643,18 @@
       "api_errors": 1,
       "tool_calls": 19,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 5.0,
+      "score_max": 10.0,
+      "normalized_score": 1.5,
+      "checks_passed": 2,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: passed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: passed"
+      ],
       "post_mortem": {
         "headline": "Agent completed all tasks but scoring returned no checks (0/0), suggesting a grading issue.",
         "what_went_wrong": [
@@ -569,395 +705,6 @@
       "prompt_preview": "Voce recebeu uma fatura de fornecedor (ver PDF anexo). Registe a fatura no Tripletex. Crie o fornecedor se nao existir. "
     },
     {
-      "filename": "20260321-003026_099f75b039fa4676a7a3bd9b2094f05c.jsonl",
-      "run_id": "099f75b039fa4676a7a3bd9b2094f05c",
-      "started_at": "2026-03-21T00:30:26.551070+00:00",
-      "task_type": "",
-      "task_tier": null,
-      "executor_model": "",
-      "status": "incomplete",
-      "source": "simulation",
-      "duration_seconds": 0.0,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 0,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Test active run"
-    },
-    {
-      "filename": "20260320-230139_7236b449944d464d840443945b05ef64.jsonl",
-      "run_id": "7236b449944d464d840443945b05ef64",
-      "started_at": "2026-03-20T23:01:39.533372+00:00",
-      "task_type": "update_employee",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "error",
-      "source": "competition",
-      "duration_seconds": 105.1,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 43,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 40,
-      "errors": [
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "'Unknown endpoint: GET /token/session/whoAmI'",
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "'Unknown endpoint: GET /company'",
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "Agent reached max steps before completing the task"
-      ],
-      "prompt_preview": "Ejecute la nómina de Fernando Sánchez (fernando.sanchez@example.org) para este mes. El salario base es de 42350 NOK. Aña"
-    },
-    {
-      "filename": "20260320-230110_58cdbbe23728452b85d20f4933c25c21.jsonl",
-      "run_id": "58cdbbe23728452b85d20f4933c25c21",
-      "started_at": "2026-03-20T23:01:10.012963+00:00",
-      "task_type": "create_travel_expense",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "error",
-      "source": "competition",
-      "duration_seconds": 128.2,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 41,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": null,
-      "checks_total": null,
-      "checks": [],
-      "post_mortem": null,
-      "total_errors": 41,
-      "errors": [
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "Agent reached max steps before completing the task"
-      ],
-      "prompt_preview": "Register a travel expense for Charlotte Williams (charlotte.williams@example.org) for \"Client visit Bodø\". The trip last"
-    },
-    {
       "filename": "20260320-225143_ed5128db0fc344bdb4984aca69f0aa90.jsonl",
       "run_id": "ed5128db0fc344bdb4984aca69f0aa90",
       "started_at": "2026-03-20T22:51:43.952136+00:00",
@@ -971,12 +718,17 @@
       "api_errors": 0,
       "tool_calls": 21,
       "preflight_rejections": 3,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Run completed with 3 schema errors during project creation but recovered; scoring returned None/None.",
         "what_went_wrong": [
@@ -1026,12 +778,19 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
       "post_mortem": {
         "headline": "Perfect single-call customer creation with no errors, but scoring returned no checks.",
         "what_went_wrong": [
@@ -1058,55 +817,6 @@
       "prompt_preview": "Crea el cliente Río Verde SL con número de organización 975181626. La dirección es Solveien 97, 3015 Drammen. Correo: po"
     },
     {
-      "filename": "20260320-225054_056272a2c784433bb4d89f942aff42c3.jsonl",
-      "run_id": "056272a2c784433bb4d89f942aff42c3",
-      "started_at": "2026-03-20T22:50:54.216936+00:00",
-      "task_type": "register_payment",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 60416.1,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0/0 checks passed, suggesting the task was not recognized or the scoring harness had no checks to evaluate for this run.",
-          "The PUT /invoice/:payment call was made without explicit body parameters (paymentTypeId, amount, date), which may have caused the payment to be registered incorrectly or incompletely.",
-          "VAT type id=3 was assumed for 25% VAT without verifying via GET /vat or similar — could be wrong vatType in this sandbox environment."
-        ],
-        "what_worked": [
-          "Zero 4xx errors across all 8 API calls — clean execution path.",
-          "Correct sequential flow: bank account setup → customer → order → orderline → invoice → payment."
-        ],
-        "what_to_try_next": [
-          "Explicitly include paymentTypeId, amount (17750), and paymentDate in the PUT /invoice/:payment body to ensure payment is fully registered with correct parameters.",
-          "Add a GET /vat call to verify the correct vatType id for 25% Norwegian VAT before creating the orderline, rather than assuming id=3.",
-          "Investigate why scoring returned None/None — check if the task requires finding an *existing* invoice rather than creating a new one (the prompt says 'utestående faktura' implying it already exists)."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "logic_error",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — if bank account id is known/static in sandbox, this lookup could be skipped.",
-          "PUT /ledger/account/362705546 — configuring bank account may be unnecessary if already configured from prior runs."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Kunden Nordhav AS (org.nr 841333608) har en utestående faktura på 14200 kr eksklusiv MVA for \"Skylagring\". Registrer ful"
-    },
-    {
       "filename": "20260320-225029_1b65a2df0cf54b3193f459ccd4752864.jsonl",
       "run_id": "1b65a2df0cf54b3193f459ccd4752864",
       "started_at": "2026-03-20T22:50:29.197533+00:00",
@@ -1120,12 +830,18 @@
       "api_errors": 0,
       "tool_calls": 2,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 7.0,
+      "score_max": 7.0,
+      "normalized_score": 2.0,
+      "checks_passed": 5,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed"
+      ],
       "post_mortem": {
         "headline": "Product created successfully with 2 API calls and 0 errors, but scoring returned None.",
         "what_went_wrong": [
@@ -1154,57 +870,6 @@
       "prompt_preview": "Opprett produktet \"Analyserapport\" med produktnummer 1908. Prisen er 18050 kr eksklusiv MVA, og standard MVA-sats på 25 "
     },
     {
-      "filename": "20260320-225026_f3969f11f6324c3d8d310f3132f6f30a.jsonl",
-      "run_id": "f3969f11f6324c3d8d310f3132f6f30a",
-      "started_at": "2026-03-20T22:50:26.407397+00:00",
-      "task_type": "create_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 60463.7,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": 7.0,
-      "score_max": 7.0,
-      "normalized_score": 2.0,
-      "checks_passed": 5,
-      "checks_total": 5,
-      "checks": [
-        "Check 1: passed",
-        "Check 2: passed",
-        "Check 3: passed",
-        "Check 4: passed",
-        "Check 5: passed"
-      ],
-      "post_mortem": {
-        "headline": "Perfect run: all 5 checks passed with 8 API calls and 0 errors.",
-        "what_went_wrong": [],
-        "what_worked": [
-          "All 5 scoring checks passed with zero 4xx errors, achieving a perfect 1.0 correctness score.",
-          "Parallel/batched calls (customer, employee lookup, ledger account) minimized round-trips efficiently."
-        ],
-        "what_to_try_next": [
-          "Skip PUT /ledger/account if bank account is already configured — this call may be unnecessary and costs one API call.",
-          "Consider skipping GET /ledger/account entirely if the bank account ID is not needed for invoice creation in this flow.",
-          "Combine the GET /employee lookup with project creation by caching known employee IDs to avoid the extra GET call."
-        ],
-        "confidence": "high",
-        "root_cause_category": "perfect_run",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — bank account ID not directly used in invoice creation flow",
-          "PUT /ledger/account/459424698 — configuring bank account may not be required for this task"
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Establezca un precio fijo de 152400 NOK en el proyecto \"Mejora de infraestructura\" para Estrella SL (org. nº 808166283)."
-    },
-    {
       "filename": "20260320-224939_cb44a44e899b43e995ba2f6f435e8ca8.jsonl",
       "run_id": "cb44a44e899b43e995ba2f6f435e8ca8",
       "started_at": "2026-03-20T22:49:39.807720+00:00",
@@ -1218,12 +883,17 @@
       "api_errors": 0,
       "tool_calls": 8,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 2.0,
+      "score_max": 8.0,
+      "normalized_score": 0.5,
+      "checks_passed": 1,
+      "checks_total": 4,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
         "what_went_wrong": [
@@ -1255,56 +925,6 @@
       "prompt_preview": "Fixez un prix forfaitaire de 365350 NOK sur le projet \"Intégration CRM\" pour Colline SARL (nº org. 894562234). Le chef d"
     },
     {
-      "filename": "20260320-224929_e33c8f6a2c114870a6069cda01a2aa8e.jsonl",
-      "run_id": "e33c8f6a2c114870a6069cda01a2aa8e",
-      "started_at": "2026-03-20T22:49:29.371231+00:00",
-      "task_type": "create_credit_note",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 60544.8,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect execution with 8 calls and 0 errors, but scoring returned None/None (no checks defined).",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0 — no verifiable checks were registered, suggesting a scoring configuration issue or task mismatch.",
-          "The agent created a new customer/product/order chain from scratch rather than searching for an existing Sonnental GmbH customer (Org.-Nr. 809303829) first, which may not match expected behavior.",
-          "No GET search was performed to find an existing invoice for 'Systementwicklung' before creating a new one — the task implies an existing invoice was complained about."
-        ],
-        "what_worked": [
-          "Full credit note chain executed cleanly: customer → product → bank account → order → orderline → invoice → credit note with 0 errors.",
-          "Correct endpoint PUT /invoice/{id}/:createCreditNote used to generate the credit note referencing the original invoice."
-        ],
-        "what_to_try_next": [
-          "Before creating entities, search for existing customer (GET /customer?organizationNumber=809303829) and existing invoices to avoid duplicating data the task expects to already exist.",
-          "Investigate why scoring returned None/None — this may indicate the task expected pre-existing data to be found rather than created, causing check mismatches.",
-          "If the sandbox is pre-populated, skip creation steps and directly find the invoice for Sonnental GmbH, then call PUT /invoice/{id}/:createCreditNote to reverse it."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "logic_error",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "POST /product — creating a product may be unnecessary if the task only requires a credit note on an existing invoice; an orderline description alone may suffice.",
-          "PUT /ledger/account/459392956 — bank account setup may be unnecessary if the sandbox already has a configured bank account.",
-          "GET /ledger/account — only needed to support the unnecessary bank account PUT step."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Der Kunde Sonnental GmbH (Org.-Nr. 809303829) hat die Rechnung für \"Systementwicklung\" (10400 NOK ohne MwSt.) reklamiert"
-    },
-    {
       "filename": "20260320-224851_7a22d93cc91c4cd19c8e5a0d4342c868.jsonl",
       "run_id": "7a22d93cc91c4cd19c8e5a0d4342c868",
       "started_at": "2026-03-20T22:48:51.446051+00:00",
@@ -1318,12 +938,20 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 8.0,
+      "score_max": 8.0,
+      "normalized_score": 2.0,
+      "checks_passed": 7,
+      "checks_total": 7,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed",
+        "Check 7: passed"
+      ],
       "post_mortem": {
         "headline": "Perfect single-call customer creation; scoring returned no checks (None/None).",
         "what_went_wrong": [
@@ -1363,12 +991,19 @@
       "api_errors": 0,
       "tool_calls": 9,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 6,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed",
+        "Check 6: failed"
+      ],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a grader issue, not agent failure.",
         "what_went_wrong": [
@@ -1412,12 +1047,20 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 8.0,
+      "score_max": 8.0,
+      "normalized_score": 2.0,
+      "checks_passed": 7,
+      "checks_total": 7,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed",
+        "Check 7: passed"
+      ],
       "post_mortem": {
         "headline": "Perfect single-call customer creation with no errors; scoring returned no checks.",
         "what_went_wrong": [
@@ -1457,12 +1100,18 @@
       "api_errors": 0,
       "tool_calls": 2,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 7.0,
+      "score_max": 7.0,
+      "normalized_score": 2.0,
+      "checks_passed": 5,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed"
+      ],
       "post_mortem": {
         "headline": "Product created successfully with 2 API calls and 0 errors — near-optimal run.",
         "what_went_wrong": [
@@ -1504,12 +1153,17 @@
       "api_errors": 1,
       "tool_calls": 5,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 8.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Invoice registered successfully after one 422 error; scoring returned None/None (no checks defined).",
         "what_went_wrong": [
@@ -1570,12 +1224,17 @@
       "api_errors": 0,
       "tool_calls": 3,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 7.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Perfect 3-call run with zero errors; scoring returned None/None (no checks defined).",
         "what_went_wrong": [
@@ -1615,12 +1274,18 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 6.0,
+      "score_max": 7.0,
+      "normalized_score": 0.8571,
+      "checks_passed": 4,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: failed"
+      ],
       "post_mortem": {
         "headline": "Perfect supplier creation run with optimal efficiency (1 call, 0 errors).",
         "what_went_wrong": [],
@@ -1657,12 +1322,16 @@
       "api_errors": 0,
       "tool_calls": 10,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 2.0,
+      "score_max": 8.0,
+      "normalized_score": 0.5,
+      "checks_passed": 1,
+      "checks_total": 3,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed"
+      ],
       "post_mortem": {
         "headline": "Perfect execution with 0 errors; scoring returned None/None (no checks defined).",
         "what_went_wrong": [
@@ -1705,12 +1374,19 @@
       "api_errors": 0,
       "tool_calls": 6,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 13.0,
+      "score_max": 13.0,
+      "normalized_score": 3.5,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed"
+      ],
       "post_mortem": {
         "headline": "Perfect execution with 6 calls, 0 errors — no scoring data returned to evaluate.",
         "what_went_wrong": [
@@ -1739,199 +1415,6 @@
       "prompt_preview": "Cree una dimensión contable personalizada \"Kostsenter\" con los valores \"Markedsføring\" y \"Kundeservice\". Luego registre "
     },
     {
-      "filename": "20260320-224509_14b53d4170054d4bb439254b410c6c23.jsonl",
-      "run_id": "14b53d4170054d4bb439254b410c6c23",
-      "started_at": "2026-03-20T22:45:09.744738+00:00",
-      "task_type": "create_supplier",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "error",
-      "source": "competition",
-      "duration_seconds": 144.1,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 40,
-      "preflight_rejections": 0,
-      "score_raw": 7.0,
-      "score_max": 7.0,
-      "normalized_score": 2.0,
-      "checks_passed": 5,
-      "checks_total": 5,
-      "checks": [
-        "Check 1: passed",
-        "Check 2: passed",
-        "Check 3: passed",
-        "Check 4: passed",
-        "Check 5: passed"
-      ],
-      "post_mortem": null,
-      "total_errors": 41,
-      "errors": [
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "Agent reached max steps before completing the task"
-      ],
-      "prompt_preview": "Registrer leverandøren Elvdal AS med organisasjonsnummer 994963309. E-post: faktura@elvdal.no."
-    },
-    {
       "filename": "20260320-224509_2af07551895640209f058b0cda58a8a2.jsonl",
       "run_id": "2af07551895640209f058b0cda58a8a2",
       "started_at": "2026-03-20T22:45:09.728573+00:00",
@@ -1945,12 +1428,18 @@
       "api_errors": 0,
       "tool_calls": 2,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 7.0,
+      "score_max": 7.0,
+      "normalized_score": 2.0,
+      "checks_passed": 5,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed"
+      ],
       "post_mortem": {
         "headline": "Product created successfully but scoring returned no checks (0/0), outcome unclear.",
         "what_went_wrong": [
@@ -1992,12 +1481,17 @@
       "api_errors": 0,
       "tool_calls": 3,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
+      "score_raw": 0.0,
+      "score_max": 7.0,
+      "normalized_score": 0.0,
       "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "checks_total": 4,
+      "checks": [
+        "Check 1: failed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed"
+      ],
       "post_mortem": {
         "headline": "Perfect 3-call run with zero errors; scoring returned no checks (0/0).",
         "what_went_wrong": [
@@ -2037,12 +1531,15 @@
       "api_errors": 0,
       "tool_calls": 8,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 2.0,
+      "score_max": 7.0,
+      "normalized_score": 0.2857,
+      "checks_passed": 1,
+      "checks_total": 2,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed"
+      ],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
         "what_went_wrong": [
@@ -2074,56 +1571,6 @@
       "prompt_preview": "Kunden Elvdal AS (org.nr 963143230) har ein uteståande faktura på 19600 kr eksklusiv MVA for \"Datarådgjeving\". Registrer"
     },
     {
-      "filename": "20260320-224415_cdc984335e99445aaa0f1b3ad3de9e7d.jsonl",
-      "run_id": "cdc984335e99445aaa0f1b3ad3de9e7d",
-      "started_at": "2026-03-20T22:44:15.035064+00:00",
-      "task_type": "create_voucher",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 60993.4,
-      "api_calls": 7,
-      "api_errors": 0,
-      "tool_calls": 7,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Payroll voucher created successfully but scoring returned no checks (0/0).",
-        "what_went_wrong": [
-          "Scoring returned 0/0 checks with score_raw=None/None — no verifiable outcome, possibly wrong task type or unrecognized voucher structure.",
-          "Three ledger account lookups for bonus accounts (5020, 5090, 5010) were exploratory and added unnecessary API calls before settling on account 5000 for both lines.",
-          "The task may require using the actual payroll/salary module endpoints rather than a generic ledger voucher, which could explain why no scoring checks were triggered."
-        ],
-        "what_worked": [
-          "Employee Fernando Sánchez was found on first lookup without needing to create a new record.",
-          "Voucher was created without any 4xx errors, with correct amounts (42350 + 12850 = 55200 NOK) and balanced postings."
-        ],
-        "what_to_try_next": [
-          "Investigate whether the competition expects use of /salary/payslip or /salary/transaction endpoints instead of /ledger/voucher for payroll tasks.",
-          "Eliminate the exploratory account lookups (5020, 5090, 5010) by directly using account 5000 for all salary/bonus lines — saves 3 API calls.",
-          "Check if the scoring system requires specific fields like payroll period, employee salary type, or a different voucher type code to register checks."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "wrong_endpoint",
-        "api_call_count": 7,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account for account 5020 (Feriepenger) — not needed, wrong account type for bonus",
-          "GET /ledger/account for account 5090 — not needed, wrong account type",
-          "GET /ledger/account for account 5010 — not needed, account didn't exist"
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Ejecute la nómina de Fernando Sánchez (fernando.sanchez@example.org) para este mes. El salario base es de 42350 NOK. Aña"
-    },
-    {
       "filename": "20260320-224357_143e1b1a2f4242fea78839f43a3dec0b.jsonl",
       "run_id": "143e1b1a2f4242fea78839f43a3dec0b",
       "started_at": "2026-03-20T22:43:57.970726+00:00",
@@ -2137,12 +1584,16 @@
       "api_errors": 0,
       "tool_calls": 3,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 7.0,
+      "score_max": 7.0,
+      "normalized_score": 1.3333,
+      "checks_passed": 3,
+      "checks_total": 3,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed"
+      ],
       "post_mortem": {
         "headline": "Perfect execution: 3 departments created in 3 clean API calls with zero errors.",
         "what_went_wrong": [],
@@ -2179,12 +1630,18 @@
       "api_errors": 14,
       "tool_calls": 16,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 1.0,
+      "score_max": 8.0,
+      "normalized_score": 0.25,
+      "checks_passed": 1,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed"
+      ],
       "post_mortem": {
         "headline": "All API calls failed with 403 proxy token errors — no task progress made",
         "what_went_wrong": [
@@ -2275,223 +1732,6 @@
       "prompt_preview": "O cliente Estrela Lda (org. nº 890872492) reclamou sobre a fatura referente a \"Consultoria de dados\" (12000 NOK sem IVA)"
     },
     {
-      "filename": "20260320-223907_003f74b1b9cb4050aecd442a2913ec81.jsonl",
-      "run_id": "003f74b1b9cb4050aecd442a2913ec81",
-      "started_at": "2026-03-20T22:39:07.528308+00:00",
-      "task_type": "create_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 61332.1,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": 1.0,
-      "score_max": 8.0,
-      "normalized_score": 0.25,
-      "checks_passed": 1,
-      "checks_total": 5,
-      "checks": [
-        "Check 1: passed",
-        "Check 2: failed",
-        "Check 3: failed",
-        "Check 4: failed",
-        "Check 5: failed"
-      ],
-      "post_mortem": {
-        "headline": "Project created correctly but invoice amount, VAT, and field mappings caused 4/5 checks to fail.",
-        "what_went_wrong": [
-          "Invoice amount likely wrong: 33% of 429500 = 141735 NOK but the check may expect the exact value 141835 (429500 * 0.33) or a different rounding — need to verify exact calculation.",
-          "fixedprice field may be wrong: the project API field might be 'fixedPrice' (camelCase) not 'fixedprice' — project fixed price check likely failed due to incorrect field name.",
-          "VAT type id=3 (25%) may be incorrect for this context; the scoring check may expect no VAT or a different VAT type on the orderline.",
-          "Order/invoice structure may be missing required fields checked by scorer, such as currency, payment terms, or the invoice not being properly linked to the project."
-        ],
-        "what_worked": [
-          "Customer creation, employee lookup, bank account setup, and project/order/invoice chain all succeeded with 0 API errors.",
-          "Efficient execution: 8 API calls, 0 errors, clean sequential flow."
-        ],
-        "what_to_try_next": [
-          "Verify the exact field name for fixed price on project POST — try 'fixedPrice' instead of 'fixedprice' and confirm the project schema accepts it.",
-          "Check what the scorer expects for the invoice amount: 429500 * 0.33 = 141735 exactly — also verify if the amount should be inclusive or exclusive of VAT, and whether vatType should be omitted or set differently.",
-          "GET /project/{id} after creation to confirm fixedprice was actually stored, and GET /invoice/{id} to verify the invoiced amount matches the expected 33% partial payment value."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "wrong_payload",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — bank account setup may not be required for this task type if invoicing works without it.",
-          "PUT /ledger/account/459078725 — configuring bank account is likely unnecessary overhead for this specific scoring task."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Sett fastpris 429500 kr på prosjektet \"ERP-implementering\" for Elvdal AS (org.nr 834214261). Prosjektleiar er Marit Kvam"
-    },
-    {
-      "filename": "20260320-223847_42969573afbb451f938334d3b4198456.jsonl",
-      "run_id": "42969573afbb451f938334d3b4198456",
-      "started_at": "2026-03-20T22:38:47.538069+00:00",
-      "task_type": "create_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "error",
-      "source": "competition",
-      "duration_seconds": 191.3,
-      "api_calls": 0,
-      "api_errors": 0,
-      "tool_calls": 45,
-      "preflight_rejections": 0,
-      "score_raw": 6.0,
-      "score_max": 7.0,
-      "normalized_score": 0.8571,
-      "checks_passed": 4,
-      "checks_total": 5,
-      "checks": [
-        "Check 1: passed",
-        "Check 2: passed",
-        "Check 3: passed",
-        "Check 4: passed",
-        "Check 5: failed"
-      ],
-      "post_mortem": null,
-      "total_errors": 33,
-      "errors": [
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        {
-          "error": "Invalid or expired proxy token. Each submission receives a unique token - do not reuse tokens from previous submissions.",
-          "source": "nmiai-proxy"
-        },
-        "Agent reached max steps before completing the task"
-      ],
-      "prompt_preview": "Registrer 29 timar for Håkon Eide (hakon.eide@example.org) på aktiviteten \"Design\" i prosjektet \"Plattformintegrasjon\" f"
-    },
-    {
       "filename": "20260320-223839_e84512295c7a40279cfb61ef4fb8ff0c.jsonl",
       "run_id": "e84512295c7a40279cfb61ef4fb8ff0c",
       "started_at": "2026-03-20T22:38:39.841622+00:00",
@@ -2505,12 +1745,18 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 6.0,
+      "score_max": 7.0,
+      "normalized_score": 0.8571,
+      "checks_passed": 4,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: failed"
+      ],
       "post_mortem": {
         "headline": "Supplier created successfully in 1 call with no errors; scoring returned no checks.",
         "what_went_wrong": [
@@ -2537,170 +1783,6 @@
       "prompt_preview": "Registe o fornecedor Oceano Lda com número de organização 841149394. E-mail: faktura@oceanolda.no."
     },
     {
-      "filename": "20260320-223835_822ee6e937ba4e8c805dee87951dd40f.jsonl",
-      "run_id": "822ee6e937ba4e8c805dee87951dd40f",
-      "started_at": "2026-03-20T22:38:35.676002+00:00",
-      "task_type": "register_payment",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 61394.8,
-      "api_calls": 10,
-      "api_errors": 0,
-      "tool_calls": 10,
-      "preflight_rejections": 0,
-      "score_raw": 6.0,
-      "score_max": 7.0,
-      "normalized_score": 0.8571,
-      "checks_passed": 4,
-      "checks_total": 5,
-      "checks": [
-        "Check 1: passed",
-        "Check 2: passed",
-        "Check 3: passed",
-        "Check 4: passed",
-        "Check 5: failed"
-      ],
-      "post_mortem": {
-        "headline": "Payment reversal nearly perfect but one check failed, likely invoice amount or VAT type mismatch.",
-        "what_went_wrong": [
-          "Check 5 failed — likely the VAT type used (id: 3) did not correctly map to 25% VAT, causing an amount or tax mismatch on the invoice.",
-          "The orderline used vatType id:3 without verifying it corresponds to 25% Norwegian VAT; a GET /vat-type lookup was skipped.",
-          "No verification of the invoice total (17500 NOK) or payment amount before registering payment, risking silent mismatches."
-        ],
-        "what_worked": [
-          "Full workflow executed cleanly: customer, order, orderline, invoice, payment, and reversal all succeeded with 0 errors.",
-          "Correct identification and reversal of the payment voucher (608867188) to restore outstanding invoice balance."
-        ],
-        "what_to_try_next": [
-          "Add a GET /vat-type or GET /product/unit call before creating the orderline to confirm the correct VAT type ID for 25% Norwegian VAT.",
-          "After creating the invoice, do a GET /invoice/{id} to verify the amountIncludingVat equals 17500 before registering payment.",
-          "Check what Check 5 specifically validates (e.g., invoice status, reversal voucher linkage, or customer org number) and ensure those fields are explicitly set."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "wrong_payload",
-        "api_call_count": 10,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/voucher — could be avoided by tracking the payment voucher ID returned from PUT /invoice/:payment response.",
-          "GET /ledger/account — if bank account ID is known/constant in sandbox, this lookup could be skipped."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Betalingen fra Bergvik AS (org.nr 977576776) for fakturaen \"Webdesign\" (14000 kr ekskl. MVA) ble returnert av banken. Re"
-    },
-    {
-      "filename": "20260320-223823_3427aee9dade4fe8a95690d76b82963c.jsonl",
-      "run_id": "3427aee9dade4fe8a95690d76b82963c",
-      "started_at": "2026-03-20T22:38:23.447310+00:00",
-      "task_type": "create_travel_expense",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 61421.8,
-      "api_calls": 24,
-      "api_errors": 4,
-      "tool_calls": 31,
-      "preflight_rejections": 0,
-      "score_raw": 0.0,
-      "score_max": 1.0,
-      "normalized_score": 0.0,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Travel expense created successfully but scored 0/0 checks — scoring system found no verifiable checks",
-        "what_went_wrong": [
-          "Score is 0.0 with '0/0 checks passed' — the scoring system had no checks defined or couldn't find the created travel expense, suggesting the final entity may not match expected structure.",
-          "Three 422 validation errors during per diem creation: countryCode 'NO' not enabled, missing departure/return dates, and wrong expense type (ansattutlegg vs reiseregning) — required delete and recreate.",
-          "Redundant GET /travelExpense/costCategory called 3 times and GET /travelExpense/rateCategory called 3 times due to paginated/trimmed results instead of using count/from parameters efficiently.",
-          "GET /travelExpense/rate without filters hit the 10000-record limit (422), wasting a call; should have filtered by rateCategory from the start."
-        ],
-        "what_worked": [
-          "Successfully identified employee Arne Vik, correct cost categories (Fly, Taxi), payment type, and 2026 rate category/type.",
-          "Recovered from validation errors by deleting and recreating the travel expense with travelDetails included at creation time."
-        ],
-        "what_to_try_next": [
-          "Include travelDetails (isForeignTravel, departureDate, returnDate) in the initial POST /travelExpense to avoid the 'ansattutlegg' vs 'reiseregning' error and eliminate the delete/recreate cycle.",
-          "Use pagination parameters (from, count) on GET /travelExpense/rateCategory and costCategory to fetch targeted pages instead of calling the same endpoint 3 times.",
-          "Investigate why scoring returned 0/0 checks — the travel expense may need to be in a specific state (e.g., submitted/approved) or the per diem rate must exactly match 800 kr rather than using the system rate of 1012 kr."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "logic_error",
-        "api_call_count": 24,
-        "error_call_count": 4,
-        "unnecessary_calls": [
-          "GET /travelExpense/costCategory (3rd call) — duplicate of 2nd call; use pagination params instead",
-          "GET /travelExpense/rate (unfiltered) — hit 10000-record limit; should filter by rateCategory immediately",
-          "DELETE /travelExpense/11146108 + second POST /travelExpense — avoidable if travelDetails included in first POST"
-        ]
-      },
-      "total_errors": 4,
-      "errors": [
-        {
-          "status": 422,
-          "code": 23000,
-          "message": "Result set too large. Limit of 10000 reached.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": null,
-          "validationMessages": null,
-          "requestId": "bfe195bb-c2a1-443b-a4b8-252a2f5d9b39"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": null,
-              "message": "Country not enabled for travel expense.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "982203bb-93b6-4c54-bc2c-b5c345c72a60"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": null,
-              "message": "Spesifiser avreisedato og returdato.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "122d4589-22e9-4a41-afc9-eb1bf6cf5761"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "travelExpense.id",
-              "message": "Kun reiseregning, ikke ansattutlegg, kan benyttes her.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "080da7f2-ae33-4fdb-bb94-0beaba1f2e5c"
-        }
-      ],
-      "prompt_preview": "Registrer ei reiserekning for Arne Vik (arne.vik@example.org) for \"Kundebesøk Stavanger\". Reisa varte 2 dagar med diett "
-    },
-    {
       "filename": "20260320-221245_a7543ef8aa764476975e218b06e709dd.jsonl",
       "run_id": "a7543ef8aa764476975e218b06e709dd",
       "started_at": "2026-03-20T22:12:45.638034+00:00",
@@ -2714,12 +1796,18 @@
       "api_errors": 0,
       "tool_calls": 2,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 6.0,
+      "score_max": 7.0,
+      "normalized_score": 0.8571,
+      "checks_passed": 4,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: failed",
+        "Check 5: passed"
+      ],
       "post_mortem": {
         "headline": "Product 'Orangensaft' created successfully with correct fields; no scoring data available.",
         "what_went_wrong": [
@@ -2818,12 +1906,18 @@
       "api_errors": 0,
       "tool_calls": 8,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 1.0,
+      "score_max": 8.0,
+      "normalized_score": 0.25,
+      "checks_passed": 1,
+      "checks_total": 5,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: failed",
+        "Check 3: failed",
+        "Check 4: failed",
+        "Check 5: failed"
+      ],
       "post_mortem": {
         "headline": "Credit note created successfully but scoring returned no checks (0/0), result unclear.",
         "what_went_wrong": [
@@ -2869,12 +1963,19 @@
       "api_errors": 2,
       "tool_calls": 43,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 8.0,
+      "score_max": 8.0,
+      "normalized_score": 2.2222,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed"
+      ],
       "post_mortem": {
         "headline": "Per diem registered as cost line instead of perDiemCompensation due to country enablement error",
         "what_went_wrong": [
@@ -2959,12 +2060,19 @@
       "api_errors": 0,
       "tool_calls": 1,
       "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
+      "score_raw": 8.0,
+      "score_max": 8.0,
+      "normalized_score": 2.2222,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "checks": [
+        "Check 1: passed",
+        "Check 2: passed",
+        "Check 3: passed",
+        "Check 4: passed",
+        "Check 5: passed",
+        "Check 6: passed"
+      ],
       "post_mortem": {
         "headline": "Customer created successfully in 1 API call with no errors; scoring returned no checks.",
         "what_went_wrong": [
@@ -3007,8 +2115,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -3058,8 +2166,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Product created successfully with 2 API calls and 0 errors, but scoring returned no checks.",
@@ -3087,857 +2195,6 @@
       "prompt_preview": "Créez le produit \"Jus de pomme\" avec le numéro de produit 3582. Le prix est de 33800 NOK hors TVA, avec le taux de TVA p"
     },
     {
-      "filename": "20260320-220847_65ac66e9aaf94605933f469644640943.jsonl",
-      "run_id": "65ac66e9aaf94605933f469644640943",
-      "started_at": "2026-03-20T22:08:47.124634+00:00",
-      "task_type": "create_order",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 63288.6,
-      "api_calls": 10,
-      "api_errors": 0,
-      "tool_calls": 10,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Run completed successfully with 0 errors but scoring returned no checks (0/0).",
-        "what_went_wrong": [
-          "Scoring returned 0/0 checks passed — no checks were evaluated, suggesting a scoring system issue or task mismatch rather than agent failure.",
-          "Two redundant GET /product calls were made (one for each product number) when a single call with query params could have retrieved both.",
-          "GET /ledger/account was called before PUT to set up bank account — this extra lookup could be skipped if account ID is known or cached."
-        ],
-        "what_worked": [
-          "All 10 API calls succeeded with 0 errors — clean execution from customer creation through payment registration.",
-          "Enforcer correctly caught potential duplicate product creation and redirected to GET /product checks first."
-        ],
-        "what_to_try_next": [
-          "Investigate why scoring returned None/None (0/0 checks) — the task may not have been registered correctly or the invoice/order IDs weren't matched by the scorer.",
-          "Combine the two GET /product calls into one with number filter (e.g., ?number=2677,5844) to reduce API call count by 1.",
-          "Skip GET /ledger/account if the bank account ID can be derived from a known pattern, saving 1 call and going directly to PUT."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 10,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — could be skipped if account number 1920 ID is already known from prior runs or hardcoded.",
-          "Second GET /product call — both products could be fetched in a single GET /product call with combined filters.",
-          "GET /invoice/paymentType — payment type ID could be cached/hardcoded if it's stable across sandbox runs."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Opprett ein ordre for kunden Skogheim AS (org.nr 865101422) med produkta Opplæring (2677) til 15100 kr og Webdesign (584"
-    },
-    {
-      "filename": "20260320-220818_b0feff44b7f94164b7fa4c5600910f36.jsonl",
-      "run_id": "b0feff44b7f94164b7fa4c5600910f36",
-      "started_at": "2026-03-20T22:08:18.354713+00:00",
-      "task_type": "create_department",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 63322.7,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect run: 3 departments created with 0 errors in minimal API calls",
-        "what_went_wrong": [],
-        "what_worked": [
-          "All three departments created successfully with 0 errors in exactly 3 API calls",
-          "Correctly identified required fields (name + departmentNumber) and executed efficiently"
-        ],
-        "what_to_try_next": [
-          "Check if POST /department supports batch creation (list payload) to reduce 3 calls to 1",
-          "Verify scoring system registered the checks — score_raw=None/None suggests no checks were evaluated, which may indicate a scoring config issue",
-          "If departmentNumber conflicts arise in future runs, query existing departments first to find safe numbers"
-        ],
-        "confidence": "medium",
-        "root_cause_category": "perfect_run",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": []
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Crea tres departamentos en Tripletex: \"Logistikk\", \"Produksjon\" y \"Drift\"."
-    },
-    {
-      "filename": "20260320-220806_5433e43465734cfa931df9e2840914d7.jsonl",
-      "run_id": "5433e43465734cfa931df9e2840914d7",
-      "started_at": "2026-03-20T22:08:06.595613+00:00",
-      "task_type": "create_employee",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 63343.7,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Employee created successfully but scoring returned no checks (0/0), outcome unclear.",
-        "what_went_wrong": [
-          "Scoring returned 0/0 checks with score_raw=None/None — no verification was performed, making correctness unknown.",
-          "Unnecessary department creation: POST /department was called but task only required creating an employee; department may not have been needed.",
-          "Initial GET /employee search did not filter by email (no query params visible), potentially missing existing employee check."
-        ],
-        "what_worked": [
-          "Employee POST succeeded on first attempt with all required fields: name, email, dateOfBirth, startDate.",
-          "Zero 4xx errors across all 3 API calls — clean execution."
-        ],
-        "what_to_try_next": [
-          "Skip the department creation step unless the API explicitly requires it — POST /employee may work without a department, saving 1 API call.",
-          "Add email filter to GET /employee search: GET /employee?email=turid.kvamme@example.org to properly check for duplicates.",
-          "Investigate why scoring returned 0/0 checks — this may indicate a task configuration issue or the task type 'create_employee' has no registered checks in this competition round."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "POST /department — department creation was not required by the task; employee creation may succeed without it.",
-          "GET /employee — if used without email filter param, it adds a call without meaningful duplicate detection."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Me har ein ny tilsett som heiter Turid Kvamme, fødd 31. May 1985. Opprett vedkomande som tilsett med e-post turid.kvamme"
-    },
-    {
-      "filename": "20260320-220435_71e78269964d4b63b6d5a655a860fdb0.jsonl",
-      "run_id": "71e78269964d4b63b6d5a655a860fdb0",
-      "started_at": "2026-03-20T22:04:35.522005+00:00",
-      "task_type": "create_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 63569.0,
-      "api_calls": 13,
-      "api_errors": 0,
-      "tool_calls": 24,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Run completed with 0 errors but scoring returned None/None — no checks were evaluated.",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0, suggesting the task checks were not triggered or the task was not recognized by the scoring system.",
-          "The invoice was created via a manual order+orderline approach rather than using a project-specific invoice endpoint (e.g., POST /invoice/createProjectInvoice), which may not satisfy 'project invoice' scoring criteria.",
-          "The activity 'Testing' found has isChargeable=false; the agent reused it without updating chargeability, potentially causing the hours not to be billed correctly in a project invoice context.",
-          "Bank account configuration (GET/PUT /ledger/account) is likely unnecessary overhead for this task and adds 2 calls without contributing to scoring."
-        ],
-        "what_worked": [
-          "Zero 4xx errors across all 13 API calls — clean execution with no failed requests.",
-          "Core entities (customer, project, project activity, hourly rate, timesheet entry, order, invoice) were all created successfully in logical order."
-        ],
-        "what_to_try_next": [
-          "Investigate whether a dedicated project invoice endpoint exists (e.g., POST /invoice/createProjectInvoice or similar) and use it instead of the manual order+orderline approach to satisfy 'project invoice' scoring checks.",
-          "Before reusing the existing 'Testing' activity, update it to isChargeable=true via PUT /activity/{id}, or create a new project-specific chargeable activity to ensure hours are properly billable.",
-          "Remove the unnecessary GET/PUT /ledger/account calls (2 calls) since bank account setup is not required for hour registration and project invoicing — this will improve efficiency if the run achieves perfect correctness."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "wrong_endpoint",
-        "api_call_count": 13,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — bank account lookup not needed for this task",
-          "PUT /ledger/account/363814330 — bank account configuration not required for project invoicing",
-          "GET /activity (enforcer-triggered duplicate check) — could be skipped if activity creation is attempted first and 422 handled"
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Registe 17 horas para Carolina Pereira (carolina.pereira@example.org) na atividade \"Testing\" do projeto \"Auditoria de se"
-    },
-    {
-      "filename": "20260320-220410_c0bd173521f74d5cb3366698925885b7.jsonl",
-      "run_id": "c0bd173521f74d5cb3366698925885b7",
-      "started_at": "2026-03-20T22:04:10.121146+00:00",
-      "task_type": "create_department",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 63600.6,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "All three departments created successfully with 3 clean API calls and no errors.",
-        "what_went_wrong": [],
-        "what_worked": [
-          "All three POST /department calls succeeded with no errors, creating Innkjøp, Drift, and Kundeservice.",
-          "Minimal API calls (3 total, 0 errors) — optimal execution with no wasted requests."
-        ],
-        "what_to_try_next": [
-          "Scoring returned None/None with 0 checks — verify the scoring system is configured for this task type; the run appears correct.",
-          "If departmentNumber conflicts arise in future runs (e.g., numbers already taken), consider omitting departmentNumber or querying existing departments first.",
-          "No verification GET call was made — this is efficient; avoid adding one unless required by task spec."
-        ],
-        "confidence": "high",
-        "root_cause_category": "perfect_run",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": []
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Create three departments in Tripletex: \"Innkjøp\", \"Drift\", and \"Kundeservice\"."
-    },
-    {
-      "filename": "20260320-220359_92ad69c5737744f98f21ef25dbb001a0.jsonl",
-      "run_id": "92ad69c5737744f98f21ef25dbb001a0",
-      "started_at": "2026-03-20T22:03:59.948938+00:00",
-      "task_type": "register_supplier_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64165.3,
-      "api_calls": 13,
-      "api_errors": 3,
-      "tool_calls": 13,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Supplier invoice registered via manual 3-posting voucher after VAT account lock issues",
-        "what_went_wrong": [
-          "Agent initially omitted 'row' field from posting despite enforcer warning, causing first 422 error with 'system-generated row 0' message.",
-          "Account 7100 is VAT-locked to type 0 in this sandbox, requiring a PUT /ledger/account call to unlock it before the voucher could use VAT type 1.",
-          "Agent incorrectly assumed Tripletex auto-generates VAT and credit postings; the API requires all balanced postings manually, causing a third 422 'sum not zero' error.",
-          "Two redundant GET /ledger/account calls were made with unclear filters before finding the right accounts, wasting API calls."
-        ],
-        "what_worked": [
-          "Supplier Brightstone Ltd was created successfully on the first attempt with correct org number.",
-          "Final 3-posting voucher (debit 7100 6800, debit 2710 1700, credit 2400 8500) balanced correctly and was accepted."
-        ],
-        "what_to_try_next": [
-          "Always include 'row': 1 on the first posting from the start — never omit it, as the enforcer and API both reject row=0.",
-          "For supplier invoices, immediately plan for 3 manual balanced postings (expense net, input VAT, AP credit) rather than relying on auto-generation which does not work here.",
-          "Check account VAT lock status early and update via PUT /ledger/account before attempting the voucher, or search for an unlocked expense account to avoid the extra round-trip."
-        ],
-        "confidence": "high",
-        "root_cause_category": "logic_error",
-        "api_call_count": 13,
-        "error_call_count": 3,
-        "unnecessary_calls": [
-          "GET /ledger/account (second call, duplicate of first with same result for account 7100)",
-          "GET /ledger/account with unclear filter that returned from beginning (third call, failed to find 6xxx accounts)",
-          "POST /ledger/voucher with vatType id 3 (first voucher attempt before fixing row and VAT type issues)"
-        ]
-      },
-      "total_errors": 3,
-      "errors": [
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "postings",
-              "message": "Et bilag kan ikke registreres uten posteringer.",
-              "path": null,
-              "rootId": null
-            },
-            {
-              "field": "postings.row",
-              "message": "Posteringene på rad 0 (guiRow 0) er systemgenererte og kan ikke opprettes eller endres på utsiden av Tripletex.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "8aaecd8b-5810-4fcc-baee-66df29c978f3"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "postings.vatType.id",
-              "message": "Kontoen 7100 Bilgodtgjørelse oppgavepliktig er låst til mva-kode 0: Ingen avgiftsbehandling.",
-              "path": null,
-              "rootId": null
-            },
-            {
-              "field": "",
-              "message": "Summen av posteringene for 2026-03-20 er ikke lik 0.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "9c1c39a5-ad7f-4533-9771-004b8bb2ca9b"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "",
-              "message": "Summen av posteringene for 2026-03-20 er ikke lik 0.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "c8bbd96d-ed75-4311-afb4-b84efacb1ccd"
-        }
-      ],
-      "prompt_preview": "We have received invoice INV-2026-8735 from the supplier Brightstone Ltd (org no. 913701585) for 8500 NOK including VAT."
-    },
-    {
-      "filename": "20260320-220238_32ccedb951e440d0936a818cf39d3285.jsonl",
-      "run_id": "32ccedb951e440d0936a818cf39d3285",
-      "started_at": "2026-03-20T22:02:38.871143+00:00",
-      "task_type": "create_department",
-      "task_tier": 1,
-      "executor_model": "claude-sonnet-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64253.5,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "All three departments created successfully with 3 clean API calls and no errors.",
-        "what_went_wrong": [],
-        "what_worked": [
-          "All three POST /department calls succeeded with no errors, creating Produksjon, Salg, and Logistikk.",
-          "Minimal API calls (3 total, 0 errors) — highly efficient execution with no wasted requests."
-        ],
-        "what_to_try_next": [
-          "Scoring returned None/None with 0 checks — verify the scoring system is correctly configured for this task type.",
-          "If departmentNumber conflicts arise in future runs (e.g., numbers already taken), consider omitting departmentNumber or querying existing departments first.",
-          "No verification GET call was made — this is correct for efficiency; avoid adding unnecessary verification calls."
-        ],
-        "confidence": "low",
-        "root_cause_category": "unknown",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": []
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Créez trois départements dans Tripletex : \"Produksjon\", \"Salg\" et \"Logistikk\"."
-    },
-    {
-      "filename": "20260320-220229_217463dc54444e7589089a51e77f773b.jsonl",
-      "run_id": "217463dc54444e7589089a51e77f773b",
-      "started_at": "2026-03-20T22:02:29.144360+00:00",
-      "task_type": "register_payment",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64274.5,
-      "api_calls": 10,
-      "api_errors": 0,
-      "tool_calls": 10,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect execution with 0 errors but scoring returned None/None — likely no checks defined.",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0, suggesting the task had no verifiable checks or the scorer could not evaluate the result.",
-          "The PUT /invoice/:payment call was made without explicit body parameters (paymentTypeId, amount, date), relying on defaults which may not match expected scoring criteria.",
-          "No explicit date or amount was passed to the payment endpoint, which could cause issues if the scorer checks specific payment field values."
-        ],
-        "what_worked": [
-          "Full workflow executed cleanly: bank config, customer, order, orderline, invoice, payment, and reversal — all 10 calls succeeded with 0 errors.",
-          "Correct voucher identified and reversed using PUT /ledger/voucher/:reverse, completing the payment reversal chain."
-        ],
-        "what_to_try_next": [
-          "Pass explicit body to PUT /invoice/:payment with paymentTypeId, amount (9000), and paymentDate to ensure scorer can verify payment details.",
-          "Investigate why scoring returned None/None — this may indicate a task configuration issue or that the competition enforcer expects a different entity state.",
-          "Consider verifying the invoice open amount after reversal via GET /invoice/{id} to confirm the outstanding balance is restored to 9000 NOK."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 10,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — could be replaced by directly using known account number 1920 if account ID is cached or predictable.",
-          "GET /ledger/voucher — necessary but could be skipped if invoice payment endpoint returns the voucher ID directly in the response."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "O pagamento de Luz do Sol Lda (org. nº 856642402) referente à fatura \"Horas de consultoria\" (9000 NOK sem IVA) foi devol"
-    },
-    {
-      "filename": "20260320-220203_f4b9e5d1c1214718a0d5bda7f1e96aea.jsonl",
-      "run_id": "f4b9e5d1c1214718a0d5bda7f1e96aea",
-      "started_at": "2026-03-20T22:02:03.648983+00:00",
-      "task_type": "create_project",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64308.5,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect 3-call run with no errors; scoring returned None/None (no checks evaluated).",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0/0 checks passed — no verifiable checks were evaluated, suggesting a scoring system issue or task mismatch.",
-          "The GET /employee call has no visible query parameters in the trace, making it unclear if the correct employee was filtered by email or just returned first result."
-        ],
-        "what_worked": [
-          "Minimal 3-call execution: POST /customer, GET /employee, POST /project — clean and efficient.",
-          "Zero 4xx errors; all API calls succeeded on first attempt."
-        ],
-        "what_to_try_next": [
-          "Verify GET /employee included query params like ?email=goncalo.oliveira@example.org to ensure correct employee was matched, not a random first result.",
-          "Investigate why scoring returned None/None — the task may require a specific field (e.g., number, description) on the project that was omitted.",
-          "If re-running, confirm POST /project payload includes all required fields checked by the scorer (e.g., startDate format, customer linkage, projectManager reference)."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": []
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Crie o projeto \"Implementação Rio\" vinculado ao cliente Rio Azul Lda (org. nº 827937223). O gerente de projeto é Gonçalo"
-    },
-    {
-      "filename": "20260320-220052_6d9221b1bffb42f5b1f06ac63e8122d9.jsonl",
-      "run_id": "6d9221b1bffb42f5b1f06ac63e8122d9",
-      "started_at": "2026-03-20T22:00:52.837885+00:00",
-      "task_type": "register_payment",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64390.2,
-      "api_calls": 10,
-      "api_errors": 0,
-      "tool_calls": 10,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect execution with 10 calls and 0 errors, but scoring returned None/None (no checks defined).",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0 — no verifiable checks were defined for this task, making correctness assessment impossible.",
-          "The task prompt describes reversing an *existing* payment, but the agent built the entire chain from scratch (customer, order, invoice, payment, reversal) — this may not match the intended scenario if data was pre-seeded."
-        ],
-        "what_worked": [
-          "Clean execution: 10 API calls, 0 errors, logical step-by-step flow from bank setup to payment reversal.",
-          "Correctly identified and reversed the payment voucher using PUT /ledger/voucher/{id}/:reverse."
-        ],
-        "what_to_try_next": [
-          "Investigate why scoring returned None/None — check if the task requires pre-existing data (customer/invoice already in sandbox) rather than creating from scratch.",
-          "Before creating entities, search for existing customer (GET /customer?organizationNumber=858237033) and invoice to avoid duplicate creation if data is pre-seeded.",
-          "If the sandbox is always empty for this task type, the current approach is correct — confirm with competition organizers whether checks are defined for this task."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 10,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /invoice/paymentType — if the payment type ID (27196731) is stable across sandboxes, this lookup could be hardcoded to save a call.",
-          "GET /ledger/voucher — could be avoided if the payment PUT response returns the voucher ID directly, eliminating the need to search."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "The payment from Windmill Ltd (org no. 858237033) for the invoice \"Consulting Hours\" (25500 NOK excl. VAT) was returned "
-    },
-    {
-      "filename": "20260320-220047_887576dc743540eb95282d78340860bf.jsonl",
-      "run_id": "887576dc743540eb95282d78340860bf",
-      "started_at": "2026-03-20T22:00:47.969673+00:00",
-      "task_type": "create_order",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64405.2,
-      "api_calls": 10,
-      "api_errors": 0,
-      "tool_calls": 10,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Run completed all steps successfully but scoring returned no checks (0/0).",
-        "what_went_wrong": [
-          "Scoring returned 0/0 checks — no verifiable fields were evaluated, suggesting a scoring system issue or task mismatch rather than agent failure.",
-          "Two redundant GET /product calls were made (one per product) when a single call with query params could have retrieved both.",
-          "GET /invoice/paymentType was called to discover payment types, but the agent could have used a known payment type ID directly, saving one call."
-        ],
-        "what_worked": [
-          "All 10 API calls succeeded with 0 errors — clean execution from customer creation through payment registration.",
-          "Enforcer warning about duplicate products was handled correctly by checking existing products before creating."
-        ],
-        "what_to_try_next": [
-          "Investigate why scoring returned 0/0 — verify the task prompt matches expected competition format and that entity IDs are being checked correctly.",
-          "Combine the two GET /product calls into one by using query parameters (e.g., number=8400,2535) to reduce call count.",
-          "Cache known payment type IDs (e.g., 'Betalt til bank') to skip the GET /invoice/paymentType lookup and reduce calls by 1."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 10,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /product (second call) — both products could be fetched in one call with combined query params.",
-          "GET /invoice/paymentType — payment type ID could be hardcoded from prior knowledge to save one call."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Crie um pedido para o cliente Cascata Lda (org. nº 927161524) com os produtos Consultoria de dados (8400) a 5700 NOK e D"
-    },
-    {
-      "filename": "20260320-220001_23d0f8e0ea0f4d188e09f4677f3c12b9.jsonl",
-      "run_id": "23d0f8e0ea0f4d188e09f4677f3c12b9",
-      "started_at": "2026-03-20T22:00:01.535102+00:00",
-      "task_type": "create_voucher",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64464.6,
-      "api_calls": 20,
-      "api_errors": 4,
-      "tool_calls": 32,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Payroll created successfully but scoring returned None/None — likely no checks defined for this task.",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0, suggesting the task had no verifiable scoring criteria or the scorer couldn't find the created entities.",
-          "4 validation errors (422) occurred: missing dateOfBirth on employee, missing division on employment, missing municipality/orgNumber on division, and wrong org number format.",
-          "Used URL-encoded endpoint GET /token/session/%3EwhoAmI (404) before correcting to GET /token/session/>whoAmI — wasted a call.",
-          "Two GET /salary/type calls were made when one would suffice — redundant API call."
-        ],
-        "what_worked": [
-          "Agent successfully navigated all validation errors and ultimately created the salary transaction (id: 6956908) with correct amounts (36000 + 15400 = 51400 NOK).",
-          "Correct salary types (Fastlønn id 78935050, Bonus id 78935064) were identified and used for the payslip specifications."
-        ],
-        "what_to_try_next": [
-          "Pre-fetch employee details including dateOfBirth before attempting employment creation to avoid the first 422 error.",
-          "Cache salary types from the first GET /salary/type call instead of calling it twice; also pre-check if employment and division already exist before creating them.",
-          "Investigate why scoring returned None/None — the task may require the salary transaction to be in a specific state (e.g., approved/settled) or the scorer checks a different field than what was created."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 20,
-        "error_call_count": 4,
-        "unnecessary_calls": [
-          "Second GET /salary/type call — duplicate of the first, same data already retrieved.",
-          "GET /token/session/%3EwhoAmI — URL-encoded version that failed; could have gone directly to GET /token/session/>whoAmI.",
-          "GET /salary/payslip/32627926 — verification call not needed for task completion, adds no scoring value."
-        ]
-      },
-      "total_errors": 5,
-      "errors": [
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "employee.dateOfBirth",
-              "message": "Feltet må fylles ut.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "7209541c-a778-4321-a2e3-2b1e294648d6"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "employee",
-              "message": "Arbeidsforholdet er ikke knyttet mot en virksomhet.",
-              "path": "employee",
-              "rootId": null
-            }
-          ],
-          "requestId": "d780a1ae-2e14-40b8-8ee3-88b85da38abc"
-        },
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "municipality",
-              "message": "Må velges.",
-              "path": null,
-              "rootId": null
-            },
-            {
-              "field": "organizationNumber",
-              "message": "Feltet må fylles ut.",
-              "path": null,
-              "rootId": null
-            },
-            {
-              "field": "municipalityDate",
-              "message": "Feltet må fylles ut.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "09edc845-0eb7-4846-9915-45bee8866343"
-        },
-        "'Unknown endpoint: GET /token/session/%3EwhoAmI'",
-        {
-          "status": 422,
-          "code": 18000,
-          "message": "Validering feilet.",
-          "link": "https://tripletex.no/v2-docs/",
-          "developerMessage": "VALIDATION_ERROR",
-          "validationMessages": [
-            {
-              "field": "organizationNumber",
-              "message": "Juridisk enhet kan ikke registreres som virksomhet/underenhet.",
-              "path": null,
-              "rootId": null
-            }
-          ],
-          "requestId": "319a8921-279c-44a7-bc76-27e916ef58d6"
-        }
-      ],
-      "prompt_preview": "Køyr løn for Brita Stølsvik (brita.stlsvik@example.org) for denne månaden. Grunnløn er 36000 kr. Legg til ein eingongsbo"
-    },
-    {
-      "filename": "20260320-215952_7ebb7ebc5c754ab39daeaeea7a7651b6.jsonl",
-      "run_id": "7ebb7ebc5c754ab39daeaeea7a7651b6",
-      "started_at": "2026-03-20T21:59:52.349381+00:00",
-      "task_type": "create_credit_note",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64412.4,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect execution with 8 calls and 0 errors, but scoring returned None/None (no checks defined).",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0 — no verifiable checks were defined or evaluated for this run.",
-          "The PUT /invoice/{id}/:createCreditNote call did not include a 'date' query parameter, which field rules indicate is required — may cause silent failures in some environments.",
-          "The GET /ledger/account call retrieved account id=457992329 but no query params were shown — unclear if the correct account (1920) was targeted initially."
-        ],
-        "what_worked": [
-          "All 8 API calls succeeded with 0 errors, following the correct sequential flow for credit note creation.",
-          "Customer, product, order, orderline, invoice, and credit note were all created successfully in logical order."
-        ],
-        "what_to_try_next": [
-          "Add the 'date' query parameter to PUT /invoice/{id}/:createCreditNote (e.g., ?date=2026-03-20) as field rules specify it is required.",
-          "Investigate why scoring returned None/None — this may indicate the task verifier couldn't find the credit note or the invoice wasn't linked correctly to the expected customer/product.",
-          "Consider filtering GET /ledger/account with ?number=1920 to directly target the bank account and avoid ambiguity, potentially saving a PUT call if already configured."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "PUT /ledger/account/457992329 — bank account setup may not be required if already configured in sandbox, saving 1 call.",
-          "GET /ledger/account — could be skipped if bank account ID is known or not needed for credit note flow."
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "The customer Greenfield Ltd (org no. 918318070) has complained about the invoice for \"Software License\" (40250 NOK excl."
-    },
-    {
-      "filename": "20260320-215906_7c61cb66cf0248f3bdb0e20c9132e419.jsonl",
-      "run_id": "7c61cb66cf0248f3bdb0e20c9132e419",
-      "started_at": "2026-03-20T21:59:06.596320+00:00",
-      "task_type": "create_project",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64527.6,
-      "api_calls": 3,
-      "api_errors": 0,
-      "tool_calls": 3,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Perfect 3-call run with zero errors; scoring returned None/None (no checks defined).",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0 — no verifiable checks were registered, so correctness cannot be confirmed.",
-          "The planner over-planned 5 steps (including unnecessary PATCH/PUT and GET verification) but execution wisely skipped them; planner logic could be tightened."
-        ],
-        "what_worked": [
-          "Executed in only 3 API calls with 0 errors: POST /customer, GET /employee, POST /project.",
-          "Correctly reused existing employee instead of creating a duplicate, and embedded all fields in a single POST /project."
-        ],
-        "what_to_try_next": [
-          "Investigate why scoring returned None/None — ensure the competition task registered field-level checks for project name, customer link, and projectManager.",
-          "If GET /employee can be replaced by passing email directly in POST /project or caching known employees, reduce to 2 calls for maximum efficiency bonus.",
-          "Confirm organizationNumber format acceptance (string vs integer) to avoid potential future 4xx errors on customer creation."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 3,
-        "error_call_count": 0,
-        "unnecessary_calls": []
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Crie o projeto \"Integração Porto\" vinculado ao cliente Porto Alegre Lda (org. nº 872798277). O gerente de projeto é Andr"
-    },
-    {
-      "filename": "20260320-215721_f068554d1930457eb821dba03afd1fc4.jsonl",
-      "run_id": "f068554d1930457eb821dba03afd1fc4",
-      "started_at": "2026-03-20T21:57:21.354650+00:00",
-      "task_type": "create_invoice",
-      "task_tier": 2,
-      "executor_model": "claude-opus-4-6",
-      "status": "completed",
-      "source": "competition",
-      "duration_seconds": 64644.3,
-      "api_calls": 8,
-      "api_errors": 0,
-      "tool_calls": 8,
-      "preflight_rejections": 0,
-      "score_raw": null,
-      "score_max": null,
-      "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
-      "checks": [],
-      "post_mortem": {
-        "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
-        "what_went_wrong": [
-          "Scoring returned score_raw=None/None with 0 checks passed out of 0, suggesting the task was not recognized or matched by the scoring system.",
-          "The GET /ledger/account and PUT /ledger/account calls may be unnecessary overhead not required by the task spec, adding 2 extra calls.",
-          "VAT type id=3 (25%) was assumed without explicit instruction; if the scorer expects a different VAT type or VAT-exempt, this could cause failures if scoring activates."
-        ],
-        "what_worked": [
-          "All 8 API calls succeeded with 0 errors — clean execution with correct entity creation chain.",
-          "Project created with isFixedPrice=true, fixedprice=365350, correct customer and project manager linkage, and 75% milestone orderline of 274012.5 NOK."
-        ],
-        "what_to_try_next": [
-          "Investigate why scoring returned None/None — this may indicate a task registration issue or the scoring system did not find the expected entities by the right field names.",
-          "Skip the GET/PUT /ledger/account calls entirely if not required by the task; they add 2 unnecessary calls and the bank account setup may not be needed for project invoicing tasks.",
-          "Verify the fixedprice field name casing and value are correctly stored on the project by doing a GET /project/{id} after creation to confirm the scorer can find it."
-        ],
-        "confidence": "medium",
-        "root_cause_category": "unknown",
-        "api_call_count": 8,
-        "error_call_count": 0,
-        "unnecessary_calls": [
-          "GET /ledger/account — bank account lookup not required by the task prompt",
-          "PUT /ledger/account/363789467 — configuring bank account is not part of the task requirements"
-        ]
-      },
-      "total_errors": 0,
-      "errors": [],
-      "prompt_preview": "Fixez un prix forfaitaire de 365350 NOK sur le projet \"Intégration CRM\" pour Colline SARL (nº org. 894562234). Le chef d"
-    },
-    {
       "filename": "20260320-215649_7db59e815849485b946b2b718fd8d073.jsonl",
       "run_id": "7db59e815849485b946b2b718fd8d073",
       "started_at": "2026-03-20T21:56:49.720213+00:00",
@@ -3954,8 +2211,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created but per diem used wrong endpoint; scoring returned no checks (0/0).",
@@ -4049,8 +2306,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment reversal completed with 0 errors but scoring returned None/None — no checks defined.",
@@ -4099,8 +2356,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a verifier issue.",
@@ -4332,8 +2589,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payroll voucher created successfully but scoring returned None/None with 0 checks",
@@ -4387,8 +2644,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Product created successfully with 2 API calls and 0 errors — near-perfect efficiency.",
@@ -4431,8 +2688,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a verification issue.",
@@ -4482,8 +2739,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice registered successfully but with 1 unnecessary 422 error and 2 extra account lookups",
@@ -4550,8 +2807,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution: all 3 departments created in 3 clean API calls with no errors.",
@@ -4592,8 +2849,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "All three departments created successfully with zero errors in minimal calls.",
@@ -4634,8 +2891,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -4801,8 +3058,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -4851,8 +3108,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -4900,8 +3157,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -4950,8 +3207,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution with 6 calls and 0 errors, but scoring returned None/None (no checks defined).",
@@ -4997,8 +3254,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Task completed with 1 recoverable 422 error; scoring returned None/None (no checks defined).",
@@ -5065,8 +3322,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment reversal completed successfully but scoring returned no checks (0/0).",
@@ -5114,8 +3371,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect run: 3 departments created in 3 clean API calls with zero errors.",
@@ -5156,8 +3413,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Task completed but scoring returned None/None — likely invoice not linked to project hours correctly",
@@ -5241,8 +3498,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution with 6 calls, 0 errors — no scoring data returned to evaluate.",
@@ -5286,8 +3543,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Supplier created successfully in 1 call with no errors; scoring returned no checks.",
@@ -5330,8 +3587,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created and sent successfully but scoring returned no checks (0/0).",
@@ -5379,8 +3636,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), result unclear.",
@@ -5428,8 +3685,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Product created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -5475,8 +3732,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect run: 3 departments created with 0 errors in minimal 3 API calls.",
@@ -5517,8 +3774,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution with 7 calls and 0 errors, but scoring returned None/None",
@@ -5565,8 +3822,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created and sent successfully but scoring returned no checks (0/0).",
@@ -5614,8 +3871,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Credit note created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -5664,8 +3921,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a VAT type mismatch.",
@@ -5715,8 +3972,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -5765,8 +4022,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed successfully with 0 errors but scoring returned None/None (no checks evaluated).",
@@ -5816,8 +4073,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect single-call customer creation with no errors; scoring returned no checks.",
@@ -5861,8 +4118,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -5910,8 +4167,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned None/None — possible field mapping issue",
@@ -5962,8 +4219,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Product created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -6009,8 +4266,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -6060,8 +4317,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution with 6 API calls and 0 errors, but scoring returned None/None.",
@@ -6105,8 +4362,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect 1-call customer creation run with no errors; scoring returned None/None.",
@@ -6150,8 +4407,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -6201,8 +4458,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment reversal completed but scoring returned no checks (0/0), suggesting task mismatch or setup issue.",
@@ -6252,8 +4509,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created but per diem used cost lines instead of perDiemCompensation endpoint",
@@ -6336,8 +4593,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed with 0 errors but scoring returned None/None — no checks evaluated.",
@@ -6387,8 +4644,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution: 3 departments created in 3 clean API calls with no errors.",
@@ -6429,8 +4686,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "All API calls succeeded but scoring returned no checks (0/0), suggesting a verification issue.",
@@ -6478,8 +4735,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), suggesting a perfect or unverified run.",
@@ -6652,8 +4909,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created but scoring returned None/None — likely wrong approach for per diem (mileage vs cost line)",
@@ -6703,8 +4960,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payroll voucher created but scoring returned None/None — likely wrong approach for salary task",
@@ -6856,8 +5113,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -6907,8 +5164,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a VAT type mismatch.",
@@ -6957,8 +5214,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created successfully but scoring returned None/None — likely a scoring system issue",
@@ -7025,8 +5282,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment registered successfully but scoring returned None/None — likely no checks defined or task mismatch.",
@@ -7075,8 +5332,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), suggesting a scoring anomaly.",
@@ -7362,8 +5619,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment registered successfully but scoring returned None/None — likely a task verification issue.",
@@ -7413,8 +5670,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created and sent successfully but scoring returned no checks (0/0).",
@@ -7462,8 +5719,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payroll task used wrong endpoint (ledger/voucher) instead of salary API; scoring returned None/None",
@@ -7539,8 +5796,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Customer created successfully but scoring returned no checks (0/0), result unclear.",
@@ -7587,8 +5844,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -7636,8 +5893,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment registered successfully but scoring returned None/None — no checks evaluated.",
@@ -7686,8 +5943,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Employee created successfully but scoring returned no checks (0/0), outcome unclear.",
@@ -7735,8 +5992,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created successfully but scoring returned None/None — no checks defined or scoring issue.",
@@ -7786,8 +6043,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution: 3 departments created in 3 clean API calls with no errors.",
@@ -7828,8 +6085,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Task completed but scoring returned None/None — likely employee mismatch or wrong timesheet employee",
@@ -7989,8 +6246,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed successfully but scoring returned None/None — likely a scoring system issue",
@@ -8072,8 +6329,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Run completed successfully but scoring returned None/None — no checks evaluated.",
@@ -8123,8 +6380,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payroll voucher created but scoring returned None/None — no checks defined or task mismatch.",
@@ -8173,8 +6430,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Invoice created and sent successfully but scoring returned no checks (0/0).",
@@ -8222,8 +6479,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment registered successfully but scoring returned None/None — no checks evaluated.",
@@ -8273,8 +6530,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Supplier created successfully but scoring returned no checks (0/0), result unclear.",
@@ -8321,8 +6578,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Project created successfully but with 2 avoidable 422 errors and an unnecessary department creation",
@@ -8403,8 +6660,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Payment reversal completed but scoring returned None/None — task may have been pre-existing",
@@ -8472,8 +6729,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Product created successfully but scoring returned None/None — likely a field mapping issue.",
@@ -8522,8 +6779,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect execution with 0 errors, but scoring returned None/None (no checks defined).",
@@ -8571,8 +6828,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Customer created successfully but scoring returned None/None — no checks evaluated.",
@@ -8619,8 +6876,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Task completed successfully but scoring returned None/None — likely no checks defined for this task.",
@@ -8708,8 +6965,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Perfect credit note run with 0 errors but scoring returned None/None (no checks defined).",
@@ -8757,8 +7014,8 @@
       "score_raw": null,
       "score_max": null,
       "normalized_score": null,
-      "checks_passed": 0,
-      "checks_total": 0,
+      "checks_passed": null,
+      "checks_total": null,
       "checks": [],
       "post_mortem": {
         "headline": "Travel expense created but scoring returned None/None — per diem may need perDiemCompensation endpoint",
@@ -10121,6 +8378,6 @@
       "prompt_preview": "Opprett en kunde med navn Test Kunde AS og e-post test@example.com"
     }
   ],
-  "total_runs": 177,
-  "generated_at": "2026-03-21T17:42:25.142525+00:00"
+  "total_runs": 150,
+  "generated_at": "2026-03-21T18:24:01.637881+00:00"
 }

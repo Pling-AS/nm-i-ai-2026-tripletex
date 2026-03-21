@@ -12,8 +12,19 @@ export function useWebSocket() {
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const enrichIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const runEventDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const prevRunStatusesRef = useRef<Map<string, string>>(new Map())
+
+  const refreshRuns = useCallback(() => {
+    api.getRuns().then(data => {
+      if (data?.runs) setRuns(data.runs, data.active_count, data.total_count)
+    }).catch(console.error)
+  }, [setRuns])
+
+  const enrichAndRefresh = useCallback(() => {
+    api.enrichRuns().then(() => refreshRuns()).catch(console.error)
+  }, [refreshRuns])
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
@@ -58,9 +69,7 @@ export function useWebSocket() {
             for (const run of newRuns) {
               const prevStatus = prev.get(run.run_id)
               if (prevStatus === 'running' && (run.status === 'completed' || run.status === 'error')) {
-                setTimeout(() => {
-                  api.enrichRuns().catch(console.error)
-                }, 5000)
+                setTimeout(enrichAndRefresh, 5000)
                 break
               }
             }
@@ -73,6 +82,8 @@ export function useWebSocket() {
             setSettings(message.payload)
             break
           case 'run_event':
+            if (runEventDebounceRef.current) clearTimeout(runEventDebounceRef.current)
+            runEventDebounceRef.current = setTimeout(refreshRuns, 2000)
             break
           case 'heartbeat':
           case 'pong':
@@ -88,7 +99,7 @@ export function useWebSocket() {
     }
 
     ws.onerror = () => {}
-  }, [setRuns, setSettings, setConnectionStatus])
+  }, [setRuns, setSettings, setConnectionStatus, refreshRuns, enrichAndRefresh])
 
   const handleDisconnect = useCallback(() => {
     if (wsRef.current) {
@@ -104,13 +115,7 @@ export function useWebSocket() {
     setConnectionStatus('offline')
 
     if (!pollingIntervalRef.current) {
-      pollingIntervalRef.current = setInterval(() => {
-        api.getRuns().then(data => {
-          if (data && data.runs) {
-            setRuns(data.runs, data.active_count, data.total_count)
-          }
-        }).catch(console.error)
-      }, 4000)
+      pollingIntervalRef.current = setInterval(refreshRuns, 4000)
     }
 
     const backoff = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 15000)
@@ -128,13 +133,8 @@ export function useWebSocket() {
   useEffect(() => {
     connect()
 
-    enrichIntervalRef.current = setInterval(() => {
-      api.enrichRuns().catch(console.error)
-    }, 30000)
-
-    setTimeout(() => {
-      api.enrichRuns().catch(console.error)
-    }, 3000)
+    enrichIntervalRef.current = setInterval(enrichAndRefresh, 30000)
+    setTimeout(enrichAndRefresh, 3000)
 
     return () => {
       if (wsRef.current) wsRef.current.close()
@@ -142,8 +142,9 @@ export function useWebSocket() {
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current)
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current)
       if (enrichIntervalRef.current) clearInterval(enrichIntervalRef.current)
+      if (runEventDebounceRef.current) clearTimeout(runEventDebounceRef.current)
     }
-  }, [connect])
+  }, [connect, enrichAndRefresh])
 
   return { connectionStatus }
 }
