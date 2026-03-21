@@ -40,8 +40,7 @@ export function RunCard({ run, isSelected, onClick }: RunCardProps) {
   const score = run.competition_score
   const isRunning = run.status === 'running'
   const elapsed = useElapsed(run.started_at, isRunning)
-  const isRecent = run.started_at ? (Date.now() - new Date(run.started_at).getTime()) < 10 * 60 * 1000 : false
-  const isAwaitingScore = run.source === 'competition' && run.status === 'completed' && !score && isRecent
+  const isAwaitingScore = run.source === 'competition' && run.status === 'completed' && (!score || score.status !== 'completed' && score.status !== 'failed')
   const scoreStatus = score?.status
   const isScoring = scoreStatus === 'in_progress' || scoreStatus === 'pending'
 

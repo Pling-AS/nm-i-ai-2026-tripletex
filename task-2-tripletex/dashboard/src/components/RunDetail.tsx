@@ -140,8 +140,7 @@ export function RunDetail({ runId }: RunDetailProps) {
   const s = summary
   const apiCalls = s.tripletex_call_log.length > 0 ? s.tripletex_call_log : deriveApiCalls(events)
   const apiCallCount = apiCalls.length || s.tripletex_call_count
-  const isRecent = s.started_at ? (Date.now() - new Date(s.started_at).getTime()) < 10 * 60 * 1000 : false
-  const isAwaitingScore = s.source === 'competition' && s.status === 'completed' && !s.competition_score && isRecent
+  const isAwaitingScore = s.source === 'competition' && s.status === 'completed' && (!s.competition_score || s.competition_score.status !== 'completed' && s.competition_score.status !== 'failed')
 
   const lastEvent = events.length > 0 ? events[events.length - 1] : null
   const currentActivity = isRunning && lastEvent
