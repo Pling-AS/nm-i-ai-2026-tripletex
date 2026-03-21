@@ -70,6 +70,8 @@ TAU_OBS_FLOOR = 12.0
 NEIGHBOR_LAMBDA = 0.5
 NEIGHBOR_MAX_TOTAL = 2.0
 
+TAU_OBS_FLOOR = 8.0
+
 FIELD_SIGMA = 2.0
 FIELD_LAMBDA0 = 8.0
 FIELD_ALPHA = 1.0
@@ -596,8 +598,16 @@ def predict_full_grid_vectorized(
                 seed_index, seed_analysis, observation_store, y, x, terrain
             )
             archetype = seed_analysis.get_archetype(y, x)
-            tau = _get_adaptive_tau(archetype)
+            adaptive_tau = _get_adaptive_tau(archetype)
             n_eff = effective_counts.sum()
+
+            if n_eff > 0:
+                observed_class = int(np.argmax(effective_counts))
+                surprise = 1.0 - prior_mean[observed_class]
+                tau = adaptive_tau - surprise * (adaptive_tau - TAU_OBS_FLOOR)
+            else:
+                tau = adaptive_tau
+
             prediction[y, x] = (effective_counts + tau * prior_mean) / (n_eff + tau)
 
     prediction = apply_floor_and_normalize_grid(prediction, class_masks)

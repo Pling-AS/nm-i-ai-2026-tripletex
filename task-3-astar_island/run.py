@@ -129,32 +129,50 @@ def _query_phase(
 
     log("  Executing coverage queries...")
     for i, q in enumerate(coverage_queries):
-        try:
-            result = client.simulate(
-                round_id=round_id,
-                seed_index=q.seed_index,
-                viewport_x=q.viewport_x,
-                viewport_y=q.viewport_y,
-                viewport_w=q.viewport_w,
-                viewport_h=q.viewport_h,
-            )
-            observation_store.add_observation(
-                seed_index=q.seed_index,
-                viewport=result.viewport,
-                grid=result.grid,
-                archetypes=seed_analyses[q.seed_index].archetypes,
-            )
-            if (i + 1) % 10 == 0 or i == n_coverage - 1:
-                log(
-                    f"    [{i + 1}/{n_coverage}] seed={q.seed_index} "
-                    f"vp=({q.viewport_x},{q.viewport_y}) "
-                    f"budget={result.queries_used}/{result.queries_max}"
+        for attempt in range(3):
+            try:
+                result = client.simulate(
+                    round_id=round_id,
+                    seed_index=q.seed_index,
+                    viewport_x=q.viewport_x,
+                    viewport_y=q.viewport_y,
+                    viewport_w=q.viewport_w,
+                    viewport_h=q.viewport_h,
                 )
-        except Exception as e:
-            log(f"    [{i + 1}/{n_coverage}] ERROR: {e}")
-            if "429" in str(e):
-                log("    Rate limited or budget exhausted, stopping coverage.")
-                repeat_budget = 0
+                observation_store.add_observation(
+                    seed_index=q.seed_index,
+                    viewport=result.viewport,
+                    grid=result.grid,
+                    archetypes=seed_analyses[q.seed_index].archetypes,
+                )
+                if (i + 1) % 10 == 0 or i == n_coverage - 1:
+                    log(
+                        f"    [{i + 1}/{n_coverage}] seed={q.seed_index} "
+                        f"vp=({q.viewport_x},{q.viewport_y}) "
+                        f"budget={result.queries_used}/{result.queries_max}"
+                    )
+                break  # Success
+            except Exception as e:
+                if "429" in str(e):
+                    if attempt < 2:
+                        log(
+                            f"    [{i + 1}/{n_coverage}] Rate limited, retrying in 2s..."
+                        )
+                        time.sleep(2.0)
+                        continue
+                    else:
+                        log(
+                            f"    [{i + 1}/{n_coverage}] ERROR 429: Budget exhausted or persistent rate limit."
+                        )
+                        repeat_budget = 0
+                        break  # Stop retrying this query
+                else:
+                    log(f"    [{i + 1}/{n_coverage}] ERROR: {e}")
+                    break  # Stop retrying this query
+        else:
+            # Loop finished without break -> failure
+            if repeat_budget == 0:
+                log("    Stopping coverage due to errors.")
                 break
 
     # Phase 2: Adaptive repeat queries

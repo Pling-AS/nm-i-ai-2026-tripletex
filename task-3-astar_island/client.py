@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_BASE = "https://api.ainm.no"
-MIN_REQUEST_INTERVAL = 0.22  # ~4.5 req/s, stay under 5 req/s limit
+MIN_REQUEST_INTERVAL = 0.5  # 2 req/s, safely under 5 req/s limit
 
 
 @dataclass
