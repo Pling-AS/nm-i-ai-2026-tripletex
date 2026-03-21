@@ -65,12 +65,10 @@ TAU = TAU_DEFAULT  # module-level round τ, set by compute_round_tau()
 # Surprise-based τ reduction: lower τ when observation contradicts the prior.
 # τ_eff = adaptive_τ - surprise × (adaptive_τ - TAU_OBS_FLOOR)
 # where surprise = 1 - prior_prob(observed_class).
-TAU_OBS_FLOOR = 12.0
+TAU_OBS_FLOOR = 8.0
 
 NEIGHBOR_LAMBDA = 0.5
 NEIGHBOR_MAX_TOTAL = 2.0
-
-TAU_OBS_FLOOR = 8.0
 
 FIELD_SIGMA = 2.0
 FIELD_LAMBDA0 = 8.0

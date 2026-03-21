@@ -14,6 +14,28 @@ load_dotenv()
 
 DEFAULT_BASE = "https://api.ainm.no"
 MIN_REQUEST_INTERVAL = 0.5  # 2 req/s, safely under 5 req/s limit
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 1.0
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+class APIError(RuntimeError):
+    """API request failed after bounded retries."""
+
+    def __init__(
+        self,
+        status_code: int | None,
+        message: str,
+        *,
+        response_body: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_body = response_body
+
+
+class BudgetExhaustedError(APIError):
+    """API indicated that no query budget remains."""
 
 
 @dataclass
@@ -67,19 +89,75 @@ class AstarClient:
             time.sleep(MIN_REQUEST_INTERVAL - elapsed)
         self._last_request_time = time.monotonic()
 
-    def _get(self, path: str) -> Any:
-        self._rate_limit()
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+    ) -> Any:
         url = f"{self._base}{path}"
-        resp = self._session.get(url, timeout=120)
-        resp.raise_for_status()
-        return resp.json()
+        last_error: APIError | None = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                self._rate_limit()
+                resp = self._session.request(
+                    method,
+                    url,
+                    json=payload,
+                    timeout=120,
+                )
+            except requests.RequestException as e:
+                last_error = APIError(None, f"{method} {path} request failed: {e}")
+                if attempt == MAX_RETRIES - 1:
+                    raise last_error from e
+                time.sleep(RETRY_BACKOFF_SECONDS * (2**attempt))
+                continue
+
+            if resp.ok:
+                return resp.json()
+
+            body = resp.text.strip()
+            body_lower = body.lower()
+            message = f"{method} {path} failed with {resp.status_code}"
+            if body:
+                message = f"{message}: {body}"
+
+            if resp.status_code == 429 and any(
+                token in body_lower for token in ("budget", "queries_used", "queries_max")
+            ):
+                raise BudgetExhaustedError(
+                    resp.status_code,
+                    message,
+                    response_body=body,
+                )
+
+            last_error = APIError(resp.status_code, message, response_body=body)
+            if resp.status_code not in RETRYABLE_STATUS_CODES or attempt == MAX_RETRIES - 1:
+                raise last_error
+
+            retry_after = resp.headers.get("Retry-After")
+            try:
+                delay = (
+                    float(retry_after)
+                    if retry_after
+                    else RETRY_BACKOFF_SECONDS * (2**attempt)
+                )
+            except ValueError:
+                delay = RETRY_BACKOFF_SECONDS * (2**attempt)
+
+            time.sleep(max(delay, MIN_REQUEST_INTERVAL))
+
+        if last_error is not None:
+            raise last_error
+
+        raise APIError(None, f"{method} {path} failed without receiving a response")
+
+    def _get(self, path: str) -> Any:
+        return self._request("GET", path)
 
     def _post(self, path: str, payload: dict[str, Any]) -> Any:
-        self._rate_limit()
-        url = f"{self._base}{path}"
-        resp = self._session.post(url, json=payload, timeout=120)
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("POST", path, payload)
 
     # ------------------------------------------------------------------
     # Public API

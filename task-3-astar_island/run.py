@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-from client import AstarClient, SimulationResult
+from client import APIError, AstarClient, BudgetExhaustedError, SimulationResult
 from features import SeedAnalysis
 from observation_store import ObservationStore
 from predictor import (
@@ -128,52 +128,62 @@ def _query_phase(
     log(f"  Coverage: {n_coverage} queries, repeat budget: {repeat_budget}")
 
     log("  Executing coverage queries...")
+    coverage_successes = 0
+    coverage_failures = 0
+
     for i, q in enumerate(coverage_queries):
-        for attempt in range(3):
-            try:
-                result = client.simulate(
-                    round_id=round_id,
-                    seed_index=q.seed_index,
-                    viewport_x=q.viewport_x,
-                    viewport_y=q.viewport_y,
-                    viewport_w=q.viewport_w,
-                    viewport_h=q.viewport_h,
+        try:
+            result = client.simulate(
+                round_id=round_id,
+                seed_index=q.seed_index,
+                viewport_x=q.viewport_x,
+                viewport_y=q.viewport_y,
+                viewport_w=q.viewport_w,
+                viewport_h=q.viewport_h,
+            )
+            observation_store.add_observation(
+                seed_index=q.seed_index,
+                viewport=result.viewport,
+                grid=result.grid,
+                archetypes=seed_analyses[q.seed_index].archetypes,
+            )
+            coverage_successes += 1
+            if (i + 1) % 10 == 0 or i == n_coverage - 1:
+                log(
+                    f"    [{i + 1}/{n_coverage}] seed={q.seed_index} "
+                    f"vp=({q.viewport_x},{q.viewport_y}) "
+                    f"budget={result.queries_used}/{result.queries_max}"
                 )
-                observation_store.add_observation(
-                    seed_index=q.seed_index,
-                    viewport=result.viewport,
-                    grid=result.grid,
-                    archetypes=seed_analyses[q.seed_index].archetypes,
-                )
-                if (i + 1) % 10 == 0 or i == n_coverage - 1:
-                    log(
-                        f"    [{i + 1}/{n_coverage}] seed={q.seed_index} "
-                        f"vp=({q.viewport_x},{q.viewport_y}) "
-                        f"budget={result.queries_used}/{result.queries_max}"
-                    )
-                break  # Success
-            except Exception as e:
-                if "429" in str(e):
-                    if attempt < 2:
-                        log(
-                            f"    [{i + 1}/{n_coverage}] Rate limited, retrying in 2s..."
-                        )
-                        time.sleep(2.0)
-                        continue
-                    else:
-                        log(
-                            f"    [{i + 1}/{n_coverage}] ERROR 429: Budget exhausted or persistent rate limit."
-                        )
-                        repeat_budget = 0
-                        break  # Stop retrying this query
-                else:
-                    log(f"    [{i + 1}/{n_coverage}] ERROR: {e}")
-                    break  # Stop retrying this query
-        else:
-            # Loop finished without break -> failure
-            if repeat_budget == 0:
-                log("    Stopping coverage due to errors.")
+        except BudgetExhaustedError as e:
+            coverage_failures += 1
+            repeat_budget = 0
+            log(f"    [{i + 1}/{n_coverage}] BUDGET EXHAUSTED: {e}")
+            break
+        except APIError as e:
+            coverage_failures += 1
+            log(f"    [{i + 1}/{n_coverage}] API ERROR: {e}")
+            if e.status_code == 429:
+                repeat_budget = 0
+                log("    Persistent rate limit after retries, stopping coverage.")
                 break
+        except Exception as e:
+            coverage_failures += 1
+            log(f"    [{i + 1}/{n_coverage}] ERROR: {e}")
+
+    if n_coverage > 0:
+        coverage_ratio = coverage_successes / n_coverage
+        log(
+            f"  Coverage health: {coverage_successes}/{n_coverage} successful "
+            f"({coverage_ratio:.0%}), failures={coverage_failures}"
+        )
+        if coverage_ratio < 0.5:
+            log(
+                "  CRITICAL: Coverage query success fell below 50%. "
+                "Predictions may be degraded."
+            )
+            if repeat_budget > 0:
+                log("  Skipping repeat phase because coverage is severely degraded.")
+                repeat_budget = 0
 
     # Phase 2: Adaptive repeat queries
     if repeat_budget > 0:
@@ -209,11 +219,16 @@ def _query_phase(
                     f"vp=({q.viewport_x},{q.viewport_y}) "
                     f"budget={result.queries_used}/{result.queries_max}"
                 )
+            except BudgetExhaustedError as e:
+                log(f"    [{i + 1}/{len(repeat_queries)}] BUDGET EXHAUSTED: {e}")
+                break
+            except APIError as e:
+                log(f"    [{i + 1}/{len(repeat_queries)}] API ERROR: {e}")
+                if e.status_code == 429:
+                    log("    Persistent rate limit after retries, stopping repeats.")
+                    break
             except Exception as e:
                 log(f"    [{i + 1}/{len(repeat_queries)}] ERROR: {e}")
-                if "429" in str(e):
-                    log("    Budget exhausted, stopping repeats.")
-                    break
     else:
         log("Phase 2: Skipped (no repeat budget)")
 
@@ -268,23 +283,20 @@ def _predict_and_submit(
             f"negatives={has_negative}"
         )
 
-        # Submit with retry (submit endpoint has 2 req/s limit)
-        for attempt in range(3):
-            try:
-                time.sleep(0.6)  # 2 req/s limit → 0.5s + margin
-                resp = client.submit(
-                    round_id=round_id,
-                    seed_index=seed_idx,
-                    prediction=pred.tolist(),
-                )
-                log(f"  Seed {seed_idx}: submitted -> {resp}")
-                break
-            except Exception as e:
-                if "429" in str(e) and attempt < 2:
-                    log(f"  Seed {seed_idx}: rate limited, retrying in 2s...")
-                    time.sleep(2)
-                else:
-                    log(f"  Seed {seed_idx}: ERROR submitting: {e}")
+        try:
+            resp = client.submit(
+                round_id=round_id,
+                seed_index=seed_idx,
+                prediction=pred.tolist(),
+            )
+            log(f"  Seed {seed_idx}: submitted -> {resp}")
+        except BudgetExhaustedError as e:
+            log(f"  Seed {seed_idx}: submission blocked by API budget: {e}")
+            break
+        except APIError as e:
+            log(f"  Seed {seed_idx}: ERROR submitting: {e}")
+        except Exception as e:
+            log(f"  Seed {seed_idx}: ERROR submitting: {e}")
 
     log("Done!")
 
