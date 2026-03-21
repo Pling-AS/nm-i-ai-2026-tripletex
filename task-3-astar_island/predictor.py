@@ -77,7 +77,7 @@ CROSS_SEED_LAMBDA = 0.5  # 0 = disabled; >0 = total pseudo-count weight from oth
 # Settlement vitality conditioning: use actual settlement stats (population,
 # food, defense) from simulate API to nudge priors for near-settlement cells.
 # Strength controls max prior adjustment: 0.05 = max ~1 percentage point shift.
-SETTLEMENT_VITALITY_STRENGTH = 0.05
+SETTLEMENT_VITALITY_STRENGTH = 0.0  # DISABLED - hurt R17 by 8pts
 _settlement_vitality: dict | None = None
 
 FIELD_SIGMA = 2.0

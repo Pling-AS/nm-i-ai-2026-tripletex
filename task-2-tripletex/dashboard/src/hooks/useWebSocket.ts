@@ -133,8 +133,8 @@ export function useWebSocket() {
   useEffect(() => {
     connect()
 
-    enrichIntervalRef.current = setInterval(enrichAndRefresh, 30000)
-    setTimeout(enrichAndRefresh, 3000)
+    enrichIntervalRef.current = setInterval(enrichAndRefresh, 60000)
+    setTimeout(enrichAndRefresh, 5000)
 
     return () => {
       if (wsRef.current) wsRef.current.close()

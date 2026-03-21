@@ -152,7 +152,7 @@ async def _get_cached_submissions(force_refresh: bool = False) -> list[dict[str,
     has_pending = any(
         s.get("status") in ("in_progress", "pending") for s in _submissions_cache
     )
-    ttl = 15.0 if (active_count > 0 or has_pending) else 120.0
+    ttl = 30.0 if (active_count > 0 or has_pending) else 120.0
 
     if not force_refresh and _submissions_cache and (now - _submissions_cache_ts) < ttl:
         return _submissions_cache
@@ -305,6 +305,7 @@ router = APIRouter(dependencies=[Depends(verify_dashboard_access)])
 async def dashboard_ws(websocket: WebSocket) -> None:
     manager = get_ws_manager()
     await manager.connect(websocket)
+    _ensure_file_poll_started()
     try:
         store = get_run_store()
         runs = store.list_summaries()
@@ -433,6 +434,51 @@ register_trace_callback(_on_trace_event)
 router.routes.append(WebSocketRoute("/dashboard/ws", endpoint=dashboard_ws))
 
 
+_file_poll_task: asyncio.Task | None = None  # type: ignore[type-arg]
+
+
+async def _poll_runs_directory() -> None:
+    store = get_run_store()
+    last_file_set: set[str] = set()
+    last_mtime_sum: float = 0.0
+
+    while True:
+        await asyncio.sleep(5)
+        try:
+            manager = get_ws_manager()
+            if manager.connection_count == 0:
+                continue
+
+            if not RUNS_DIR.exists():
+                continue
+
+            current_files: set[str] = set()
+            mtime_sum: float = 0.0
+            for f in RUNS_DIR.glob("*.jsonl"):
+                if f.name == "raw_requests.jsonl":
+                    continue
+                current_files.add(f.name)
+                mtime_sum += f.stat().st_mtime
+
+            if current_files != last_file_set or mtime_sum != last_mtime_sum:
+                last_file_set = current_files
+                last_mtime_sum = mtime_sum
+                store.invalidate_all()
+                await broadcast_run_list_update()
+        except Exception:
+            pass
+
+
+def _ensure_file_poll_started() -> None:
+    global _file_poll_task
+    if _file_poll_task is None or _file_poll_task.done():
+        try:
+            loop = asyncio.get_running_loop()
+            _file_poll_task = loop.create_task(_poll_runs_directory())
+        except RuntimeError:
+            pass
+
+
 def _parse_trace_file(path: Path) -> list[dict[str, Any]]:
     return get_run_store().parse_trace_file(path)
 
@@ -485,7 +531,7 @@ async def _do_enrich_runs() -> JSONResponse:
     local_hostname = _platform.node()
 
     store = get_run_store()
-    submissions = await _get_cached_submissions(force_refresh=True)
+    submissions = await _get_cached_submissions()
     enriched_count = 0
     skipped_count = 0
     pending_count = 0
@@ -872,9 +918,6 @@ async def competition_submit(request_body: dict | None = None) -> JSONResponse:
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
 
-    global _submissions_cache_ts
-    _submissions_cache_ts = 0
-
     sub_id = data.get("id", "")
     if sub_id:
         register_pending_submission(sub_id)
@@ -1011,9 +1054,6 @@ async def _run_batch(count: int, delay: int) -> None:
                 resp.raise_for_status()
                 sub_data = resp.json()
                 sub_id = sub_data.get("id", "?")
-
-            global _submissions_cache_ts
-            _submissions_cache_ts = 0
 
             _batch_runner_progress["status"] = (
                 f"waiting for run {i + 1}/{count} (submission {sub_id[:8]})"
