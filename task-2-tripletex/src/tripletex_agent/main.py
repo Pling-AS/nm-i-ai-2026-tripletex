@@ -47,6 +47,20 @@ if (_nextjs_static / "_next").exists():
 
 @app.middleware("http")
 async def log_all_requests(request: Request, call_next):
+    path = request.url.path
+    # Skip logging for dashboard and high-frequency API routes
+    if path in (
+        "/api/runs",
+        "/api/settings",
+        "/api/competition/submissions",
+        "/api/competition/submit",
+        "/dashboard",
+        "/dashboard/ws",
+        "/favicon.ico",
+        "/health",
+    ):
+        return await call_next(request)
+
     start = time.monotonic()
     body_bytes = b""
     # Only read body for POST/PUT — skip for GET to avoid stream exhaustion
@@ -55,18 +69,6 @@ async def log_all_requests(request: Request, call_next):
 
     response = await call_next(request)
     elapsed = round(time.monotonic() - start, 3)
-
-    # Skip dashboard auto-refresh noise
-    path = request.url.path
-    if path in (
-        "/api/runs",
-        "/api/settings",
-        "/api/competition/submissions",
-        "/api/competition/submit",
-        "/dashboard",
-        "/favicon.ico",
-    ):
-        return response
 
     body_preview = ""
     if body_bytes:

@@ -23,3 +23,5 @@ task-1-norgesgruppen/submission/*.pt
 .sisyphus/
 submission_status.md
 task-1-norgesgruppen/temp_eval/
+task-2-tripletex/runs/overview.json
+task-2-tripletex/runs/raw_requests.jsonl

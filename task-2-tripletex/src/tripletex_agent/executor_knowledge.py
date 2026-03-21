@@ -21,7 +21,7 @@ FIELD_RULES: dict[str, list[str]] = {
     "POST /ledger/voucher": [
         "ALWAYS set BOTH amountGross AND amountGrossCurrency to the SAME value on every posting.",
         "Do NOT include postings with row=0 — row 0 is system-generated and will cause a 422.",
-        "When using vatType != 0 (e.g. VAT 25%), include ONLY the debit posting. Tripletex auto-generates VAT and credit postings.",
+        "When using vatType != 0 (e.g. VAT 25%), include ONLY the debit posting with the GROSS amount (incl VAT). Tripletex auto-generates VAT split and credit posting. If this fails with a balance error, fall back to manual postings for all legs.",
         'For supplier invoices, set supplier={"id": supplier_id} on the debit posting.',
         'For salary/payroll vouchers, set employee={"id": employee_id} on each posting.',
         'Always resolve account numbers via GET /ledger/account?number=XXXX first, then use account={"id": resolved_id}.',
@@ -115,7 +115,7 @@ FIELD_RULES: dict[str, list[str]] = {
         "If the prompt mentions a project number (prosjektnummer), set number=<project_number>.",
         "isInternal should be false unless explicitly stated as internal project.",
         "If description text is provided, set description=<text>.",
-        "For fixed-price projects, set isFixedPrice=true and fixedprice=<amount>.",
+        "For fixed-price projects, set isFixedPrice=true and fixedPrice=<amount> (camelCase).",
     ],
     "POST /project/projectActivity": [
         'Requires project={"id": project_id} and activity={"id": activity_id}.',
@@ -483,7 +483,7 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                     "customer": {"id": "from_step2"},
                     "projectManager": {"id": "from_step3"},
                     "isFixedPrice": True,
-                    "fixedprice": "number",
+                    "fixedPrice": "number",
                 },
             },
             {

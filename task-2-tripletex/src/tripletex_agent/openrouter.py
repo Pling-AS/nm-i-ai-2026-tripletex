@@ -405,7 +405,7 @@ class OpenRouterClient:
         self,
         *,
         messages: list[dict[str, Any]],
-        max_tokens: int = 1200,
+        max_tokens: int = 2500,
         model_override: str | None = None,
     ) -> dict[str, Any]:
         model = model_override or self._settings.openrouter_model
