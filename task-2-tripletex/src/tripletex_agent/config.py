@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Multi-model routing: planner + tiered executor models
     planner_model: str = "gpt-5.4"
+    planner_fast_model: str = "claude-sonnet-4-6"
     tier1_executor_model: str = "claude-sonnet-4-6"
     tier2_executor_model: str = "claude-opus-4-6"
     tier3_executor_model: str = "gpt-5.4"

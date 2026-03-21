@@ -1,6 +1,7 @@
 from difflib import get_close_matches
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -19,7 +20,7 @@ from tripletex_agent.openrouter import (
     OpenRouterError,
     _is_anthropic_model,
 )
-from tripletex_agent.prompts import EXECUTOR_SYSTEM_PROMPT, PLANNER_SYSTEM_PROMPT
+from tripletex_agent.prompts import PLANNER_SYSTEM_PROMPT, build_executor_system_prompt
 from tripletex_agent.schemas import PlannerOutput, SolveRequest
 from tripletex_agent.executor_knowledge import (
     get_endpoint_chain,
@@ -52,6 +53,14 @@ class ExecutionState:
     last_enforcer_suggestion: str = ""
     created_entity_keys: set[str] = field(default_factory=set)
     advisor_recovery_keys: set[str] = field(default_factory=set)
+    # Circuit breaker: consecutive proxy token errors
+    consecutive_proxy_errors: int = 0
+    # Time budget: wall-clock start (set in solve())
+    start_time: float = 0.0
+    # Track total API errors for conditional enforcer (P3)
+    total_api_errors: int = 0
+    # Track 422 endpoints for conditional advisor (P3)
+    advisor_422_endpoints: set[str] = field(default_factory=set)
 
 
 class TripletexAccountingAgent:
@@ -60,7 +69,7 @@ class TripletexAccountingAgent:
         self._spec_index = TripletexSpecIndex(settings.tripletex_api_spec_path)
 
     async def solve(self, request: SolveRequest) -> AgentRunResult:
-        execution_state = ExecutionState()
+        execution_state = ExecutionState(start_time=time.monotonic())
         credentials = request.tripletex_credentials
         if credentials is None:
             raise OpenRouterError("Missing Tripletex credentials in solve request")
@@ -68,8 +77,10 @@ class TripletexAccountingAgent:
         base_url = str(credentials.base_url)
         is_competition = "tx-proxy" in base_url
 
-        # Build model chains
-        planner_chain = _build_planner_model_chain(self._settings)
+        is_simple_prompt = len(request.prompt) < 300 and len(request.files) == 0
+        planner_chain = _build_planner_model_chain(
+            self._settings, fast=is_simple_prompt
+        )
 
         metadata = {
             "model": self._settings.openrouter_model,
@@ -671,9 +682,8 @@ class TripletexAccountingAgent:
             planner_task_type=planner.task_type,
             request_prompt=request.prompt,
         )
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": EXECUTOR_SYSTEM_PROMPT}
-        ]
+        focused_prompt = build_executor_system_prompt(planner.task_type)
+        messages: list[dict[str, Any]] = [{"role": "system", "content": focused_prompt}]
         execution_brief = self._build_execution_brief(
             planner=planner,
             request_prompt=request.prompt,
@@ -789,18 +799,54 @@ class TripletexAccountingAgent:
 
         executor_model_chain = model_chain or [self._settings.openrouter_model]
         max_steps = max(self._settings.agent_max_steps, 28)
-        # Tier 3 tasks need more room — bank reconciliation and year-end are long chains
         task_tier = _classify_task_tier(planner.task_type)
         if task_tier == 3:
             max_steps = max(max_steps, 50)
-        for _ in range(max_steps):
+
+        time_budget_seconds = 280.0
+        for step_idx in range(max_steps):
+            elapsed = time.monotonic() - execution_state.start_time
+            remaining = time_budget_seconds - elapsed
+            if remaining <= 15:
+                trace.write(
+                    "time_budget_exceeded", {"elapsed": elapsed, "remaining": remaining}
+                )
+                logger.warning(
+                    "Time budget exhausted (%.0fs elapsed). Forcing completion.",
+                    elapsed,
+                )
+                return
+            steps_remaining = max_steps - step_idx
+            if execution_state.consecutive_proxy_errors >= 2:
+                trace.write(
+                    "circuit_breaker_tripped",
+                    {
+                        "consecutive_proxy_errors": execution_state.consecutive_proxy_errors,
+                        "step": step_idx,
+                    },
+                )
+                logger.warning(
+                    "Circuit breaker: %d consecutive proxy token errors. Stopping.",
+                    execution_state.consecutive_proxy_errors,
+                )
+                return
+            if step_idx >= 4:
+                _compress_old_tool_results(messages, keep_recent=6)
+            budget_warning = _build_budget_warning(
+                steps_remaining=steps_remaining,
+                time_remaining=remaining,
+            )
+            if budget_warning:
+                messages.append({"role": "user", "content": budget_warning})
+            num_steps = len(getattr(planner, "ordered_steps", None) or [])
+            use_thinking = num_steps >= 5 or task_tier >= 2
             message = await self._chat_completion_with_fallback(
                 openrouter,
                 messages=messages,
                 tools=tools,
-                max_tokens=64000,
+                max_tokens=64000 if use_thinking else 16000,
                 model_chain=executor_model_chain,
-                enable_thinking=True,
+                enable_thinking=use_thinking,
             )
             tool_calls = message.get("tool_calls") or []
             assistant_content = message.get("content") or ""
@@ -940,7 +986,12 @@ class TripletexAccountingAgent:
                             }
                         )
                         continue
-                    if not execution_state.enforcer_override_active:
+                    should_run_semantic = (
+                        not execution_state.enforcer_override_active
+                        and execution_state.total_api_errors > 0
+                    )
+                    semantic: dict[str, Any] | None = None
+                    if should_run_semantic:
                         semantic = await self._semantic_enforce(
                             openrouter,
                             tool_name=tool_name,
@@ -1015,13 +1066,15 @@ class TripletexAccountingAgent:
                             f"Follow its suggestion: {execution_state.last_enforcer_suggestion}"
                         )
 
+                    advisor_endpoint_key = f"{(arguments.get('method') or 'GET').upper()} {arguments.get('path', '')}"
                     if (
                         tool_name == "tripletex_request"
                         and not tool_result.get("ok")
                         and tool_result.get("status_code") == 422
-                        and tool_call_key not in execution_state.advisor_recovery_keys
+                        and advisor_endpoint_key
+                        not in execution_state.advisor_422_endpoints
                     ):
-                        execution_state.advisor_recovery_keys.add(tool_call_key)
+                        execution_state.advisor_422_endpoints.add(advisor_endpoint_key)
                         validation_summary = tool_result.get("validation_summary") or []
                         validation_text = "; ".join(
                             f"{item.get('field', '')}: {item.get('message', '')}"
@@ -1051,7 +1104,9 @@ class TripletexAccountingAgent:
                         trace.write(
                             "api_advisor_response",
                             {
-                                "endpoints_found": advisor_result.get("endpoints_found", 0),
+                                "endpoints_found": advisor_result.get(
+                                    "endpoints_found", 0
+                                ),
                                 "response_preview": (
                                     advisor_result.get("advisor_response")
                                     or advisor_result.get("error")
@@ -1287,11 +1342,22 @@ class TripletexAccountingAgent:
         except KeyError as exc:
             return {"ok": False, "error": str(exc)}
         except TripletexApiError as exc:
+            body_str = str(exc.body).lower() if exc.body else ""
+            is_proxy_token_error = "invalid or expired proxy token" in body_str or (
+                "expired" in body_str and "proxy" in body_str
+            )
+            if is_proxy_token_error:
+                execution_state.consecutive_proxy_errors += 1
+            else:
+                execution_state.consecutive_proxy_errors = 0
+                execution_state.total_api_errors += 1
             result = {
                 "ok": False,
                 "status_code": exc.status_code,
                 "error": exc.body,
             }
+            if is_proxy_token_error:
+                result["proxy_token_expired"] = True
             validation_summary = _extract_validation_summary(exc.body)
             if validation_summary:
                 result["validation_summary"] = validation_summary
@@ -1705,6 +1771,49 @@ def _extract_completion_json(content: str) -> dict[str, Any] | None:
             continue
 
     return None
+
+
+def _build_budget_warning(*, steps_remaining: int, time_remaining: float) -> str | None:
+    if steps_remaining <= 3 or time_remaining <= 45:
+        return (
+            f"[BUDGET] {steps_remaining} steps and {int(time_remaining)}s remaining. "
+            "Complete the task NOW. Return completion JSON immediately after your current action."
+        )
+    if steps_remaining <= 8 or time_remaining <= 90:
+        return (
+            f"[BUDGET] {steps_remaining} steps and {int(time_remaining)}s remaining. "
+            "Focus on the core task only. Skip optional steps."
+        )
+    return None
+
+
+def _compress_old_tool_results(
+    messages: list[dict[str, Any]], keep_recent: int = 6
+) -> None:
+    tool_msg_indices = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
+    if len(tool_msg_indices) <= keep_recent:
+        return
+    indices_to_compress = tool_msg_indices[:-keep_recent]
+    for idx in indices_to_compress:
+        msg = messages[idx]
+        content_str = msg.get("content", "")
+        try:
+            parsed = (
+                json.loads(content_str) if isinstance(content_str, str) else content_str
+            )
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        if parsed.get("ok") and "summary" in parsed:
+            compressed = {"ok": True, "summary": parsed["summary"]}
+            resource_id = parsed.get("resource_id")
+            if resource_id is not None:
+                compressed["resource_id"] = resource_id
+            msg["content"] = json.dumps(compressed, ensure_ascii=False)
+        elif not parsed.get("ok") and "error" in parsed:
+            compressed = {"ok": False, "error_summary": str(parsed["error"])[:200]}
+            msg["content"] = json.dumps(compressed, ensure_ascii=False)
 
 
 def _compact_tool_result_for_model(tool_result: dict[str, Any]) -> dict[str, Any]:
@@ -3210,10 +3319,11 @@ def _classify_task_tier(task_type: str) -> int:
     return 2
 
 
-def _build_planner_model_chain(settings: Settings) -> list[str]:
-    """Build ordered model chain for the planner phase."""
+def _build_planner_model_chain(settings: Settings, *, fast: bool = False) -> list[str]:
+    primary = settings.planner_fast_model if fast else settings.planner_model
     return _dedupe_models(
         [
+            primary,
             settings.planner_model,
             settings.openrouter_model,
         ]

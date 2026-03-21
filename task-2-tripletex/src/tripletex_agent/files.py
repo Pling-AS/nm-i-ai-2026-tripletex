@@ -1,4 +1,5 @@
 import base64
+import logging
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
@@ -6,6 +7,15 @@ from typing import Any
 from pypdf import PdfReader
 
 from tripletex_agent.schemas import AttachmentSummary, SolveFile
+
+logger = logging.getLogger(__name__)
+
+try:
+    import pymupdf4llm  # pyright: ignore[reportMissingImports]
+
+    _HAS_PYMUPDF4LLM = True
+except ImportError:
+    _HAS_PYMUPDF4LLM = False
 
 
 @dataclass(slots=True)
@@ -79,6 +89,18 @@ def detect_kind(mime_type: str) -> str:
 
 
 def extract_pdf_text(payload: bytes, max_text_chars: int) -> str | None:
+    if _HAS_PYMUPDF4LLM:
+        try:
+            import pymupdf  # pyright: ignore[reportMissingImports]
+
+            doc = pymupdf.open(stream=payload, filetype="pdf")
+            md = pymupdf4llm.to_markdown(doc)
+            doc.close()
+            if md and md.strip():
+                return md.strip()[:max_text_chars]
+        except Exception as exc:
+            logger.warning("pymupdf4llm failed, falling back to pypdf: %s", exc)
+
     try:
         reader = PdfReader(BytesIO(payload))
     except Exception:

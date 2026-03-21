@@ -706,6 +706,7 @@ async def get_settings_endpoint() -> JSONResponse:
             "http_timeout": s.http_timeout_seconds,
             "max_attachment_chars": s.max_attachment_text_chars,
             "log_level": s.log_level,
+            "local_solve_url": s.local_solve_url,
         }
     )
 
@@ -1611,6 +1612,7 @@ let lastCompetitionRefresh = 0;
 let competitionViewActive = false;
 let lastSubmissionCount = 0;
 let globalHasPendingSubmissions = false;
+let defaultSolveUrl = '';
 let previousScoreStatuses = {};
 
 // --- Web Audio API Sound Engine ---
@@ -2365,7 +2367,7 @@ function renderCompetitionView(data) {
       <h2>&#127942; Competition Submissions</h2>
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
         <input type="text" id="submit-endpoint-url" placeholder="Endpoint URL" 
-          value="https://annamae-subseptate-nonveraciously.ngrok-free.dev/solve"
+          value="${defaultSolveUrl || 'https://tripletex-agent-nmiai.ngrok-free.dev/solve'}"
           style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;">
         <button onclick="submitNewRun()" id="btn-submit-run" 
           ${allRuns.some(r => r.status === 'running') ? 'disabled style="background:var(--surface2);color:var(--text2);border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:not-allowed;white-space:nowrap;"' : 'style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px 16px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;"'}>
@@ -2446,6 +2448,7 @@ async function refresh() {
     document.getElementById('hdr-active').textContent = runsData.active_count;
     document.getElementById('hdr-total').textContent = runsData.total_count;
     const shortModel = (m) => m ? m.split('/').pop().replace(':exacto','') : '-';
+    if (settingsData.local_solve_url && !defaultSolveUrl) defaultSolveUrl = settingsData.local_solve_url;
     document.getElementById('hdr-planner').textContent = shortModel(settingsData.planner_model);
     document.getElementById('hdr-t1').textContent = shortModel(settingsData.tier1_executor_model);
     document.getElementById('hdr-t2').textContent = shortModel(settingsData.tier2_executor_model);
