@@ -61,3 +61,5 @@ This task is verified complete.
 - **Code:** `task-3-astar_island/`
 
 <!-- Verified ready for submission: Sat Mar 21 2026 -->
+<!-- Git Commit: 7dd230ea63520738dd50087201f4bd60f2f30035 -->
+
