@@ -1305,7 +1305,7 @@ class TripletexAccountingAgent:
                         }
                         if call_path and call_path not in planned_paths:
                             execution_state.off_plan_api_calls += 1
-                        if execution_state.off_plan_api_calls >= 3:
+                        if execution_state.off_plan_api_calls >= 2:
                             alt_type = getattr(planner, "alternative_task_type", None)
                             if alt_type:
                                 alt_rules = select_field_rules(
@@ -1668,8 +1668,6 @@ class TripletexAccountingAgent:
         }
         discovery: dict[str, dict[str, Any]] = {}
         entities = getattr(planner, "entities", [])
-        if not entities:
-            return {}
 
         for entity in entities:
             role_lower = entity.role.lower()
@@ -1678,15 +1676,11 @@ class TripletexAccountingAgent:
                 continue
             endpoint, query_param, slot_field = mapping
             identifier = getattr(entity, slot_field, None)
+            if not identifier and entity.name:
+                query_param = "name"
+                identifier = entity.name
             if not identifier:
-                if (
-                    role_lower in ("customer", "client", "supplier", "vendor")
-                    and entity.name
-                ):
-                    query_param = "name"
-                    identifier = entity.name
-                else:
-                    continue
+                continue
 
             try:
                 result = await tripletex.request(
@@ -1742,17 +1736,72 @@ class TripletexAccountingAgent:
                         "actual": existing["phoneNumber"],
                     }
 
-            for li in getattr(planner, "line_items", []):
-                if li.unit_price_excluding_vat is not None and endpoint == "/product":
-                    break
-            else:
-                li = None
-
             discovery[role_lower] = {
                 "exists": True,
                 "id": existing_id,
                 "identifier": identifier,
                 "endpoint": endpoint,
+                "matches_task": len(mismatched_fields) == 0,
+                "mismatched_fields": mismatched_fields if mismatched_fields else None,
+                "key_fields": {
+                    k: v
+                    for k, v in existing.items()
+                    if k in _KEY_FIELD_NAMES and v is not None
+                },
+            }
+
+        line_items = getattr(planner, "line_items", [])
+        for li in line_items:
+            if not li.product_number:
+                continue
+            prod_key = f"product_{li.product_number}"
+            if prod_key in discovery:
+                continue
+            try:
+                result = await tripletex.request(
+                    method="GET",
+                    path="/product",
+                    params={"number": li.product_number, "count": 5},
+                )
+            except Exception:
+                continue
+
+            values = []
+            if isinstance(result, dict):
+                values = result.get("values") or []
+            if not isinstance(values, list):
+                values = []
+
+            execution_state.created_entity_keys.add(
+                f"GET:/product?number={li.product_number}"
+            )
+
+            if not values:
+                discovery[prod_key] = {
+                    "exists": False,
+                    "identifier": li.product_number,
+                    "endpoint": "/product",
+                }
+                continue
+
+            existing = values[0]
+            mismatched_fields = {}
+            if li.unit_price_excluding_vat is not None:
+                actual_price = existing.get("priceExcludingVatCurrency")
+                if (
+                    actual_price is not None
+                    and abs(float(actual_price) - li.unit_price_excluding_vat) > 0.01
+                ):
+                    mismatched_fields["priceExcludingVatCurrency"] = {
+                        "expected": li.unit_price_excluding_vat,
+                        "actual": actual_price,
+                    }
+
+            discovery[prod_key] = {
+                "exists": True,
+                "id": existing.get("id"),
+                "identifier": li.product_number,
+                "endpoint": "/product",
                 "matches_task": len(mismatched_fields) == 0,
                 "mismatched_fields": mismatched_fields if mismatched_fields else None,
                 "key_fields": {
@@ -1801,8 +1850,6 @@ class TripletexAccountingAgent:
                 entry["organizationNumber"] = entity.organization_number
             if entity.phone:
                 entry["phoneNumber"] = entity.phone
-            for k, v in entity.extra_fields.items():
-                entry[k] = v
             entity_lookup[role] = entry
 
         if not entity_lookup:
@@ -1908,13 +1955,23 @@ class TripletexAccountingAgent:
             if remaining < 15:
                 break
 
-            repair_body: dict[str, Any] = {"id": mismatch["resource_id"]}
-            if mismatch.get("version") is not None:
-                repair_body["version"] = mismatch["version"]
-            for field_name, vals in mismatch["mismatches"].items():
-                repair_body[field_name] = vals["expected"]
-
             try:
+                full_obj = await tripletex.request(
+                    method="GET",
+                    path=f"{mismatch['path']}/{mismatch['resource_id']}",
+                    params={"fields": "*"},
+                )
+                repair_body = (
+                    full_obj.get("value", full_obj)
+                    if isinstance(full_obj, dict)
+                    else {}
+                )
+                if not isinstance(repair_body, dict):
+                    continue
+                repair_body = dict(repair_body)
+                for field_name, vals in mismatch["mismatches"].items():
+                    repair_body[field_name] = vals["expected"]
+
                 await tripletex.request(
                     method="PUT",
                     path=f"{mismatch['path']}/{mismatch['resource_id']}",
