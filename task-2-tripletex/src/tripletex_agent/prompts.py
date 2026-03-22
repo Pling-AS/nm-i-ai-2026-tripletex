@@ -325,28 +325,20 @@ The sandbox is EMPTY — you must create the full chain first, then reverse:
    CRITICAL: dateTo must be AFTER dateFrom (exclusive upper bound). Never use dateFrom == dateTo.
 6. Reverse payment voucher: PUT /ledger/voucher/{payment_voucher_id}/:reverse?date=YYYY-MM-DD""",
     "create_travel_expense": """## Playbook: Create Travel Expense
-1. Ensure employee exists (POST /employee if needed — remember department.id is required).
+1. Ensure employee exists (POST /employee if needed with department.id).
 2. GET /travelExpense/costCategory?from=0&count=100 to find available cost categories.
 3. GET /travelExpense/paymentType?from=0&count=100 to find payment types.
-4. POST /travelExpense with employee ref, departureDateTime (format: YYYY-MM-DDT08:00:00), returnDateTime, title, department ref.
+4. POST /travelExpense with employee ref, departureDateTime (YYYY-MM-DDT08:00:00), returnDateTime, title, department ref.
 5. POST /travelExpense/cost for each cost line:
    - MUST use amountCurrencyIncVat (NOT amount or amountExcludingVat)
-   - MUST include costCategory and paymentType refs
-   - MUST include date field
-6. POST /travelExpense/perDiemCompensation only when per-diem/diet is explicitly requested.
+   - MUST include costCategory, paymentType refs, and date field
+6. For per-diem/diet: GET /travelExpense/rateCategory, GET /travelExpense/zone (use 'innland'), then POST /travelExpense/perDiemCompensation with travelExpenseZoneId (NEVER countryCode).
+   FALLBACK: If per-diem POST fails, use /travelExpense/cost with total amount instead.
 
-## COST CATEGORY SELECTION (CRITICAL — wrong category = 0 points)
-Norwegian representation/entertainment expense rules:
-- "Middag representasjon" / dinner representation → use "Representasjon - ikke fradragsb." (NON-deductible)
-  In Norway, representation meals are NOT tax-deductible and NOT VAT-deductible.
-- "Overnatting" / accommodation → use the hotel/accommodation category
-- "Flybillett" / flight → use the travel/transport category
-- When in doubt between "fradragsb." and "ikke fradragsb." for representation → ALWAYS choose "ikke fradragsb."
-
-## PAYMENT TYPE SELECTION
-- If receipt says "Bedriftskort" (company card) → look for a company card payment type
-- If receipt says "Privat utlegg" → use private expense payment type
-- If only one payment type exists, use it regardless of receipt text
+## COST CATEGORY SELECTION
+- "Middag representasjon" / dinner representation: use "Representasjon - ikke fradragsb." (NON-deductible)
+- "Overnatting" / accommodation: use the hotel/accommodation category
+- When in doubt between "fradragsb." and "ikke fradragsb." for representation: ALWAYS choose "ikke fradragsb."
 
 ## AMOUNT RULES
 - amountCurrencyIncVat = the TOTAL including VAT from the receipt line
@@ -382,22 +374,19 @@ Norwegian representation/entertainment expense rules:
 2. PUT /invoice/{id} with id, version, and ONLY the changed fields.""",
     "register_supplier_invoice": """## Playbook: Register Supplier Invoice
 1. Create/reuse supplier first; mirror email->invoiceEmail when email exists.
-2. Prefer POST /supplierInvoice if available; if 403/forbidden, immediately switch to POST /ledger/voucher.
-3. Resolve expense account ID via GET /ledger/account params={"number": XXXX}; never use account number in posting body.
-4. Voucher: use TWO postings — DEBIT expense (vatType=3, amountGross=GROSS) + CREDIT 2400 (vatType=0, amountGross=NEGATIVE GROSS, supplier ref). Auto-split handles VAT.
-5. For normal 25% purchase VAT: vatType={"id":3} on debit; NEVER use vatType id=1 and never vatType 0 on the debit.
-6. Always set supplier={"id": supplier_id} on BOTH the debit posting AND the credit 2400 posting.
-7. Set vendorInvoiceNumber from the invoice number AND include dueDate from forfallsdato when available.
-8. Never call /incomingInvoice (forbidden in sandbox).""",
-    "create_voucher": """## Playbook: Create Voucher (Payroll-focused)
-1. If prompt is salary/payroll: GET /salary/type and map IDs by NAME (Fastlønn/Timelønn/Overtid/Bonus/Feriepenger), never by index.
-2. Ensure employee prerequisites: dateOfBirth set, division exists, active employment covers payroll period.
-3. If missing prerequisites: PUT /employee (dateOfBirth), POST /division, POST /employee/employment, POST /employee/employment/details.
-4. POST /salary/transaction with payslips[].specifications[] using salaryType + rate + count (never amount).
-5. Keep salary type semantics correct: base salary->Fastlønn, hourly->Timelønn, overtime->Overtid, bonus->Bonus.
-6. For non-payroll vouchers use POST /ledger/voucher with amountGross==amountGrossCurrency and no row=0.
-7. For vatType=0 include debit+credit manually; for vatType!=0 use debit (vatType=3) + credit (vatType=0) — auto-split handles VAT on debit side.
-8. Never invent payroll amounts in closing/accrual tasks; derive from actual salary transactions in period.""",
+2. Try POST /supplierInvoice first with invoiceNumber, invoiceDate, dueDate, supplier ref, currency NOK, orderLines with account+amount+vatType. If 403, fall back to voucher.
+3. Voucher fallback: resolve expense account via GET /ledger/account params={"number": XXXX}.
+4. POST /ledger/voucher with TWO postings: DEBIT expense (vatType=3, amountGross=GROSS) + CREDIT 2400 (vatType=0, amountGross=NEGATIVE GROSS, supplier ref).
+5. Always set supplier ref on BOTH postings. Set vendorInvoiceNumber and dueDate.
+6. Never call /incomingInvoice (forbidden in sandbox).""",
+    "create_voucher": """## Playbook: Create Voucher / Payroll
+1. If salary/payroll: GET /salary/type, map IDs by NAME (Fastlonn/Timelonn/Overtid/Bonus/Feriepenger).
+2. Ensure employee prerequisites: dateOfBirth, division, active employment.
+3. POST /salary/transaction with payslips[].specifications[] using salaryType + rate + count.
+4. For non-payroll vouchers: POST /ledger/voucher with amountGross==amountGrossCurrency, no row=0.
+5. For vatType=0: include debit+credit manually. For vatType!=0: debit (vatType=3) + credit (vatType=0).
+6. Custom dimensions: POST /ledger/accountingDimensionName, then /accountingDimensionValue. Use freeAccountingDimension1..10 on postings.
+7. Month-end salary accrual: if no actual salary postings found, use employee annual salary / 12 as estimate. NEVER post 0 amount.""",
     "enable_module": """## Playbook: Enable Module
 1. Use candidate endpoint from execution_brief for module settings.
 2. Call required PUT/POST exactly once with required payload.""",

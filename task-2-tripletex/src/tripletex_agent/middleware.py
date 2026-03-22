@@ -401,15 +401,8 @@ class ExecutionMiddleware:
     def intercept_tool_call(
         self, method: str, path: str, params: dict | None, body: dict | list | None
     ) -> tuple[str, str, dict | None, dict | list | None]:
-        # Resolve $REF: tokens in URL path segments (prevents 422 on path IDs)
-        if "$REF:" in path:
-            for ref_key, ref_id in self.registry.all_refs().items():
-                token = f"$REF:{ref_key}"
-                if token in path:
-                    path = path.replace(token, str(ref_id))
-                    logger.info("Resolved %s in path -> %d", token, ref_id)
+        path = self._resolve_refs_in_path(path)
 
-        # Resolve $REF/$TIME/$STYRK in body (handles both dict and list bodies)
         if isinstance(body, (dict, list)):
             body = _resolve_refs_in_value(body, self.registry)
 
@@ -426,6 +419,37 @@ class ExecutionMiddleware:
                 body["startDate"] = safe_start
 
         return method, path, params, body
+
+    def _resolve_refs_in_path(self, path: str) -> str:
+        if "$REF:" not in path:
+            return path
+        segments = path.split("/")
+        resolved_segments = []
+        for seg in segments:
+            if seg.startswith("$REF:"):
+                ref_name = seg[5:]
+                resolved = self.registry.resolve(ref_name)
+                if resolved is not None:
+                    resolved_segments.append(str(resolved))
+                    continue
+                for key, val in self.registry.all_refs().items():
+                    if (
+                        ref_name.lower() in key.lower()
+                        or key.lower() in ref_name.lower()
+                    ):
+                        logger.info(
+                            "Fuzzy-resolved path $REF:%s -> %s (%d)", ref_name, key, val
+                        )
+                        resolved_segments.append(str(val))
+                        break
+                else:
+                    logger.warning(
+                        "Unresolved path $REF:%s — passing through", ref_name
+                    )
+                    resolved_segments.append(seg)
+            else:
+                resolved_segments.append(seg)
+        return "/".join(resolved_segments)
 
     def check_dedup(
         self, method: str, path: str, body: dict | list | None
