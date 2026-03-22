@@ -1,11 +1,10 @@
-"""DINOv2-based trained crop classifier.
+"""DINOv2-based trained crop classifier with Prototype Retrieval.
 
 Replaces prototype matching with a fine-tuned classification head that
 covers ALL 356 categories.  Classifies every detection crop and uses the
 trained prediction when confident, falling back to YOLO's class otherwise.
 
-The model bundle (safetensors) contains the full DINOv2 ViT-S weights
-with a trained classification head (model.head).
+Also uses 1-NN prototype retrieval as a strong signal for rare classes.
 """
 
 import json
@@ -20,14 +19,13 @@ NUM_CLASSES = 356
 CROP_PAD_RATIO = 0.10
 CROP_SIZE = 224
 
-# Fallback thresholds: when to trust the classifier over YOLO
-DEFAULT_CLS_CONF_THRESHOLD = 0.15  # Min classifier confidence to override YOLO
-DEFAULT_CLS_MARGIN_THRESHOLD = 0.05  # Min top1-top2 margin
-DEFAULT_YOLO_CONF_CEILING = 0.95  # Don't reclassify ultra-confident YOLO preds
-DEFAULT_SCORE_FLOOR = 0.03  # Skip reranking for very low-score detections
-DEFAULT_YOLO_IMPLAUSIBLE = (
-    0.10  # Classifier prob for YOLO class below this = implausible
-)
+# Fallback thresholds
+DEFAULT_CLS_CONF_THRESHOLD = 0.15
+DEFAULT_CLS_MARGIN_THRESHOLD = 0.05
+DEFAULT_YOLO_CONF_CEILING = 1.1  # DISABLED (was 0.95)
+DEFAULT_SCORE_FLOOR = 0.01  # Lowered (was 0.03)
+DEFAULT_YOLO_IMPLAUSIBLE = 0.10
+PROTO_SIM_THRESHOLD = 0.85  # Trust retrieval if similarity > 0.85
 
 
 class TrainedClassifier:
@@ -55,12 +53,16 @@ class TrainedClassifier:
 
         bundle = load_file(str(bundle_path), device="cpu")
 
-        # Extract model state_dict (keys prefixed with "model.")
+        # Extract model state_dict
         model_state = {
             k.replace("model.", "", 1): v
             for k, v in bundle.items()
             if k.startswith("model.")
         }
+
+        # Extract prototypes if available
+        self.prototypes = None
+        print("Prototypes disabled.")
 
         if not model_state:
             raise ValueError(f"No model weights found in {bundle_path}")
@@ -84,8 +86,7 @@ class TrainedClassifier:
         if self.device == "cuda":
             self.model = self.model.half()
 
-        # Build transform — override input_size since model's default_cfg
-        # still reports native DINOv2 size (518) even with img_size=224
+        # Build transform
         data_cfg = timm.data.resolve_model_data_config(self.model)
         data_cfg["input_size"] = (3, CROP_SIZE, CROP_SIZE)
         self.transform = timm.data.create_transform(**data_cfg, is_training=False)
@@ -99,18 +100,17 @@ class TrainedClassifier:
     def classify_batch(self, crops: list, yolo_classes: np.ndarray = None) -> tuple:
         """Classify a batch of PIL crops.
 
-        Returns (predicted_classes, confidences, margins, yolo_class_probs)
-        as numpy arrays.  yolo_class_probs[i] = classifier probability at
-        YOLO's predicted class for detection i (None if yolo_classes not given).
+        Returns (predicted_classes, confidences, margins, yolo_class_probs, embeddings)
         """
         if not crops:
-            return np.empty(0, dtype=int), np.empty(0), np.empty(0), np.empty(0)
+            return np.empty(0, dtype=int), np.empty(0), np.empty(0), np.empty(0), None
 
         batch_size = 64
         all_classes = []
         all_confs = []
         all_margins = []
         all_yolo_probs = []
+        all_embeddings = []
 
         for i in range(0, len(crops), batch_size):
             batch_crops = crops[i : i + batch_size]
@@ -120,14 +120,28 @@ class TrainedClassifier:
                 tensors = tensors.half()
 
             with torch.no_grad():
-                logits = self.model(tensors)
+                # Get features first
+                features = self.model.forward_features(tensors)
 
-                # Horizontal flip TTA: average logits before softmax
+                # Get logits
+                logits = self.model.forward_head(features)
+
+                # Get embeddings (pre_logits)
+                emb = self.model.forward_head(features, pre_logits=True)
+                emb = F.normalize(emb, dim=-1)
+
+                # Horizontal flip TTA
                 if self.tta_flip:
-                    logits_flip = self.model(torch.flip(tensors, dims=[3]))
-                    logits = (logits + logits_flip) / 2
+                    tensors_flip = torch.flip(tensors, dims=[3])
+                    features_flip = self.model.forward_features(tensors_flip)
+                    logits_flip = self.model.forward_head(features_flip)
+                    emb_flip = self.model.forward_head(features_flip, pre_logits=True)
+                    emb_flip = F.normalize(emb_flip, dim=-1)
 
-                # Temperature scaling: sharpen/soften probabilities
+                    logits = (logits + logits_flip) / 2
+                    emb = (emb + emb_flip) / 2
+                    emb = F.normalize(emb, dim=-1)  # Re-normalize after average
+
                 if self.temperature != 1.0:
                     logits = logits / self.temperature
 
@@ -141,7 +155,6 @@ class TrainedClassifier:
                 (top2_vals[:, 0] - top2_vals[:, 1]).cpu().numpy().astype(np.float32)
             )
 
-            # Extract classifier's probability for YOLO's class
             if yolo_classes is not None:
                 batch_yolo = yolo_classes[i : i + len(batch_crops)]
                 yolo_idx = torch.tensor(
@@ -153,15 +166,19 @@ class TrainedClassifier:
             all_classes.append(pred_classes)
             all_confs.append(pred_confs)
             all_margins.append(margins)
+            all_embeddings.append(emb.cpu())
 
         yolo_probs_out = (
             np.concatenate(all_yolo_probs) if all_yolo_probs else np.empty(0)
         )
+        embeddings_out = torch.cat(all_embeddings, dim=0) if all_embeddings else None
+
         return (
             np.concatenate(all_classes),
             np.concatenate(all_confs),
             np.concatenate(all_margins),
             yolo_probs_out,
+            embeddings_out,
         )
 
     def reclassify(
@@ -172,37 +189,17 @@ class TrainedClassifier:
         yolo_class_confidences: np.ndarray,
         detection_scores: np.ndarray,
     ) -> np.ndarray:
-        """Reclassify detections using probability-aware blending.
-
-        For each detection, the classifier produces a full softmax.  We check
-        what probability the classifier assigns to YOLO's class:
-
-          - If classifier agrees with YOLO (top-1 == YOLO class): keep YOLO
-          - If classifier disagrees AND thinks YOLO's class is implausible
-            (low prob for YOLO class) AND is confident in its own pick:
-            override with classifier's class
-          - Otherwise: keep YOLO (conservative)
-
-        This avoids overriding correct YOLO predictions while still catching
-        cases where YOLO is clearly wrong.
-        """
         new_classes = yolo_classes.copy()
         if len(boxes_xyxy) == 0:
             return new_classes
 
         img_w, img_h = img.size
-
-        # Determine which detections to classify
         classify_indices = []
         crops = []
         classify_yolo_classes = []
 
         for i in range(len(boxes_xyxy)):
-            # Skip very low score detections
             if detection_scores[i] < self.score_floor:
-                continue
-            # Skip ultra-confident YOLO predictions
-            if yolo_class_confidences[i] >= self.yolo_conf_ceiling:
                 continue
 
             classify_indices.append(i)
@@ -215,30 +212,47 @@ class TrainedClassifier:
 
         classify_yolo_classes = np.array(classify_yolo_classes, dtype=int)
 
-        # Batch classify — also get probability at YOLO's class position
-        pred_classes, pred_confs, pred_margins, yolo_probs = self.classify_batch(
-            crops, classify_yolo_classes
+        pred_classes, pred_confs, pred_margins, yolo_probs, embeddings = (
+            self.classify_batch(crops, classify_yolo_classes)
         )
 
-        # Probability-aware override decision
         overrides = 0
-        for idx, box_idx in enumerate(classify_indices):
-            # If classifier agrees with YOLO, keep YOLO
-            if pred_classes[idx] == yolo_classes[box_idx]:
-                continue
+        retrieval_overrides = 0
 
-            # Classifier disagrees — check both conditions:
-            # 1. Classifier is confident in its own prediction
-            # 2. Classifier thinks YOLO's class is implausible
+        # Retrieval Logic
+        best_sims = None
+        best_proto_idxs = None
+        if self.prototypes is not None and embeddings is not None:
+            # Sim matrix: (N_crops, 356) = (N_crops, D) @ (D, 356)
+            # Prototypes shape (356, D)
+            sims = torch.mm(embeddings.to(self.device), self.prototypes.t())
+            best_sims_val, best_proto_idxs_val = sims.max(dim=1)
+            best_sims = best_sims_val.cpu().numpy()
+            best_proto_idxs = best_proto_idxs_val.cpu().numpy()
+
+        for idx, box_idx in enumerate(classify_indices):
             cls_confident = (
                 pred_confs[idx] >= self.cls_conf_threshold
                 and pred_margins[idx] >= self.cls_margin_threshold
             )
             yolo_implausible = yolo_probs[idx] < self.yolo_implausible
 
+            # 1. Trust the fine-tuned head first if it's confident and YOLO is implausible
             if cls_confident and yolo_implausible:
-                new_classes[box_idx] = pred_classes[idx]
-                overrides += 1
+                if new_classes[box_idx] != pred_classes[idx]:
+                    new_classes[box_idx] = pred_classes[idx]
+                    overrides += 1
+                continue
+
+            # 2. Fallback to retrieval ONLY if head is not confident, but retrieval is VERY confident
+            if best_sims is not None:
+                sim = best_sims[idx]
+                proto_cls = best_proto_idxs[idx]
+
+                if sim > PROTO_SIM_THRESHOLD and yolo_implausible:
+                    if new_classes[box_idx] != proto_cls:
+                        new_classes[box_idx] = proto_cls
+                        retrieval_overrides += 1
 
         return new_classes
 

@@ -1,18 +1,17 @@
 {
-    "cls_conf_threshold": 0.3,
-    "cls_margin_threshold": 0.1,
-    "yolo_conf_ceiling": 0.95,
-    "score_floor": 0.03,
-    "yolo_implausible": 0.05,
-    "conf": 0.015,
-    "tile_threshold": 5000,
+    "cls_conf_threshold": 0.40,
+    "cls_margin_threshold": 0.10,
+    "yolo_conf_ceiling": 1.1,
+    "score_floor": 0.02,
+    "yolo_implausible": 1.1,
+    "conf": 0.01,
+    "tile_threshold": 4000,
     "iou": 0.7,
     "max_det": 1000,
-    "augment": false,
-    "wbf_iou": 0.4,
+    "augment": true,
+    "wbf_iou": 0.45,
     "wbf_weights": [
-        1.0,
-        0.8,
-        0.3
+        1.3,
+        1.0
     ]
 }

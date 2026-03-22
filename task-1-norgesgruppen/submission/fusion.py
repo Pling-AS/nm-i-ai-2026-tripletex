@@ -6,6 +6,8 @@ gets the best boxes first, then assigns class by weighted vote.
 """
 
 import numpy as np
+import torch
+import torchvision
 from ensemble_boxes import weighted_boxes_fusion
 
 
@@ -29,7 +31,7 @@ def fuse_detections(
     if not detection_list:
         return _empty_result()
 
-    # Build per-source weights, extending if needed (e.g. tile pass)
+    # Build per-source weights
     if weights is None:
         weights = [1.0] * len(detection_list)
     while len(weights) < len(detection_list):
@@ -92,6 +94,71 @@ def fuse_detections(
         "scores": fused_scores,
         "classes": fused_classes,
         "class_confidence": class_confidence,
+    }
+
+
+def nms_dict(det: dict, iou_thr: float = 0.5) -> dict:
+    if len(det["scores"]) == 0:
+        if "class_confidence" not in det:
+            det["class_confidence"] = np.empty(0)
+        return det
+    keep = torchvision.ops.nms(
+        torch.tensor(det["boxes_xyxy"], dtype=torch.float32),
+        torch.tensor(det["scores"], dtype=torch.float32),
+        iou_thr
+    ).numpy()
+    
+    res = {k: v[keep] for k, v in det.items()}
+    if "class_confidence" not in res:
+        res["class_confidence"] = np.ones_like(res["scores"])
+    return res
+
+
+def combine_full_and_tile(full_det: dict, tile_det: dict, iou_thr: float = 0.5) -> dict:
+    """Combine full-image WBF detections with tile detections using NMS.
+    This avoids the WBF score penalty where tile models miss large objects
+    and full models miss small objects.
+    """
+    if len(full_det["scores"]) == 0:
+        return nms_dict(tile_det, iou_thr)
+    if len(tile_det["scores"]) == 0:
+        if "class_confidence" not in full_det:
+            full_det["class_confidence"] = np.ones_like(full_det["scores"])
+        return full_det
+
+    # First NMS the tile detections to remove overlaps from tiling
+    tile_det = nms_dict(tile_det, iou_thr)
+
+    # Slightly penalize tile scores so full-image boxes (which have better global context 
+    # and no boundary truncation) win NMS when they overlap with tile boxes.
+    tile_scores_penalized = tile_det["scores"] * 0.95
+
+    # Concatenate
+    boxes = np.vstack([full_det["boxes_xyxy"], tile_det["boxes_xyxy"]])
+    scores = np.concatenate([full_det["scores"], tile_scores_penalized])
+    classes = np.concatenate([full_det["classes"], tile_det["classes"]])
+    
+    if "class_confidence" in full_det and "class_confidence" in tile_det:
+        class_conf = np.concatenate([full_det["class_confidence"], tile_det["class_confidence"]])
+    elif "class_confidence" in full_det:
+        class_conf = np.concatenate([full_det["class_confidence"], np.ones_like(tile_det["scores"])])
+    else:
+        class_conf = np.ones_like(scores)
+
+    keep = torchvision.ops.nms(
+        torch.tensor(boxes, dtype=torch.float32),
+        torch.tensor(scores, dtype=torch.float32),
+        iou_thr
+    ).numpy()
+
+    # Restore original scores for the kept boxes (undo the 0.95 penalty for the final output)
+    original_scores = np.concatenate([full_det["scores"], tile_det["scores"]])
+
+    return {
+        "boxes_xyxy": boxes[keep],
+        "scores": original_scores[keep],
+        "classes": classes[keep],
+        "class_confidence": class_conf[keep]
     }
 
 
