@@ -1,0 +1,8 @@
+{
+  "text": "# Stormberg AS\n\nOrg.nr: 908782003\n\nParkveien 55, 8006 Bodø\n\n# FAKTURA\n\nFakturanummer: INV-2026-5859\n\nFakturadato: 11.01.2026\n\nForfallsdato: 10.02.2026\n\nTil: Ditt firma\n\n| Beskrivelse             | Belop    |\n|-------------------------|----------|\n| Kontorrekvista          | 30850 kr |\n| MVA 25%: 7712 kr        |          |\n| <b>Totalt: 38562 kr</b> |          |\n\nKonto: 6500\n\nBankkonto: 81867612726",
+  "method": "datalab",
+  "filename": "files/leverandorfaktura_nb_07.pdf",
+  "sha256": "ab6374e5d8e6d1c2573f96cd50cd98ffd705429ab41db36c8a5806a851f75f98",
+  "extracted_at": "2026-03-22T09:32:42.630539+00:00",
+  "char_count": 400
+}

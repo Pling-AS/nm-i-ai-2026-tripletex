@@ -310,7 +310,7 @@ def _predict_and_submit(
         n_total = height * width
 
         prediction = predict_full_grid_vectorized(
-            seed_idx, observation_store, seed_analyses[seed_idx]
+            seed_idx, observation_store, seed_analyses
         )
         predictions.append(prediction)
 

@@ -1,61 +1,35 @@
-import re
-
-with open('task-3-astar_island/predictor.py', 'r') as f:
+with open('/Users/m/Programmering/2025/nm-i-ai/task-3-astar_island/predictor.py', 'r') as f:
     content = f.read()
 
-# 1. Add TEMP_ALPHA
-if 'TEMP_ALPHA' not in content:
-    content = re.sub(
-        r'FIELD_ALPHA = 1\.0',
-        'FIELD_ALPHA = 1.0\nTEMP_ALPHA = 0.95',
-        content
-    )
+content = content.replace(
+    "def predict_full_grid_vectorized(\n    seed_index: int,\n    observation_store: ObservationStore,\n    seed_analysis: SeedAnalysis,\n) -> NDArray[np.floating]:",
+    "def predict_full_grid_vectorized(\n    seed_index: int,\n    observation_store: ObservationStore,\n    seed_analyses: list[SeedAnalysis],\n) -> NDArray[np.floating]:"
+)
 
-# 2. Fix _archetype_backoff_chain
-old_backoff = '''def _archetype_backoff_chain(archetype: CellArchetype) -> list[CellArchetype]:
-    """Progressively coarser archetypes: full → drop coastal → drop dist → terrain only."""
-    t, coast, dist, adj_sett = archetype
-    return [
-        archetype,
-        CellArchetype(t, False, dist, adj_sett),
-        CellArchetype(t, False, 3, adj_sett),
-        CellArchetype(t, False, 3, False),
-    ]'''
+content = content.replace(
+    "h, w = seed_analysis.height, seed_analysis.width\n    grid = seed_analysis.grid\n    class_masks = seed_analysis.class_masks",
+    "seed_analysis = seed_analyses[seed_index]\n    h, w = seed_analysis.height, seed_analysis.width\n    grid = seed_analysis.grid\n    class_masks = seed_analysis.class_masks"
+)
 
-new_backoff = '''def _archetype_backoff_chain(archetype: CellArchetype) -> list[CellArchetype]:
-    """Progressively coarser archetypes: full → drop coastal → drop dist → terrain only."""
-    t, coast, dist, adj_sett = archetype
-    chain = []
-    for arch in [
-        archetype,
-        CellArchetype(t, False, dist, adj_sett),
-        CellArchetype(t, False, dist, False),
-        CellArchetype(t, False, 3, False),
-    ]:
-        if arch not in chain:
-            chain.append(arch)
-    return chain'''
+old_cross_seed = """    # Pre-compute cross-seed pooled counts (sum of other seeds at same position)
+    cross_seed_grid = np.zeros((h, w, NUM_CLASSES), dtype=np.float64)
+    if CROSS_SEED_LAMBDA > 0:
+        for other_seed in range(observation_store.seeds_count):
+            if other_seed != seed_index:
+                cross_seed_grid += observation_store.get_seed_counts(other_seed).astype(np.float64)"""
 
-content = content.replace(old_backoff, new_backoff)
+new_cross_seed = """    # Pre-compute cross-seed pooled counts (sum of other seeds at same position WITH SAME ARCHETYPE)
+    cross_seed_grid = np.zeros((h, w, NUM_CLASSES), dtype=np.float64)
+    if CROSS_SEED_LAMBDA > 0:
+        my_archetypes = seed_analysis.archetypes
+        for other_seed in range(observation_store.seeds_count):
+            if other_seed != seed_index:
+                other_archetypes = seed_analyses[other_seed].archetypes
+                match_mask = (my_archetypes == other_archetypes)
+                other_counts = observation_store.get_seed_counts(other_seed).astype(np.float64)
+                cross_seed_grid += other_counts * match_mask[..., np.newaxis]"""
 
-# 3. Disable spatial smoothing and add temperature scaling
-old_predict_end = '''    prediction = apply_floor_and_normalize_grid(prediction, class_masks)
-    prediction = _spatial_smooth(prediction, class_masks, grid)
-    prediction = apply_correction(prediction, seed_analysis, _correction_table)
+content = content.replace(old_cross_seed, new_cross_seed)
 
-    return prediction'''
-
-new_predict_end = '''    prediction = apply_floor_and_normalize_grid(prediction, class_masks)
-    prediction = _spatial_smooth(prediction, class_masks, grid, max_beta=0.0)
-    prediction = apply_correction(prediction, seed_analysis, _correction_table)
-
-    # Apply temperature scaling
-    prediction = np.power(prediction, TEMP_ALPHA)
-    prediction = apply_floor_and_normalize_grid(prediction, class_masks)
-
-    return prediction'''
-
-content = content.replace(old_predict_end, new_predict_end)
-
-with open('task-3-astar_island/predictor.py', 'w') as f:
+with open('/Users/m/Programmering/2025/nm-i-ai/task-3-astar_island/predictor.py', 'w') as f:
     f.write(content)

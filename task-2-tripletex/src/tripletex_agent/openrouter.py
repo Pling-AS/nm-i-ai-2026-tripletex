@@ -460,8 +460,10 @@ class OpenRouterClient:
         if vertex_available:
             assert self._vertex_client is not None
             assert vertex_model is not None
+            vertex_url = self._build_vertex_url(vertex_model)
+            t0 = time.monotonic()
             try:
-                return await self._vertex_anthropic_chat_completion(
+                result = await self._vertex_anthropic_chat_completion(
                     vertex_model=vertex_model,
                     messages=messages,
                     tools=tools,
@@ -469,12 +471,33 @@ class OpenRouterClient:
                     max_tokens=max_tokens,
                     enable_thinking=enable_thinking,
                 )
+                elapsed = time.monotonic() - t0
+                logger.debug(
+                    "Vertex AI OK: model=%s elapsed=%.1fs tokens=%s",
+                    vertex_model,
+                    elapsed,
+                    result.get("usage", {}).get("input_tokens", "?"),
+                )
+                return result
             except OpenRouterError as vertex_exc:
+                elapsed = time.monotonic() - t0
                 sc = vertex_exc.status_code
+                logger.warning(
+                    "Vertex AI error: model=%s status=%s elapsed=%.1fs url=%s error=%s",
+                    vertex_model,
+                    sc,
+                    elapsed,
+                    vertex_url,
+                    vertex_exc,
+                )
                 if sc == 400:
                     raise
 
                 if sc in (401, 403):
+                    logger.info(
+                        "Vertex AI auth error (status=%s), refreshing token and retrying...",
+                        sc,
+                    )
                     try:
                         return await self._vertex_anthropic_chat_completion(
                             vertex_model=vertex_model,
@@ -485,14 +508,18 @@ class OpenRouterClient:
                             force_token_refresh=True,
                             enable_thinking=enable_thinking,
                         )
-                    except Exception:
-                        pass
+                    except Exception as refresh_exc:
+                        logger.error(
+                            "Vertex AI token refresh retry also failed: %s",
+                            refresh_exc,
+                        )
 
                 if self._azure_anthropic_client:
                     logger.warning(
-                        "Vertex AI failed (status=%s), falling back to Azure: %s",
+                        "Vertex AI failed (status=%s, %.1fs), falling back to Azure for model=%s",
                         sc,
-                        vertex_exc,
+                        elapsed,
+                        model,
                     )
                     return await self._azure_anthropic_chat_completion(
                         model=model,
@@ -504,11 +531,20 @@ class OpenRouterClient:
                     )
                 raise
 
-            except (httpx.TimeoutException, httpx.TransportError) as vertex_exc:
+            except httpx.TimeoutException as vertex_exc:
+                elapsed = time.monotonic() - t0
+                logger.error(
+                    "Vertex AI TIMEOUT: model=%s elapsed=%.1fs timeout_setting=%.0fs url=%s type=%s error=%s",
+                    vertex_model,
+                    elapsed,
+                    self._settings.http_timeout_seconds,
+                    vertex_url,
+                    type(vertex_exc).__name__,
+                    vertex_exc,
+                )
                 if self._azure_anthropic_client:
                     logger.warning(
-                        "Vertex AI transport error, falling back to Azure: %s",
-                        vertex_exc,
+                        "Falling back to Azure after Vertex timeout (%.1fs)", elapsed
                     )
                     return await self._azure_anthropic_chat_completion(
                         model=model,
@@ -519,7 +555,34 @@ class OpenRouterClient:
                         enable_thinking=enable_thinking,
                     )
                 raise OpenRouterError(
-                    f"Vertex AI transport error: {vertex_exc}"
+                    f"Vertex AI timeout after {elapsed:.1f}s: {vertex_exc}"
+                ) from vertex_exc
+
+            except httpx.TransportError as vertex_exc:
+                elapsed = time.monotonic() - t0
+                logger.error(
+                    "Vertex AI TRANSPORT ERROR: model=%s elapsed=%.1fs url=%s type=%s error=%s",
+                    vertex_model,
+                    elapsed,
+                    vertex_url,
+                    type(vertex_exc).__name__,
+                    vertex_exc,
+                )
+                if self._azure_anthropic_client:
+                    logger.warning(
+                        "Falling back to Azure after Vertex transport error (%.1fs)",
+                        elapsed,
+                    )
+                    return await self._azure_anthropic_chat_completion(
+                        model=model,
+                        messages=messages,
+                        tools=tools,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        enable_thinking=enable_thinking,
+                    )
+                raise OpenRouterError(
+                    f"Vertex AI transport error after {elapsed:.1f}s: {vertex_exc}"
                 ) from vertex_exc
 
         if self._azure_anthropic_client:
@@ -580,6 +643,21 @@ class OpenRouterClient:
             payload["tool_choice"] = {"type": "auto"}
 
         url = self._build_vertex_url(vertex_model)
+        token_age = (
+            time.monotonic()
+            - self._vertex_token_expiry
+            + self._settings.vertex_ai_token_ttl_seconds
+        )
+        msg_count = len(anthropic_messages)
+        logger.debug(
+            "Vertex AI request: model=%s messages=%d max_tokens=%d thinking=%s token_age=%.0fs url=%s",
+            vertex_model,
+            msg_count,
+            max_tokens,
+            enable_thinking,
+            token_age,
+            url,
+        )
         response = await self._vertex_client.post(
             url,
             json=payload,
@@ -589,20 +667,38 @@ class OpenRouterClient:
             },
         )
         if response.status_code >= 400:
-            raise OpenRouterError(
-                self._build_error_message(response),
-                status_code=response.status_code,
+            error_msg = self._build_error_message(response)
+            logger.error(
+                "Vertex AI HTTP %d: model=%s url=%s body=%s",
+                response.status_code,
+                vertex_model,
+                url,
+                error_msg[:500],
             )
+            raise OpenRouterError(error_msg, status_code=response.status_code)
 
         body = response.json()
         if body.get("type") == "error":
             err = body.get("error", {})
+            logger.error(
+                "Vertex AI API error: type=%s message=%s model=%s",
+                err.get("type", "unknown"),
+                err.get("message", "")[:300],
+                vertex_model,
+            )
             raise OpenRouterError(
                 f"Vertex Anthropic error: {err.get('type', 'unknown')}: {err.get('message', '')}",
                 status_code=response.status_code,
             )
 
-        logger.debug("Claude request served by provider=vertex model=%s", vertex_model)
+        usage = body.get("usage", {})
+        logger.debug(
+            "Vertex AI OK: model=%s input_tokens=%s output_tokens=%s stop=%s",
+            vertex_model,
+            usage.get("input_tokens", "?"),
+            usage.get("output_tokens", "?"),
+            body.get("stop_reason", "?"),
+        )
         return _anthropic_response_to_openai(body)
 
     # ------ Azure Anthropic backend (fallback) ------

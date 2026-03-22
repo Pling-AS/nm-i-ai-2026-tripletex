@@ -1,0 +1,8 @@
+{
+  "text": "# Scandic Hotels\n\nSjøgata 12, 3015 Drammen\n\nOrg.nr: 940394058\n\n## KVITTERING - 07.05.2026\n\n| Vare                | Pris              |\n|---------------------|-------------------|\n| Overnatting         | 2450.00 kr        |\n| Whiteboard          | 240.00 kr         |\n| Kaffe kunderelasjon | 490.00 kr         |\n| <b>Totalt:</b>      | <b>3180.00 kr</b> |\n| herav MVA 25%:      | 795.00 kr         |\n\nBetalt med: Bedriftskort",
+  "method": "datalab",
+  "filename": "files/kvittering_fr_06.pdf",
+  "sha256": "2333f883639e5e5e2ba20833fa0ea3ad46a8f1d1ee2110759091c4508ab37224",
+  "extracted_at": "2026-03-22T12:26:49.062261+00:00",
+  "char_count": 424
+}

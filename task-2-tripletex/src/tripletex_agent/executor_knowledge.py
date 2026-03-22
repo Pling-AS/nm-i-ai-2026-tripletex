@@ -22,12 +22,16 @@ FIELD_RULES: dict[str, list[str]] = {
         "ALWAYS set BOTH amountGross AND amountGrossCurrency to the SAME value on every posting.",
         "Do NOT include postings with row=0 — row 0 is system-generated and will cause a 422.",
         "AUTO-SPLIT RULES: ONLY vatType id=3 (25% utgående) triggers auto-split. vatType id=1 does NOT auto-split.",
-        "For supplier costs: use vatType=3 (NOT id=1) with ONLY the debit posting. Tripletex detects the expense account and applies inngående MVA automatically.",
+        "For supplier costs: use TWO postings — (1) DEBIT expense account with vatType=3 and amountGross=GROSS amount, (2) CREDIT account 2400 with vatType=0 and amountGross=NEGATIVE GROSS amount with supplier ref. Tripletex auto-splits the debit into net+VAT. A SINGLE debit posting with vatType=3 causes 422 on many accounts. ALWAYS include the credit to 2400. Ignore legalVatTypes — vatType=3 works for auto-split even when not listed.",
         "For vatType=0: include BOTH debit AND credit postings manually. They must sum to 0.",
         "If you get 422 'postings don't sum to 0': switch to vatType=3 with single debit posting, OR add both debit+credit with vatType=0.",
         "NEVER use vatType=1 — it does NOT auto-generate balancing entries and will always cause 422 with single posting.",
         "Do NOT include currency on postings — let it default. Including currency={} causes 'factor must be >= 1' error.",
         'For supplier invoices, set supplier={"id": supplier_id} on the debit posting.',
+        'For ANY posting on account 2400 (Leverandørgjeld), ALWAYS include supplier={"id": supplier_id}.',
+        'For ANY posting on account 1500 (Kundefordringer), ALWAYS include customer={"id": customer_id}.',
+        "Month-end depreciation: debit a 6000-series depreciation expense (e.g., 6010), credit accumulated depreciation (typically 1039/1049/1059) — do NOT credit 1209.",
+        "Month-end payroll accrual: derive amount from actual salary transactions/postings in period; NEVER invent a payroll amount.",
         'Resolve account numbers: GET /ledger/account with params={"number": XXXX}, then use account={"id": resolved_id}. NEVER use account={"number": XXXX} in postings.',
     ],
     "PUT /ledger/voucher/{id}/:reverse": [
@@ -63,6 +67,35 @@ FIELD_RULES: dict[str, list[str]] = {
         'ALWAYS use params={"nameAndCode": "XXXX"} to filter by STYRK code. NEVER paginate through all codes.',
         'Example: GET /employee/employment/occupationCode with params={"nameAndCode": "3512"} to find STYRK 3512.',
         'If no results, try broader search: params={"nameAndCode": "351"}.',
+    ],
+    # ---- Salary / Payroll ----
+    "POST /salary/transaction": [
+        "Each specification MUST have both 'rate' and 'count' fields. Do NOT use 'amount'.",
+        "Example specification: {salaryType: {id: fastlonn_id}, rate: 59600, count: 1}",
+        "Resolve salaryType IDs by NAME from GET /salary/type (e.g., 'Fastlønn', 'Timelønn', 'Overtid', 'Bonus', 'Feriepenger') — NEVER by list position/index.",
+        "Match salary type names case-insensitively and by exact semantic meaning (base salary uses Fastlønn, hourly uses Timelønn, etc.).",
+        "Employee MUST have an active employment record covering the salary period.",
+        "If you get 'ikke registrert med et arbeidsforhold': create employment first via POST /employee/employment.",
+        "Employment requires a division. Create one with POST /division if none exists.",
+        "Employee MUST have dateOfBirth set before creating employment.",
+    ],
+    "POST /employee/employment": [
+        "Employee MUST have dateOfBirth set. If missing, PUT /employee/{id} with dateOfBirth first.",
+        "Requires division: {id: division_id}. Create division first if GET /division returns empty.",
+        "Set startDate to '2026-01-01' or earlier than the salary period.",
+        "Set isMainEmployer=true and taxDeductionCode='loennFraHovedarbeidsgiver'.",
+    ],
+    "POST /division": [
+        "Requires startDate, municipalityDate, municipality, name, and organizationNumber.",
+        "Get municipality first: GET /municipality/query?query=Oslo&from=0&count=1.",
+        "Example body: {name: 'Hovedavdeling', organizationNumber: '999999999', startDate: '2026-01-01', municipalityDate: '2026-01-01', municipality: {id: mun_id}}",
+    ],
+    # ---- Travel Expense ----
+    "POST /travelExpense/cost": [
+        "MUST use amountCurrencyIncVat — NOT amount or amountExcludingVat.",
+        "For 'Middag representasjon': use 'Representasjon - ikke fradragsb.' cost category (non-deductible).",
+        "In Norway, representation/entertainment expenses are NEVER VAT-deductible.",
+        "MUST include costCategory, paymentType, date, and travelExpense refs.",
     ],
     # ---- Customer / Supplier ----
     "POST /customer": [
@@ -135,8 +168,9 @@ FIELD_RULES: dict[str, list[str]] = {
         "startDate is REQUIRED — set to 2026-01-01 or earlier to allow timesheet entries on any date.",
         "If the prompt mentions a project number (prosjektnummer), set number=<project_number>.",
         "isInternal should be false unless explicitly stated as internal project.",
-        "For project BUDGET (budsjett/orçamento): use fixedprice=<amount> (this is the budget field in Tripletex).",
-        "For fixed-price projects, also set isFixedPrice=true.",
+        "For project BUDGET/fixed-price amount, use field name fixedPrice (camelCase) — NEVER fixedprice.",
+        "For fixed-price projects, set isFixedPrice=true and fixedPrice=<amount> in the same request.",
+        "When prompt explicitly says fixed-price project, set projectCategory='FIXED_PRICE' (or matching enum value from schema if required).",
     ],
     "POST /project/projectActivity": [
         'Requires project={"id": project_id} and activity={"id": activity_id}.',
@@ -180,10 +214,12 @@ FIELD_RULES: dict[str, list[str]] = {
         "These are QUERY PARAMS via the params field — NOT json_body.",
     ],
     "GET /ledger/posting": [
+        "Prefer GET /ledger/posting for ledger analysis; aggregate/group endpoints can return empty groups in sandbox.",
         "Use dateFrom and dateTo for date range filtering.",
         "Use count and from for pagination — ALWAYS paginate if fullResultSize > count.",
         "For expense analysis: filter accounts in range 4000-7999 (Norwegian expense accounts).",
         "Response may be truncated — check fullResultSize vs count and paginate if needed.",
+        "NEVER send the exact same API call twice simultaneously — deduplicate identical method+path+params requests.",
     ],
     "GET /ledger/account": [
         'Use params={"number": XXXX} to resolve a specific account number to its ID.',
@@ -275,6 +311,15 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
         "POST /ledger/voucher",
     ],
     "create_voucher": [
+        "GET /salary/type",
+        "GET /employee",
+        "PUT /employee/{id}",
+        "GET /division",
+        "POST /division",
+        "POST /employee/employment",
+        "GET /employee/employment/occupationCode",
+        "POST /employee/employment/details",
+        "POST /salary/transaction",
         "GET /ledger/account",
         "POST /ledger/voucher",
         "POST /ledger/accountingDimensionName",
@@ -369,6 +414,7 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
     ],
     "year_end_closing": [
         "GET /ledger/account",
+        "GET /ledger/posting",
         "POST /ledger/voucher",
     ],
     "ledger_error_correction": [
@@ -822,9 +868,11 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                     "projectManager": {"id": "from_step2_or_4"},
                     "isInternal": False,
                     "startDate": "today_iso",
-                    "projectCategory": {"id": "from_search (optional)"},
+                    "isFixedPrice": "true if fixed-price project",
+                    "fixedPrice": "number (fixed-price amount, camelCase)",
+                    "projectCategory": "FIXED_PRICE (when fixed-price project)",
                 },
-                "note": "startDate is REQUIRED. name must EXACTLY match prompt.",
+                "note": "startDate is REQUIRED. name must EXACTLY match prompt. NEVER use fixedprice lowercase.",
             },
         ],
     },
@@ -1304,14 +1352,93 @@ def get_endpoint_chain(task_type: str) -> list[str]:
 
 
 def _path_matches(actual_path: str, pattern_path: str) -> bool:
-    """Check if an actual path matches a pattern path with {id} placeholders."""
     actual_segments = actual_path.strip("/").split("/")
     pattern_segments = pattern_path.strip("/").split("/")
     if len(actual_segments) != len(pattern_segments):
         return False
     for actual, pattern in zip(actual_segments, pattern_segments):
         if pattern.startswith("{") and pattern.endswith("}"):
-            continue  # Wildcard match
+            continue
         if actual != pattern:
             return False
     return True
+
+
+DOMAIN_KNOWLEDGE: dict[str, object] = {
+    "standard_accounts": {
+        1209: {"name": "Akkumulerte avskrivninger", "type": "balance"},
+        1230: {"name": "Kjøretøy", "type": "balance"},
+        1240: {"name": "Inventar", "type": "balance"},
+        1250: {"name": "Programvare", "type": "balance"},
+        1700: {"name": "Forskuddsbetalt kostnad", "type": "balance"},
+        1920: {"name": "Bankinnskudd", "type": "balance", "is_bank": True},
+        2400: {"name": "Leverandørgjeld", "type": "balance"},
+        2710: {"name": "Utgående merverdiavgift", "type": "balance"},
+        2920: {"name": "Betalbar skatt", "type": "balance"},
+        3000: {"name": "Salgsinntekt", "type": "result"},
+        4000: {"name": "Varekostnad", "type": "result"},
+        5000: {"name": "Lønn", "type": "result"},
+        6010: {"name": "Avskrivning", "type": "result"},
+        6300: {"name": "Leie lokale", "type": "result"},
+        6340: {"name": "Lys, varme", "type": "result"},
+        6900: {"name": "Annen driftskostnad", "type": "result"},
+        7100: {"name": "Bilkostnad", "type": "result"},
+        7140: {"name": "Reisekostnad", "type": "result"},
+        7350: {"name": "Representasjon", "type": "result"},
+        8700: {"name": "Skattekostnad", "type": "result"},
+    },
+    "vat_types": {
+        0: {"name": "Ingen MVA", "percentage": 0, "auto_split": False},
+        3: {"name": "Utgående MVA 25%", "percentage": 25, "auto_split": True},
+        5: {"name": "Utgående MVA 15%", "percentage": 15, "auto_split": True},
+        6: {"name": "MVA-fri", "percentage": 0, "auto_split": False},
+    },
+    "travel_expense_categories": {
+        "representasjon_middag": {
+            "category_keyword": "Representasjon - ikke fradragsb",
+            "reason": "Norwegian dinner representation is non-deductible for both VAT and income tax",
+        },
+        "representasjon_annet": {
+            "category_keyword": "Representasjon - ikke fradragsb",
+            "reason": "All representation expenses default to non-deductible",
+        },
+        "overnatting": {
+            "category_keyword": "Hotell",
+            "reason": "Hotel/accommodation category",
+        },
+        "transport": {
+            "category_keyword": "Fly",
+            "reason": "Flight/transport category",
+        },
+    },
+    "salary_types": {
+        "base_salary_keywords": ["Fastlønn", "Fast månedslønn", "Månedslønn"],
+        "bonus_keywords": ["Bonus", "Tillegg", "Overtid"],
+        "specification_fields": {
+            "required": ["salaryType", "rate", "count"],
+            "note": "Use rate (amount per unit) and count (number of units), NOT amount field",
+        },
+    },
+    "salary_prerequisites": {
+        "chain": [
+            "1. Employee must have dateOfBirth set",
+            "2. Division must exist (POST /division with municipality)",
+            "3. Employment must exist (POST /employee/employment with division)",
+            "4. Employment details must exist (POST /employee/employment/details with occupationCode)",
+            "5. Then POST /salary/transaction with payslips[].specifications[].rate + count",
+        ],
+        "municipality_query": "GET /municipality/query?query=Oslo&from=0&count=1",
+        "default_division": {
+            "name": "Hovedavdeling",
+            "organizationNumber": "999999999",
+        },
+        "default_employment": {
+            "isMainEmployer": True,
+            "taxDeductionCode": "loennFraHovedarbeidsgiver",
+        },
+    },
+}
+
+
+def get_domain_knowledge() -> dict[str, object]:
+    return DOMAIN_KNOWLEDGE

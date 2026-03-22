@@ -495,6 +495,7 @@ def _build_corrected_prior_grid(
     """
     from scipy.ndimage import convolve
 
+    seed_analysis = seed_analyses[seed_index]
     h, w = seed_analysis.height, seed_analysis.width
     grid = seed_analysis.grid
     class_masks = seed_analysis.class_masks
@@ -573,13 +574,14 @@ def _build_corrected_prior_grid(
 def predict_full_grid_vectorized(
     seed_index: int,
     observation_store: ObservationStore,
-    seed_analysis: SeedAnalysis,
+    seed_analyses: list[SeedAnalysis],
 ) -> NDArray[np.floating]:
     """Faster vectorized prediction for the full grid.
 
     Uses single-formula Dirichlet: p_k = (n_k + τ·m_k) / (N + τ)
     Static cells handled vectorized, dynamic cells iterate for prior lookup.
     """
+    seed_analysis = seed_analyses[seed_index]
     h, w = seed_analysis.height, seed_analysis.width
     grid = seed_analysis.grid
     class_masks = seed_analysis.class_masks
@@ -597,12 +599,16 @@ def predict_full_grid_vectorized(
     dynamic_mask = ~ocean_mask & ~mountain_mask
     obs_grid = observation_store.get_seed_obs_counts(seed_index)
 
-    # Pre-compute cross-seed pooled counts (sum of other seeds at same position)
+    # Pre-compute cross-seed pooled counts (sum of other seeds at same position WITH SAME ARCHETYPE)
     cross_seed_grid = np.zeros((h, w, NUM_CLASSES), dtype=np.float64)
     if CROSS_SEED_LAMBDA > 0:
+        my_archetypes = seed_analysis.archetypes
         for other_seed in range(observation_store.seeds_count):
             if other_seed != seed_index:
-                cross_seed_grid += observation_store.get_seed_counts(other_seed).astype(np.float64)
+                other_archetypes = seed_analyses[other_seed].archetypes
+                match_mask = (my_archetypes == other_archetypes)
+                other_counts = observation_store.get_seed_counts(other_seed).astype(np.float64)
+                cross_seed_grid += other_counts * match_mask[..., np.newaxis]
 
     for y in range(h):
         for x in range(w):

@@ -1,5 +1,34 @@
 # Tripletex Agent Changelog
 
+## v4.0.0 (2026-03-22) — ADAPTIVE INTELLIGENCE ENGINE
+- **Schema Validator (Hallucination Guillotine)**: Every POST/PUT payload validated against OpenAPI spec before sending. Auto-corrects field casing (`fixedprice` → `fixedPrice`), strips readOnly fields. Recursive nested object support. Zero false positives — unknown fields preserved, only casing fixed.
+- **Memory Palace**: Indexes all perfect-score traces by task_type. On new runs, retrieves best matching "recipe" as compact few-shot example injected into executor prompt. Self-improving — indexes after every successful run. Bounded: keeps only best recipe per (task_type, language) pair.
+- **Scout & Sniper (Trace Compiler)**: Compiles perfect JSONL traces into minimal replay scripts. Extracts only successful mutations, builds dependency graph, prunes discovery/verification calls. Sniper mode replays compiled traces for maximum efficiency bonus. Handles $REF: ID substitution across sandboxes.
+- **Shadow Graph (Parallel Discovery)**: Single `asyncio.gather` burst of 10 GET requests at run start pulls all sandbox state (employees, customers, accounts, activities, salary types, etc.) into local memory. Subsequent discovery GETs hit cache. Replaces 4-8 sequential calls with ~1 round-trip.
+- **Mutation Fuzzer**: Analyzes near-miss traces (≥50% checks passed). Generates up to 8 mutation candidates: VAT type rotation, field casing fixes, add customer/supplier refs on AR/AP accounts, remove suspicious fields, post-mortem-driven mutations. Logged to trace for manual or automated resubmission.
+- **Deterministic Path Fixes**: create_customer forwards description + all extra_fields (fixes 3/6→6/6 on description tasks). create_department no longer generates hash-based departmentNumber (fixes unnecessary field failures).
+- **Domain Knowledge Expansion**: New FIELD_RULES for POST /project (fixedPrice casing, projectCategory), POST /salary/transaction (resolve type by name), GET /ledger/posting (prefer over aggregate). Strengthened voucher rules: mandatory customer ref on 1500, supplier ref on 2400, correct depreciation account pairs (DR 6xxx / CR 1039-1059).
+- **Task Playbook Overhaul**: Rewrote 5 micro-playbooks (<15 lines each): year_end_closing, create_voucher (salary), register_supplier_invoice, register_payment (FX handling), create_project (fixed-price).
+- **Vertex AI Logging Overhaul**: Separated timeout vs transport errors. Logs model, URL, elapsed time, token age, error type on every failure. Token refresh failures no longer silently swallowed. Debug-level request/response metrics (input/output tokens, stop reason).
+
+## v3.0.0 (2026-03-22) — DETERMINISTIC EXECUTION ENGINE
+- **Batch Account Resolution**: Regex-extracts all 4-digit account numbers from prompt, resolves in parallel async GETs before executor starts. Registered in middleware for $REF. Saves 3-6 sequential calls per voucher/year-end task.
+- **Deterministic Entity Setup**: Creates planner-extracted departments before executor starts. Skips if entity exists in sandbox_discovery.
+- **422 Interceptor**: Catches 422 errors in _run_tool, classifies known patterns (missing account, unresolved $REF, postings sum, supplier ref). Logs patterns to trace for auto-recovery. Extensible retry framework.
+- **Domain Knowledge Cache**: Hardcoded Norwegian SAF-T accounts (1209, 8700, 2400, 1920...), VAT type mappings, travel expense category rules, salary prerequisite chain. Injected into execution_brief — LLM has domain knowledge without API calls.
+- **Conditional Prefetch**: Task-type routing for sandbox context. create_supplier/customer/product/department → 0 prefetch GETs. year_end_closing/ledger_error_correction → 0 prefetch. Invoice/payment → targeted categories only.
+- **$REF Path Resolution**: $REF: tokens in URL paths (e.g., PUT /ledger/account/$REF:account_1920) now resolved by middleware. Fixes #1 recurring 422 error.
+- **$REF List Body Resolution**: $REF: tokens inside list bodies (batch endpoints like POST /order/orderline/list) now resolved recursively.
+- **$REF POST Registration Fix**: auto_register_from_request_response now unwraps Tripletex {"value": {...}} response wrapper. Entities from POST responses properly registered.
+- **verify_and_repair Overhaul**: Skips 20+ sub-resource paths (employment, travelExpense/cost, voucher, division, etc.) that don't have top-level entity fields. Exact path matching replaces prefix matching. Eliminates spurious 422s from PUT name/email on employment records.
+- **Deterministic Execution Expansion**: create_supplier, create_customer, create_department bypass LLM executor entirely. Single POST from planner data. create_supplier: 12→1 API calls.
+- **Skip Discovery/Verify**: Pure creation tasks (supplier, customer, product, department) skip sandbox_discovery and verify_and_repair. Saves 3-8 API calls per task.
+- **Salary Playbook Overhaul**: Full prerequisite chain documented (division→employment→employment details→salary transaction). Rate+count field requirement. Salary cheat sheet with endpoint chain injected for salary tasks.
+- **Travel Expense Playbook**: Norwegian representation expense rules — always "ikke fradragsb." for dinner representation. Cost category and payment type selection guidance.
+- **Salary/Travel Field Rules**: 4 new FIELD_RULES entries for POST /salary/transaction, POST /employee/employment, POST /division, POST /travelExpense/cost.
+- **Bank Account Ready Flag**: execution_brief.bank_account_ready tells executor to skip bank setup when already configured.
+- **Voucher Account Creation**: Playbook instructs to CREATE missing accounts (POST /ledger/account) instead of giving up.
+
 ## v2.0.0 (2026-03-22) — COMPILER ARCHITECTURE
 - **Omni-Context Pre-fetch**: 8 parallel GETs at execution start (customers, products, employees, suppliers, departments, activities, payment types, bank account). All entities registered as $REF and injected into execution brief. LLM skips discovery calls entirely.
 - **Dynamic API Blinding**: Salary/payroll tasks detected via keyword scan. /ledger/voucher hidden from LLM, salary endpoints injected instead (GET /salary/type, POST /salary/payslip, POST /wageRow, PUT /:approve).

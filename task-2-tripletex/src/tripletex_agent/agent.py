@@ -1,6 +1,7 @@
 from collections import defaultdict
 from difflib import get_close_matches
 import json
+from pathlib import Path
 import re
 import time
 from dataclasses import dataclass, field
@@ -15,8 +16,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 from tripletex_agent.config import Settings
+from tripletex_agent.executor_knowledge import (
+    get_endpoint_chain,
+    get_domain_knowledge,
+    select_field_rules,
+    select_successful_trace,
+)
 from tripletex_agent.files import prepare_attachments, prepare_attachments_async
+from tripletex_agent.memory_palace import MemoryPalace  # pyright: ignore[reportMissingImports]
 from tripletex_agent.middleware import ExecutionMiddleware
+from tripletex_agent.mutation_fuzzer import MutationFuzzer  # pyright: ignore[reportMissingImports]
 from tripletex_agent.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -27,20 +36,48 @@ from tripletex_agent.prompts import (
     PLANNER_SYSTEM_PROMPT,
     build_executor_system_prompt,
 )
+from tripletex_agent.schema_validator import validate_and_fix_payload
 from tripletex_agent.schemas import PlannerOutput, SolveRequest
-from tripletex_agent.executor_knowledge import (
-    get_endpoint_chain,
-    select_field_rules,
-    select_successful_trace,
-)
+from tripletex_agent.shadow_discovery import discover_sandbox_parallel  # pyright: ignore[reportMissingImports]
 from tripletex_agent.spec_index import TripletexSpecIndex
 from tripletex_agent.trace import RunTrace
+from tripletex_agent.trace_compiler import (  # pyright: ignore[reportMissingImports]
+    compile_trace,
+    match_compiled_trace,
+    replay_trace,
+)
 from tripletex_agent.tripletex import (
     TripletexApiError,
     TripletexClient,
     compact_response,
 )
 from tripletex_agent.version import AGENT_VERSION
+
+_SKIP_DISCOVERY_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "create_supplier",
+        "create_customer",
+        "create_product",
+        "create_department",
+    }
+)
+
+_SKIP_VERIFY_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "create_supplier",
+        "create_customer",
+        "create_product",
+        "create_department",
+    }
+)
+
+_DETERMINISTIC_TASK_TYPES: frozenset[str] = frozenset(
+    {
+        "create_supplier",
+        "create_customer",
+        "create_department",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -74,6 +111,7 @@ class ExecutionState:
     advisor_422_endpoints: set[str] = field(default_factory=set)
     created_resources: list[CreatedResource] = field(default_factory=list)
     sandbox_discovery: dict[str, Any] = field(default_factory=dict)
+    pre_resolved_accounts: dict[int, int | None] = field(default_factory=dict)
     middleware: Any = None
     reclassification_done: bool = False
     off_plan_api_calls: int = 0
@@ -154,6 +192,8 @@ class TripletexAccountingAgent:
             session_token=credentials.session_token,
             timeout=self._settings.http_timeout_seconds,
         )
+        middleware = ExecutionMiddleware()
+        execution_state.middleware = middleware
         try:
             planner = await self._plan(
                 openrouter,
@@ -163,18 +203,33 @@ class TripletexAccountingAgent:
             )
             trace.write("planner", planner.model_dump())
 
-            sandbox_discovery = await self._discover_sandbox_entities(
-                tripletex,
-                planner,
-                execution_state,
-                trace,
-            )
-
             corrected = _maybe_correct_task_type(planner, trace)
             if corrected:
                 planner = corrected
 
             task_tier = _classify_task_tier(planner.task_type)
+
+            if planner.task_type in _SKIP_DISCOVERY_TASK_TYPES:
+                sandbox_discovery: dict[str, Any] = {}
+                trace.write(
+                    "sandbox_discovery_skipped", {"task_type": planner.task_type}
+                )
+            else:
+                if task_tier >= 3:
+                    try:
+                        shadow_state = await discover_sandbox_parallel(tripletex)
+                        trace.write(
+                            "shadow_discovery",
+                            {"summary": shadow_state.to_context_string()[:500]},
+                        )
+                    except Exception as e:
+                        logger.debug("Shadow discovery failed: %s", e)
+                sandbox_discovery = await self._discover_sandbox_entities(
+                    tripletex,
+                    planner,
+                    execution_state,
+                    trace,
+                )
             executor_chain = _build_executor_model_chain(self._settings, task_tier)
             logger.info(
                 "Routing: task_type=%s tier=%d planner=%s executor=%s",
@@ -195,23 +250,90 @@ class TripletexAccountingAgent:
 
             execution_state.sandbox_discovery = sandbox_discovery
 
-            await self._execute(
-                openrouter,
-                tripletex,
-                request,
-                planner,
-                attachments.executor_content_parts,
-                execution_state,
-                trace,
-                model_chain=executor_chain,
-            )
-            await self._verify_and_repair(
-                openrouter,
+            await self._setup_entities_deterministic(
                 tripletex,
                 planner,
                 execution_state,
                 trace,
             )
+
+            pre_resolved_accounts = await self._batch_resolve_accounts(
+                tripletex,
+                request.prompt,
+                execution_state,
+                trace,
+                planner=planner,
+            )
+            execution_state.pre_resolved_accounts = pre_resolved_accounts
+
+            deterministic_result = await self._try_deterministic_execution(
+                tripletex, planner, execution_state, trace
+            )
+            if deterministic_result is None:
+                try:
+                    compiled_dir = (
+                        Path(__file__).parent.parent.parent / "runs" / "compiled_traces"
+                    )
+                    compiled = match_compiled_trace(
+                        request.prompt,
+                        planner.task_type,
+                        compiled_dir,
+                    )
+                    if compiled:
+                        trace.write(
+                            "sniper_mode",
+                            {
+                                "task_type": compiled.task_type,
+                                "source": compiled.source_trace,
+                                "compiled_calls": compiled.total_calls,
+                            },
+                        )
+                        calls_before_sniper = tripletex.call_count
+                        registry = (
+                            execution_state.middleware.registry
+                            if execution_state.middleware
+                            else None
+                        )
+                        replay_results = replay_trace(compiled, tripletex, registry)
+                        calls_after_sniper = tripletex.call_count
+                        sniper_success = (
+                            all(
+                                isinstance(r, dict) and r.get("ok", False)
+                                for r in replay_results
+                            )
+                            and calls_after_sniper > calls_before_sniper
+                        )
+                        if sniper_success:
+                            trace.write(
+                                "sniper_complete",
+                                {"steps": len(replay_results), "all_ok": True},
+                            )
+                            deterministic_result = {"ok": True, "sniper": True}
+                except Exception as e:
+                    logger.debug("Sniper mode failed, falling back to executor: %s", e)
+
+                if deterministic_result is None:
+                    await self._execute(
+                        openrouter,
+                        tripletex,
+                        request,
+                        planner,
+                        attachments.executor_content_parts,
+                        execution_state,
+                        trace,
+                        model_chain=executor_chain,
+                    )
+
+            if planner.task_type not in _SKIP_VERIFY_TASK_TYPES:
+                await self._verify_and_repair(
+                    openrouter,
+                    tripletex,
+                    planner,
+                    execution_state,
+                    trace,
+                )
+            else:
+                trace.write("verify_skipped", {"task_type": planner.task_type})
             trace.write(
                 "done",
                 {
@@ -220,6 +342,33 @@ class TripletexAccountingAgent:
                     "tripletex_call_log": tripletex.call_log,
                 },
             )
+
+            try:
+                runs_dir = Path(__file__).parent.parent.parent / "runs"
+                palace = MemoryPalace(runs_dir)
+                palace.add_trace(Path(trace.path))
+                try:
+                    compile_trace(Path(trace.path))
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+            try:
+                fuzzer = MutationFuzzer()
+                mutations = fuzzer.analyze_near_miss(Path(trace.path))
+                if mutations:
+                    trace.write(
+                        "mutation_candidates",
+                        {
+                            "count": len(mutations),
+                            "types": [m.mutation_type for m in mutations],
+                            "descriptions": [m.description for m in mutations[:3]],
+                        },
+                    )
+            except Exception:
+                pass
+
             return AgentRunResult(
                 planner=planner,
                 stats={
@@ -700,6 +849,7 @@ class TripletexAccountingAgent:
             "line_items": [line_item.model_dump() for line_item in planner.line_items],
             "actions": planner.actions,
             "ordered_steps": planner.ordered_steps,
+            "domain_knowledge": get_domain_knowledge(),
             "working_rules": [
                 "OBEY field_rules BEFORE your first write — they prevent known 422 errors.",
                 "Use prefetched_schemas to know exact field names and types — do NOT call inspect_tripletex_endpoint unless prefetched schemas are missing.",
@@ -707,6 +857,8 @@ class TripletexAccountingAgent:
                 "Prefer existing entities when conflicts or duplicates are plausible.",
                 "Keep actions anchored to the primary target resource.",
                 "If blocked by external or company-level setup, stop and report it.",
+                "DOMAIN KNOWLEDGE: execution_brief.domain_knowledge has standard Norwegian accounts, VAT types, travel expense categories, and salary prerequisite chain. Use this instead of API lookups.",
+                "MISSING ACCOUNTS: If an account number from the prompt is NOT in pre_resolved_accounts or returned None, CREATE it with POST /ledger/account before using it.",
             ],
         }
 
@@ -794,28 +946,50 @@ class TripletexAccountingAgent:
         if is_salary_task:
             salary_cheat_sheet = """
 ## SALARY/PAYROLL TASK — SPECIAL INSTRUCTIONS
-This is a SALARY task. Do NOT use POST /ledger/voucher for salary — it scores 0 points.
+This is a SALARY task. Do NOT use POST /ledger/voucher — it scores 0 points.
 
-CORRECT APPROACH — Try these endpoints in order:
-1. GET /salary/type — List available salary/wage types
-2. POST /salary/payslip — Create a payslip for the employee
-   Body: {"employee": {"id": emp_id}, "year": 2026, "month": 3}
-3. POST /salary/payslip/{id}/wageRow — Add wage rows (base salary + bonus)
-   Body: {"wageType": {"id": wage_type_id}, "amount": 50400}
-4. PUT /salary/payslip/{id}/:approve — Approve the payslip
+USE POST /salary/transaction — the ONLY correct endpoint for salary processing.
 
-If salary endpoints return 403 or "not found", THEN fall back to POST /ledger/voucher.
-But ALWAYS try the salary API first.
+PREREQUISITE CHAIN (follow in order, skip steps where entities already exist):
+1. Employee MUST have dateOfBirth — if missing, PUT /employee/{id} with dateOfBirth="1990-01-15"
+2. Division MUST exist — GET /division, if empty: GET /municipality/query?query=Oslo, then POST /division
+3. Employment MUST exist — POST /employee/employment with division, startDate="2026-01-01"
+4. Employment details MUST exist — POST /employee/employment/details with occupationCode, annualSalary
 
-Common wage types to search for:
-- "Fastlønn" or "Fast månedslønn" — base monthly salary
-- "Bonus" or "Tillegg" — one-time bonus
+THEN create the salary transaction:
+POST /salary/transaction with body:
+{date: "YYYY-MM-DD", year: YYYY, month: M, payslips: [{employee: {id: emp_id}, specifications: [{salaryType: {id: type_id}, rate: amount, count: 1}]}]}
+
+CRITICAL: Use "rate" and "count" in specifications, NOT "amount".
+GET /salary/type to find "Fastlønn" (base salary) and "Bonus" type IDs.
 """
             focused_prompt = focused_prompt + salary_cheat_sheet
         execution_brief = self._build_execution_brief(
             planner=planner,
             request_prompt=request.prompt,
         )
+        try:
+            runs_dir = Path(__file__).parent.parent.parent / "runs"
+            palace = MemoryPalace(runs_dir)
+            recipe = palace.find_recipe(planner.task_type, request.prompt)
+            if recipe:
+                execution_brief["memory_palace_recipe"] = palace.format_as_example(
+                    recipe
+                )
+                trace.write(
+                    "memory_palace_hit",
+                    {
+                        "task_type": recipe.task_type,
+                        "source": recipe.source_file,
+                        "calls": recipe.total_calls,
+                    },
+                )
+        except Exception as e:
+            logger.debug("Memory palace lookup failed: %s", e)
+        if execution_state.pre_resolved_accounts:
+            execution_brief["pre_resolved_accounts"] = {
+                str(k): v for k, v in execution_state.pre_resolved_accounts.items()
+            }
         if is_salary_task:
             execution_brief["planned_endpoints"] = [
                 ep
@@ -827,27 +1001,54 @@ Common wage types to search for:
                     {
                         "method": "GET",
                         "path": "/salary/type",
-                        "summary": "List salary/wage types",
+                        "summary": "List salary/wage types (find Fastlønn and Bonus IDs)",
+                    },
+                    {
+                        "method": "GET",
+                        "path": "/division",
+                        "summary": "Check if division exists (required for employment)",
                     },
                     {
                         "method": "POST",
-                        "path": "/salary/payslip",
-                        "summary": "Create employee payslip",
+                        "path": "/division",
+                        "summary": "Create division (prerequisite for employment)",
                     },
                     {
                         "method": "POST",
-                        "path": "/salary/payslip/{id}/wageRow",
-                        "summary": "Add wage row to payslip",
+                        "path": "/employee/employment",
+                        "summary": "Create employment record (prerequisite for salary)",
                     },
                     {
-                        "method": "PUT",
-                        "path": "/salary/payslip/{id}/:approve",
-                        "summary": "Approve payslip",
+                        "method": "POST",
+                        "path": "/employee/employment/details",
+                        "summary": "Create employment details (prerequisite for salary)",
+                    },
+                    {
+                        "method": "POST",
+                        "path": "/salary/transaction",
+                        "summary": "Create salary transaction with payslips and specifications",
                     },
                 ]
             )
         messages: list[dict[str, Any]] = [{"role": "system", "content": focused_prompt}]
         middleware = ExecutionMiddleware()
+
+        for account_number, account_id in execution_state.pre_resolved_accounts.items():
+            if account_id is not None:
+                middleware.registry.register(f"account_{account_number}", account_id)
+
+        sandbox_context = await middleware.prefetch_sandbox_context(
+            tripletex, task_type=planner.task_type
+        )
+        if sandbox_context:
+            execution_brief["sandbox_context"] = middleware.scrub_ids_for_llm(
+                sandbox_context
+            )
+        bank_info = sandbox_context.get("bank_account")
+        execution_brief["bank_account_ready"] = (
+            isinstance(bank_info, dict) and bank_info.get("isBankAccount") is True
+        )
+
         if execution_state.sandbox_discovery:
             for entity_type, entity_data in execution_state.sandbox_discovery.items():
                 if isinstance(entity_data, dict) and entity_data.get("id"):
@@ -1033,14 +1234,37 @@ Common wage types to search for:
                 messages.append({"role": "user", "content": budget_warning})
             num_steps = len(getattr(planner, "ordered_steps", None) or [])
             use_thinking = num_steps >= 5 or task_tier >= 2
-            message = await self._chat_completion_with_fallback(
-                openrouter,
-                messages=messages,
-                tools=tools,
-                max_tokens=64000 if use_thinking else 16000,
-                model_chain=executor_model_chain,
-                enable_thinking=use_thinking,
-            )
+            llm_retries = 2 if step_idx == 0 else 1
+            for llm_attempt in range(llm_retries):
+                try:
+                    message = await self._chat_completion_with_fallback(
+                        openrouter,
+                        messages=messages,
+                        tools=tools,
+                        max_tokens=64000 if use_thinking else 16000,
+                        model_chain=executor_model_chain,
+                        enable_thinking=use_thinking,
+                    )
+                    break
+                except Exception as llm_exc:
+                    if llm_attempt < llm_retries - 1:
+                        logger.warning(
+                            "Executor LLM call failed (attempt %d/%d), retrying in 2s: %s",
+                            llm_attempt + 1,
+                            llm_retries,
+                            llm_exc,
+                        )
+                        trace.write(
+                            "executor_llm_retry",
+                            {
+                                "attempt": llm_attempt + 1,
+                                "error": str(llm_exc)[:300],
+                                "step": step_idx,
+                            },
+                        )
+                        await asyncio.sleep(2)
+                    else:
+                        raise
             tool_calls = message.get("tool_calls") or []
             assistant_content = message.get("content") or ""
             thinking_content = message.get("thinking") or ""
@@ -1750,6 +1974,33 @@ Common wage types to search for:
                 )
                 if preflight_error is not None:
                     return preflight_error
+
+                try:
+                    json_body = arguments.get("json_body")
+                    if (
+                        json_body
+                        and isinstance(json_body, dict)
+                        and arguments["method"] in ("POST", "PUT")
+                    ):
+                        fixed_body, corrections = validate_and_fix_payload(
+                            arguments["method"],
+                            arguments["path"],
+                            json_body,
+                            self._spec_index,
+                        )
+                        if corrections:
+                            arguments["json_body"] = fixed_body
+                            if trace:
+                                trace.write(
+                                    "schema_corrections",
+                                    {
+                                        "corrections": corrections,
+                                        "path": arguments["path"],
+                                    },
+                                )
+                except Exception as e:
+                    logger.debug("Schema validator failed: %s", e)
+
                 try:
                     response = await tripletex.request(
                         method=arguments["method"],
@@ -1846,6 +2097,37 @@ Common wage types to search for:
         except KeyError as exc:
             return {"ok": False, "error": str(exc)}
         except TripletexApiError as exc:
+            if tool_name == "tripletex_request" and trace is not None:
+                method = str(arguments.get("method") or "").upper()
+                path = str(arguments.get("path") or "")
+                params_raw = arguments.get("params")
+                params = params_raw if isinstance(params_raw, dict) else None
+                json_body_raw = arguments.get("json_body")
+                json_body = (
+                    json_body_raw if isinstance(json_body_raw, (dict, list)) else None
+                )
+
+                # Try auto-fix for known 422 patterns
+                auto_fix_result = await self._try_auto_fix_422(
+                    exc,
+                    tripletex,
+                    method,
+                    path,
+                    params,
+                    json_body,
+                    execution_state,
+                    trace,
+                )
+                if auto_fix_result is not None:
+                    return {
+                        "ok": True,
+                        "status_code": None,
+                        "summary": f"Auto-fixed 422 and retried {method} {path}",
+                        "error": "",
+                        "resource_id": _extract_primary_resource_id(auto_fix_result),
+                        "validation_summary": None,
+                    }
+
             body_str = str(exc.body).lower() if exc.body else ""
             is_proxy_token_error = "invalid or expired proxy token" in body_str or (
                 "expired" in body_str and "proxy" in body_str
@@ -1877,6 +2159,100 @@ Common wage types to search for:
             return {"ok": False, "error": str(exc)}
 
         return {"ok": False, "error": f"Unknown tool: {tool_name}"}
+
+    async def _try_auto_fix_422(
+        self,
+        exc: TripletexApiError,
+        tripletex: TripletexClient,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None,
+        json_body: dict | list | None,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+    ) -> dict[str, Any] | None:
+        """Attempt deterministic auto-fix for known 422 patterns. Returns response if fixed, None if not."""
+        _ = tripletex
+        _ = method
+        _ = path
+        _ = params
+        _ = json_body
+        _ = execution_state
+
+        if exc.status_code != 422 or not isinstance(exc.body, dict):
+            return None
+
+        messages = exc.body.get("validationMessages", [])
+        if not messages:
+            return None
+
+        first_msg = messages[0] if messages else {}
+        if not isinstance(first_msg, dict):
+            return None
+
+        field = str(first_msg.get("field", ""))
+        message = str(first_msg.get("message", ""))
+        field_lower = field.lower()
+        message_lower = message.lower()
+
+        # Pattern 1: Account ID wrong type (unresolved $REF or non-existent account)
+        if "account" in field_lower and "korrekt type" in message_lower:
+            trace.write("auto_fix_422", {"pattern": "account_type", "field": field})
+            return None
+
+        # Pattern 2: Missing account — create it automatically (future)
+        if "account" in field_lower and (
+            "finnes ikke" in message_lower or "does not exist" in message_lower
+        ):
+            trace.write("auto_fix_422", {"pattern": "missing_account", "field": field})
+            return None
+
+        # Pattern 3: Postings don't sum to zero
+        if "sum" in message_lower and "0" in message:
+            trace.write(
+                "auto_fix_422_hint",
+                {
+                    "pattern": "postings_sum",
+                    "hint": "Try vatType={id:3} with single debit posting for auto-split, or add explicit credit posting with vatType={id:0}",
+                },
+            )
+            return None
+
+        # Pattern 4: Supplier/employee ref wrong type (unresolved $REF)
+        if (
+            "supplier" in field_lower or "employee" in field_lower
+        ) and "korrekt type" in message_lower:
+            if isinstance(json_body, dict):
+                postings = json_body.get("postings", [])
+                if isinstance(postings, list):
+                    for posting in postings:
+                        if not isinstance(posting, dict):
+                            continue
+                        supplier = posting.get("supplier", {})
+                        if isinstance(supplier, dict):
+                            supplier_id = supplier.get("id")
+                            if isinstance(supplier_id, str) and supplier_id.startswith(
+                                "$REF:"
+                            ):
+                                ref_key = supplier_id[5:]
+                                trace.write(
+                                    "auto_fix_422",
+                                    {
+                                        "pattern": "unresolved_supplier_ref",
+                                        "ref": ref_key,
+                                    },
+                                )
+            return None
+
+        trace.write(
+            "auto_fix_422_unhandled",
+            {
+                "field": field,
+                "message": message,
+                "status_code": exc.status_code,
+            },
+        )
+        return None
 
     def _inspect_tripletex_endpoint(
         self,
@@ -2161,6 +2537,265 @@ Common wage types to search for:
             trace.write("sandbox_discovery", discovery)
         return discovery
 
+    async def _batch_resolve_accounts(
+        self,
+        tripletex: TripletexClient,
+        prompt: str,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+        planner: PlannerOutput | None = None,
+    ) -> dict[int, int | None]:
+        import asyncio
+
+        account_pattern = re.compile(r"\b([1-9]\d{3})\b")
+        candidates = set(int(m) for m in account_pattern.findall(prompt))
+        accounts_to_resolve = {n for n in candidates if 1000 <= n <= 9999}
+        current_year = date.today().year
+        accounts_to_resolve -= {current_year, current_year - 1, current_year + 1}
+
+        if planner:
+            non_account_numbers: set[int] = set()
+            for li in getattr(planner, "line_items", []) or []:
+                if li.product_number:
+                    try:
+                        non_account_numbers.add(int(li.product_number))
+                    except (ValueError, TypeError):
+                        pass
+                if li.unit_price_excluding_vat is not None:
+                    price = li.unit_price_excluding_vat
+                    for val in (abs(price), abs(price) * 1.25):
+                        int_val = int(val)
+                        if 1000 <= int_val <= 9999:
+                            non_account_numbers.add(int_val)
+                if li.quantity is not None:
+                    q = int(abs(li.quantity))
+                    if 1000 <= q <= 9999:
+                        non_account_numbers.add(q)
+            if non_account_numbers:
+                accounts_to_resolve -= non_account_numbers
+
+        if not accounts_to_resolve:
+            return {}
+
+        resolved: dict[int, int | None] = {}
+
+        async def _resolve_one(account_number: int) -> tuple[int, int | None]:
+            try:
+                result = await tripletex.request(
+                    method="GET",
+                    path="/ledger/account",
+                    params={"number": account_number},
+                )
+                if isinstance(result, dict):
+                    values = result.get("values", [])
+                    if values and isinstance(values[0], dict):
+                        account_id = values[0].get("id")
+                        if isinstance(account_id, int):
+                            return (account_number, account_id)
+                return (account_number, None)
+            except Exception:
+                return (account_number, None)
+
+        tasks = [_resolve_one(n) for n in sorted(accounts_to_resolve)]
+        results = await asyncio.gather(*tasks)
+        for account_number, account_id in results:
+            resolved[account_number] = account_id
+
+        if resolved:
+            trace.write(
+                "batch_account_resolution",
+                {
+                    "resolved": {str(k): v for k, v in resolved.items()},
+                    "found": sum(1 for v in resolved.values() if v is not None),
+                    "missing": sum(1 for v in resolved.values() if v is None),
+                },
+            )
+
+        return resolved
+
+    async def _setup_entities_deterministic(
+        self,
+        tripletex: TripletexClient,
+        planner: PlannerOutput,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+    ) -> None:
+        if planner.task_type == "create_department":
+            return
+
+        for entity in getattr(planner, "entities", []):
+            role = entity.role.lower()
+            extra = entity.extra_fields or {}
+
+            if role in execution_state.sandbox_discovery:
+                existing = execution_state.sandbox_discovery[role]
+                if isinstance(existing, dict) and existing.get("exists"):
+                    continue
+
+            try:
+                if role == "department" or extra.get("department"):
+                    dept_name = entity.name or extra.get("department")
+                    if dept_name and role == "department":
+                        await tripletex.request(
+                            method="POST",
+                            path="/department",
+                            json_body={"name": dept_name},
+                        )
+                        trace.write(
+                            "entity_setup",
+                            {"role": role, "name": dept_name, "action": "created"},
+                        )
+
+                elif role == "employee":
+                    pass
+
+            except Exception as exc:
+                trace.write(
+                    "entity_setup_error",
+                    {"role": role, "error": str(exc)[:200]},
+                )
+
+    async def _try_deterministic_execution(
+        self,
+        tripletex: TripletexClient,
+        planner: PlannerOutput,
+        execution_state: ExecutionState,
+        trace: RunTrace,
+    ) -> dict[str, Any] | None:
+        if planner.task_type not in _DETERMINISTIC_TASK_TYPES:
+            return None
+
+        entities = getattr(planner, "entities", [])
+        if not entities:
+            logger.info("Deterministic skipped: no entities extracted by planner")
+            return None
+
+        entity = entities[0]
+        extra = entity.extra_fields or {}
+        payload: dict[str, Any] = {}
+
+        if planner.task_type == "create_supplier":
+            if not entity.name:
+                return None
+            payload = {"name": entity.name}
+            if entity.organization_number:
+                payload["organizationNumber"] = entity.organization_number
+            if entity.email:
+                payload["email"] = entity.email
+                payload["invoiceEmail"] = entity.email
+            if entity.phone:
+                payload["phoneNumber"] = entity.phone
+            endpoint = "/supplier"
+
+        elif planner.task_type == "create_customer":
+            if not entity.name:
+                return None
+            payload = {"name": entity.name}
+            if entity.organization_number:
+                payload["organizationNumber"] = entity.organization_number
+            if entity.email:
+                payload["email"] = entity.email
+                payload["invoiceEmail"] = entity.email
+            if entity.phone:
+                payload["phoneNumber"] = entity.phone
+            address = extra.get("address") or extra.get("postalAddress")
+            if isinstance(address, dict):
+                payload["postalAddress"] = address
+            elif isinstance(address, str):
+                payload["postalAddress"] = {
+                    "addressLine1": address,
+                    "city": extra.get("city", ""),
+                    "zipCode": extra.get("postal_code", extra.get("postalCode", "")),
+                    "country": {"id": 161},
+                }
+            elif extra.get("addressLine1") or extra.get("street"):
+                payload["postalAddress"] = {
+                    "addressLine1": extra.get("addressLine1", extra.get("street", "")),
+                    "city": extra.get("city", ""),
+                    "zipCode": extra.get(
+                        "postal_code", extra.get("postalCode", extra.get("zipCode", ""))
+                    ),
+                    "country": {"id": 161},
+                }
+            _CUSTOMER_EXTRA_FORWARD = {
+                "description",
+                "description_request",
+                "category",
+                "invoicesDueIn",
+                "invoicesDueInType",
+            }
+            _DESCRIPTION_ALIASES = {"description_request"}
+            for key in _CUSTOMER_EXTRA_FORWARD:
+                val = extra.get(key)
+                if val is not None:
+                    api_key = "description" if key in _DESCRIPTION_ALIASES else key
+                    if isinstance(val, str) and len(val) > 5000:
+                        val = val[:5000]
+                    payload[api_key] = val
+            if "description" not in payload:
+                for key, val in extra.items():
+                    if (
+                        "description" in key.lower() or "handover" in key.lower()
+                    ) and isinstance(val, str):
+                        payload["description"] = val[:5000] if len(val) > 5000 else val
+                        break
+            endpoint = "/customer"
+
+        elif planner.task_type == "create_department":
+            name = entity.name or extra.get("name")
+            if not name:
+                return None
+            payload = {"name": name}
+            endpoint = "/department"
+
+        else:
+            return None
+
+        trace.write(
+            "deterministic_execution",
+            {"task_type": planner.task_type, "endpoint": endpoint, "payload": payload},
+        )
+
+        try:
+            response = await tripletex.request(
+                method="POST",
+                path=endpoint,
+                json_body=payload,
+            )
+            resource_id = _extract_primary_resource_id(response)
+            if resource_id is not None:
+                execution_state.created_resources.append(
+                    CreatedResource(
+                        path=endpoint,
+                        resource_id=resource_id,
+                        method="POST",
+                        key_fields=_extract_key_fields(response),
+                    )
+                )
+            trace.write(
+                "deterministic_result",
+                {"ok": True, "resource_id": resource_id, "endpoint": endpoint},
+            )
+            trace.write(
+                "final_payload",
+                {
+                    "status": "completed",
+                    "summary": f"{planner.task_type} completed deterministically via POST {endpoint} (id={resource_id})",
+                },
+            )
+            return {"ok": True, "resource_id": resource_id}
+        except TripletexApiError as exc:
+            trace.write(
+                "deterministic_fallback",
+                {"error": str(exc.body)[:300], "status_code": exc.status_code},
+            )
+            logger.warning(
+                "Deterministic execution failed for %s, falling back to executor: %s",
+                planner.task_type,
+                exc,
+            )
+            return None
+
     async def _verify_and_repair(
         self,
         openrouter: OpenRouterClient,
@@ -2210,6 +2845,30 @@ Common wage types to search for:
             "/department": ("department",),
         }
 
+        _SKIP_VERIFY_PATHS = frozenset(
+            {
+                "/employee/employment",
+                "/employee/employment/details",
+                "/employee/standardTime",
+                "/employee/entitlement",
+                "/salary/transaction",
+                "/salary/payslip",
+                "/division",
+                "/travelExpense",
+                "/travelExpense/cost",
+                "/travelExpense/perDiemCompensation",
+                "/ledger/voucher",
+                "/ledger/accountingDimensionName",
+                "/ledger/accountingDimensionValue",
+                "/order/orderline",
+                "/order/orderline/list",
+                "/timesheet/entry",
+                "/timesheet/entry/list",
+                "/project/projectActivity",
+                "/activity",
+            }
+        )
+
         mismatches: list[dict[str, Any]] = []
         for resource in post_resources:
             remaining = 280.0 - (time.monotonic() - execution_state.start_time)
@@ -2217,11 +2876,13 @@ Common wage types to search for:
                 break
 
             path_base = resource.path.rstrip("/").split("?")[0]
+
+            if path_base in _SKIP_VERIFY_PATHS:
+                continue
+
             matched_roles: tuple[str, ...] = ()
             for endpoint_prefix, roles in _ENTITY_PATH_ROLES.items():
-                if path_base == endpoint_prefix or path_base.startswith(
-                    endpoint_prefix + "/"
-                ):
+                if path_base == endpoint_prefix:
                     matched_roles = roles
                     break
             if not matched_roles:

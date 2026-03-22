@@ -72,6 +72,32 @@ _ws_manager: ConnectionManager | None = None
 from collections import deque
 
 _pending_submissions: deque[dict[str, Any]] = deque(maxlen=50)
+_PENDING_FILE = RUNS_DIR / ".pending_submissions.json"
+
+
+def _load_pending_from_disk() -> None:
+    try:
+        if _PENDING_FILE.exists():
+            data = json.loads(_PENDING_FILE.read_text(encoding="utf-8"))
+            for entry in data:
+                if isinstance(entry, dict) and "submission_id" in entry:
+                    _pending_submissions.append(entry)
+    except Exception:
+        pass
+
+
+def _save_pending_to_disk() -> None:
+    try:
+        _PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PENDING_FILE.write_text(
+            json.dumps(list(_pending_submissions), ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+_load_pending_from_disk()
 
 
 def register_pending_submission(submission_id: str) -> None:
@@ -81,11 +107,13 @@ def register_pending_submission(submission_id: str) -> None:
             "submitted_at": datetime.now(timezone.utc).isoformat(),
         }
     )
+    _save_pending_to_disk()
 
 
 def pop_pending_submission() -> str | None:
     if _pending_submissions:
         entry = _pending_submissions.popleft()
+        _save_pending_to_disk()
         return entry["submission_id"]
     return None
 
@@ -152,7 +180,7 @@ async def _get_cached_submissions(force_refresh: bool = False) -> list[dict[str,
     has_pending = any(
         s.get("status") in ("in_progress", "pending") for s in _submissions_cache
     )
-    ttl = 30.0 if (active_count > 0 or has_pending) else 120.0
+    ttl = 10.0 if (active_count > 0 or has_pending) else 60.0
 
     if not force_refresh and _submissions_cache and (now - _submissions_cache_ts) < ttl:
         return _submissions_cache
@@ -1351,7 +1379,7 @@ def _enrich_run_file(
             else:
                 pending_match = True
                 attempts += 1
-                backoff_seconds = min(300.0, float(2**attempts))
+                backoff_seconds = min(30.0, 5.0 * attempts)
                 _enrichment_retry_state[run_id] = {
                     "attempts": attempts,
                     "next_retry_at": now_monotonic + backoff_seconds,
@@ -2891,7 +2919,7 @@ function stopHttpFallback() {
 // Initialize: try WebSocket first, fall back to HTTP polling
 connectWebSocket();
 // Periodic enrichment
-setInterval(() => { fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e)); }, 30000);
+setInterval(() => { fetch('/api/runs/enrich', {method: 'POST'}).catch(e => console.error(e)); }, 15000);
 
 let batchPollInterval = null;
 

@@ -98,7 +98,13 @@ class EntityRegistry:
     ) -> None:
         if method not in ("POST", "PUT") or not isinstance(response, dict):
             return
-        entity_id = response.get("id")
+
+        entity_data = response
+        value = response.get("value")
+        if isinstance(value, dict) and value.get("id"):
+            entity_data = value
+
+        entity_id = entity_data.get("id")
         if not entity_id or not isinstance(entity_id, int):
             return
 
@@ -123,7 +129,7 @@ class EntityRegistry:
 
         self.register(ref_key, entity_id)
 
-        version = response.get("version")
+        version = entity_data.get("version")
         if version is not None:
             self.register(f"{ref_key}_version", version)
 
@@ -211,8 +217,67 @@ class ExecutionMiddleware:
             self._vat_types = []
             return []
 
-    async def prefetch_sandbox_context(self, tripletex: Any) -> dict[str, Any]:
+    _PREFETCH_MAP: dict[str, list[str]] = {
+        "create_supplier": [],
+        "create_customer": [],
+        "create_product": [],
+        "create_department": [],
+        "create_voucher": [],
+        "create_employee": ["employees", "departments"],
+        "create_order": ["customers", "products"],
+        "create_invoice": [
+            "customers",
+            "products",
+            "employees",
+            "payment_types",
+            "bank_account",
+        ],
+        "register_payment": ["customers", "payment_types", "bank_account"],
+        "create_credit_note": ["customers", "bank_account"],
+        "create_project": ["customers", "employees", "departments", "activities"],
+        "create_travel_expense": ["employees", "departments"],
+        "delete_travel_expense": ["employees"],
+        "register_supplier_invoice": ["suppliers"],
+        "reverse_voucher": ["customers", "payment_types", "bank_account"],
+        "update_employee": ["employees", "departments"],
+        "update_customer": ["customers"],
+        "update_supplier": ["suppliers"],
+        "update_product": ["products"],
+        "update_order": ["customers", "products"],
+        "update_invoice": ["customers"],
+        "update_contact": ["customers"],
+        "delete_invoice": ["customers"],
+        "enable_module": [],
+        "year_end_closing": [],
+        "ledger_error_correction": [],
+        "bank_reconciliation": [
+            "customers",
+            "suppliers",
+            "payment_types",
+            "bank_account",
+        ],
+    }
+
+    _ALL_CATEGORIES = [
+        "customers",
+        "products",
+        "employees",
+        "suppliers",
+        "departments",
+        "activities",
+        "payment_types",
+        "bank_account",
+    ]
+
+    async def prefetch_sandbox_context(
+        self, tripletex: Any, task_type: str | None = None
+    ) -> dict[str, Any]:
         import asyncio
+
+        categories = self._PREFETCH_MAP.get(task_type or "", self._ALL_CATEGORIES)
+        if not categories:
+            logger.info("Prefetch skipped for task_type=%s", task_type)
+            return {}
 
         call_count_before = tripletex.call_count
 
@@ -227,33 +292,37 @@ class ExecutionMiddleware:
             except Exception:
                 return []
 
-        customers_task = asyncio.create_task(_safe_get("/customer", {"count": 15}))
-        products_task = asyncio.create_task(_safe_get("/product", {"count": 15}))
-        employees_task = asyncio.create_task(_safe_get("/employee", {"count": 15}))
-        suppliers_task = asyncio.create_task(_safe_get("/supplier", {"count": 15}))
-        departments_task = asyncio.create_task(_safe_get("/department", {"count": 10}))
-        activities_task = asyncio.create_task(_safe_get("/activity", {"count": 20}))
-        payment_types_task = asyncio.create_task(
-            _safe_get("/invoice/paymentType", {"count": 10})
-        )
+        _CATEGORY_QUERIES: dict[str, tuple[str, dict[str, int]]] = {
+            "customers": ("/customer", {"count": 15}),
+            "products": ("/product", {"count": 15}),
+            "employees": ("/employee", {"count": 15}),
+            "suppliers": ("/supplier", {"count": 15}),
+            "departments": ("/department", {"count": 10}),
+            "activities": ("/activity", {"count": 20}),
+            "payment_types": ("/invoice/paymentType", {"count": 10}),
+        }
 
-        (
-            customers,
-            products,
-            employees,
-            suppliers,
-            departments,
-            activities,
-            payment_types,
-        ) = await asyncio.gather(
-            customers_task,
-            products_task,
-            employees_task,
-            suppliers_task,
-            departments_task,
-            activities_task,
-            payment_types_task,
-        )
+        tasks: dict[str, asyncio.Task[list[dict]]] = {}
+        for cat in categories:
+            if cat == "bank_account":
+                continue
+            query = _CATEGORY_QUERIES.get(cat)
+            if query:
+                tasks[cat] = asyncio.create_task(_safe_get(query[0], query[1]))
+
+        results: dict[str, list[dict]] = {}
+        if tasks:
+            gathered = await asyncio.gather(*tasks.values())
+            for cat_name, result in zip(tasks.keys(), gathered):
+                results[cat_name] = result
+
+        customers = results.get("customers", [])
+        products = results.get("products", [])
+        employees = results.get("employees", [])
+        suppliers = results.get("suppliers", [])
+        departments = results.get("departments", [])
+        activities = results.get("activities", [])
+        payment_types = results.get("payment_types", [])
 
         def _compact_and_register(
             entities: list[dict], resource_type: str
@@ -296,27 +365,30 @@ class ExecutionMiddleware:
             "payment_types": _compact_and_register(payment_types, "paymentType"),
         }
 
-        try:
-            bank = await tripletex.request(
-                method="GET",
-                path="/ledger/account",
-                params={"number": 1920},
-            )
-            if isinstance(bank, dict):
-                values = bank.get("values", [])
-                if values and isinstance(values[0], dict):
-                    acc = values[0]
-                    self.registry.register("account_1920", acc["id"])
-                    if acc.get("version") is not None:
-                        self.registry.register("account_1920_version", acc["version"])
-                    context["bank_account"] = {
-                        "ref": "$REF:account_1920",
-                        "number": 1920,
-                        "isBankAccount": acc.get("isBankAccount", False),
-                        "version": acc.get("version"),
-                    }
-        except Exception:
-            pass
+        if "bank_account" in categories:
+            try:
+                bank = await tripletex.request(
+                    method="GET",
+                    path="/ledger/account",
+                    params={"number": 1920},
+                )
+                if isinstance(bank, dict):
+                    values = bank.get("values", [])
+                    if values and isinstance(values[0], dict):
+                        acc = values[0]
+                        self.registry.register("account_1920", acc["id"])
+                        if acc.get("version") is not None:
+                            self.registry.register(
+                                "account_1920_version", acc["version"]
+                            )
+                        context["bank_account"] = {
+                            "ref": "$REF:account_1920",
+                            "number": 1920,
+                            "isBankAccount": acc.get("isBankAccount", False),
+                            "version": acc.get("version"),
+                        }
+            except Exception:
+                pass
 
         total = sum(len(v) for v in context.values() if isinstance(v, list))
         logger.info(
@@ -327,9 +399,18 @@ class ExecutionMiddleware:
         return context
 
     def intercept_tool_call(
-        self, method: str, path: str, params: dict | None, body: dict | None
-    ) -> tuple[str, str, dict | None, dict | None]:
-        if isinstance(body, dict):
+        self, method: str, path: str, params: dict | None, body: dict | list | None
+    ) -> tuple[str, str, dict | None, dict | list | None]:
+        # Resolve $REF: tokens in URL path segments (prevents 422 on path IDs)
+        if "$REF:" in path:
+            for ref_key, ref_id in self.registry.all_refs().items():
+                token = f"$REF:{ref_key}"
+                if token in path:
+                    path = path.replace(token, str(ref_id))
+                    logger.info("Resolved %s in path -> %d", token, ref_id)
+
+        # Resolve $REF/$TIME/$STYRK in body (handles both dict and list bodies)
+        if isinstance(body, (dict, list)):
             body = _resolve_refs_in_value(body, self.registry)
 
         if isinstance(params, dict):
@@ -346,7 +427,9 @@ class ExecutionMiddleware:
 
         return method, path, params, body
 
-    def check_dedup(self, method: str, path: str, body: dict | None) -> Any | None:
+    def check_dedup(
+        self, method: str, path: str, body: dict | list | None
+    ) -> Any | None:
         if method != "POST" or body is None:
             return None
         key = f"{method}:{path}:{json.dumps(body, sort_keys=True, ensure_ascii=False)}"
@@ -356,7 +439,7 @@ class ExecutionMiddleware:
         return cached
 
     def record_for_dedup(
-        self, method: str, path: str, body: dict | None, response: Any
+        self, method: str, path: str, body: dict | list | None, response: Any
     ) -> None:
         if method != "POST" or body is None:
             return

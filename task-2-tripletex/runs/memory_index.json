@@ -1,0 +1,3155 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "task_type": "create_credit_note",
+      "prompt_summary": "The customer Oakwood Ltd (org no. 950705337) has complained about the invoice for \"Training Session\" (26700 NOK excl. VAT). Issue a full credit note that reverses the entire invoice.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "product": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:createCreditNote",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 8,
+      "total_errors": 0,
+      "score": 2.3333,
+      "source_file": "20260321-224145_7beaa4c66e93471c9f27f1aba08b1001.jsonl"
+    },
+    {
+      "task_type": "create_credit_note",
+      "prompt_summary": "O cliente Cascata Lda (org. nº 967090743) reclamou sobre a fatura referente a \"Sessão de formação\" (23800 NOK sem IVA). Emita uma nota de crédito completa que reverta toda a fatura.",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "priceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "product": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:createCreditNote",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 8,
+      "total_errors": 0,
+      "score": 2.3333,
+      "source_file": "20260322-010139_9f5b8218dfcd483c8036195a655600f5.jsonl"
+    },
+    {
+      "task_type": "create_credit_note",
+      "prompt_summary": "Kunden Lysgård AS (org.nr 962467210) har reklamert på fakturaen for \"Nettverkstjeneste\" (41600 kr ekskl. MVA). Opprett en fullstendig kreditnota som reverserer hele fakturaen.",
+      "language": "nn",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "product": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:createCreditNote",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 8,
+      "total_errors": 0,
+      "score": 2.3333,
+      "source_file": "20260322-001034_c1a04f6f547b4983a69d2d5be6125c6f.jsonl"
+    },
+    {
+      "task_type": "create_customer",
+      "prompt_summary": "Erstellen Sie den Kunden Flussgold GmbH mit der Organisationsnummer 914077168. Die Adresse ist Storgata 109, 7010 Trondheim. E-Mail: post@flussgold.no.",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/customer",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str",
+            "postalAddress": {
+              "addressLine1": "str",
+              "city": "str",
+              "country": {
+                "id": "int"
+              },
+              "postalCode": "str"
+            }
+          }
+        }
+      ],
+      "total_calls": 4,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260322-033810_fb6f72b411354d148d98cfe7ab8e79e2.jsonl"
+    },
+    {
+      "task_type": "create_customer",
+      "prompt_summary": "Create the customer Northwave Ltd with organization number 964179239. The address is Nygata 39, 2317 Hamar. Email: post@northwave.no.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/customer",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str",
+            "postalAddress": {
+              "addressLine1": "str",
+              "city": "str",
+              "country": {
+                "id": "int"
+              },
+              "postalCode": "str"
+            }
+          }
+        }
+      ],
+      "total_calls": 1,
+      "total_errors": 0,
+      "score": 2.2222,
+      "source_file": "20260320-220948_907008ab08504b2d9d0f42e00d5d2d54.jsonl"
+    },
+    {
+      "task_type": "create_customer",
+      "prompt_summary": "Crea el cliente Montaña SL con número de organización 957430201. La dirección es Nygata 24, 3015 Drammen. Correo: post@montana.no.",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/customer",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str",
+            "postalAddress": {
+              "addressLine1": "str",
+              "city": "str",
+              "country": {
+                "id": "int"
+              },
+              "postalCode": "str"
+            }
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 6.0,
+      "source_file": "20260321-224953_40e5dc462acb4caba105ea22eaed306e.jsonl"
+    },
+    {
+      "task_type": "create_customer",
+      "prompt_summary": "Créez le client Colline SARL avec le numéro d'organisation 939137599. L'adresse est Kirkegata 77, 4611 Kristiansand. E-mail : post@colline.no.",
+      "language": "fr",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/customer",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str",
+            "postalAddress": {
+              "addressLine1": "str",
+              "city": "str",
+              "country": {
+                "id": "int"
+              },
+              "postalCode": "str"
+            }
+          }
+        }
+      ],
+      "total_calls": 1,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260320-224815_6f30dd2b6359494c8e3074d4969fbdbc.jsonl"
+    },
+    {
+      "task_type": "create_department",
+      "prompt_summary": "Erstellen Sie drei Abteilungen in Tripletex: \"Utvikling\", \"Innkjøp\" und \"Økonomi\".",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/department/list",
+          "body_shape": [
+            {
+              "departmentNumber": "str",
+              "name": "str"
+            }
+          ]
+        }
+      ],
+      "total_calls": 1,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260322-094146_356a6621a3a749d2a84efb15848b156c.jsonl"
+    },
+    {
+      "task_type": "create_department",
+      "prompt_summary": "Crie três departamentos no Tripletex: \"IT\", \"Kvalitetskontroll\" e \"Regnskap\".",
+      "language": "nb",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 1.3333,
+      "source_file": "20260321-224858_768dc19d35b345ccb3d8be481c04c45a.jsonl"
+    },
+    {
+      "task_type": "create_department",
+      "prompt_summary": "Créez trois départements dans Tripletex : \"HR\", \"Lager\" et \"Innkjøp\".",
+      "language": "unknown",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 1.3333,
+      "source_file": "20260321-194058_1482158c312143cf835a2c780f8998fe.jsonl"
+    },
+    {
+      "task_type": "create_employee",
+      "prompt_summary": "Sie haben einen Arbeitsvertrag erhalten (siehe beigefugte PDF). Erstellen Sie den Mitarbeiter in Tripletex mit allen Details aus dem Vertrag: Personalnummer, Geburtsdatum, Abteilung, Berufsschluessel,",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/employee",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/employee/employment/occupationCode",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "departmentNumber": "str",
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee",
+          "body_shape": {
+            "bankAccountNumber": "str",
+            "dateOfBirth": "str",
+            "department": {
+              "id": "int"
+            },
+            "email": "str",
+            "employeeNumber": "str",
+            "employments": [
+              {
+                "employmentType": "str",
+                "percentageOfFullTimeEquivalent": "float",
+                "remunerationType": "str",
+                "startDate": "str",
+                "workingHoursScheme": "str"
+              }
+            ],
+            "firstName": "str",
+            "lastName": "str",
+            "nationalIdentityNumber": "str",
+            "startDate": "str",
+            "userType": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee/{id}/employment",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/employee/employment",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/employee/employment/details",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/employee",
+          "body_shape": {
+            "bankAccountNumber": "str",
+            "dateOfBirth": "str",
+            "department": {
+              "id": "int"
+            },
+            "email": "str",
+            "employeeNumber": "str",
+            "firstName": "str",
+            "lastName": "str",
+            "nationalIdentityNumber": "str",
+            "userType": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee/employment",
+          "body_shape": {
+            "employee": {
+              "id": "int"
+            },
+            "isMainEmployer": "bool",
+            "startDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee/employment/details",
+          "body_shape": {
+            "annualSalary": "int",
+            "date": "str",
+            "employment": {
+              "id": "int"
+            },
+            "employmentForm": "str",
+            "employmentType": "str",
+            "percentageOfFullTimeEquivalent": "float",
+            "remunerationType": "str",
+            "workingHoursScheme": "str"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/employee/employment/occupationCode",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/employee/employment/occupationCode",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/employee/employment/occupationCode",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/employee/employment/occupationCode",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/employee/employment/details/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/employee/employment/details/{id}",
+          "body_shape": {
+            "annualSalary": "int",
+            "date": "str",
+            "employment": {
+              "id": "int"
+            },
+            "employmentForm": "str",
+            "employmentType": "str",
+            "id": "int",
+            "occupationCode": {
+              "id": "int"
+            },
+            "percentageOfFullTimeEquivalent": "float",
+            "remunerationType": "str",
+            "version": "int",
+            "workingHoursScheme": "str"
+          }
+        }
+      ],
+      "total_calls": 18,
+      "total_errors": 3,
+      "score": 2.3333,
+      "source_file": "20260321-221028_952d8088b5d5473a90325521e2c3db1a.jsonl"
+    },
+    {
+      "task_type": "create_employee",
+      "prompt_summary": "We have a new employee named Ella Harris, born 21. October 1981. Please create them as an employee with email ella.harris@example.org and start date 28. May 2026.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/employee",
+          "body_shape": {
+            "dateOfBirth": "str",
+            "email": "str",
+            "firstName": "str",
+            "lastName": "str",
+            "userType": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/department",
+          "body_shape": {
+            "name": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee",
+          "body_shape": {
+            "dateOfBirth": "str",
+            "department": {
+              "id": "int"
+            },
+            "email": "str",
+            "firstName": "str",
+            "lastName": "str",
+            "userType": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/employee/employment",
+          "body_shape": {
+            "employee": {
+              "id": "int"
+            },
+            "startDate": "str"
+          }
+        }
+      ],
+      "total_calls": 4,
+      "total_errors": 1,
+      "score": 1.4,
+      "source_file": "20260320-140441_ee0a6bc1cc684afb8c1ac3fb3f0f9cb9.jsonl"
+    },
+    {
+      "task_type": "create_invoice",
+      "prompt_summary": "Create and send an invoice to the customer Ridgepoint Ltd (org no. 985190631) for 32650 NOK excluding VAT. The invoice is for Analysis Report.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:send",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 7,
+      "total_errors": 0,
+      "score": 1.4,
+      "source_file": "20260321-211700_223e1162ff42458bb9166c32461ba354.jsonl"
+    },
+    {
+      "task_type": "create_invoice",
+      "prompt_summary": "Um dos seus clientes tem uma fatura vencida. Encontre a fatura vencida e registe uma taxa de lembrete de 35 NOK. Debito contas a receber (1500), credito receitas de lembrete (3400). Também crie uma fa",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "currency": {
+                  "id": "int"
+                },
+                "customer": {
+                  "id": "int"
+                },
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/customer/{id}",
+          "body_shape": {
+            "email": "str",
+            "id": "int",
+            "invoiceEmail": "str",
+            "invoiceSendMethod": "str",
+            "name": "str",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:send",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 14,
+      "total_errors": 0,
+      "score": 4.125,
+      "source_file": "20260321-170257_98367d8db5e040aa804596084c5a66b4.jsonl"
+    },
+    {
+      "task_type": "create_invoice",
+      "prompt_summary": "Enregistrez 5 heures pour Raphaël Thomas (raphael.thomas@example.org) sur l'activité \"Utvikling\" du projet \"Refonte du site\" pour Colline SARL (nº org. 997549929). Taux horaire : 1800 NOK/h. Générez u",
+      "language": "fr",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/activity",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/project",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "isFixedPrice": "bool",
+            "isInternal": "bool",
+            "name": "str",
+            "projectHourlyRates": [
+              {
+                "fixedRate": "int",
+                "hourlyRateModel": "str",
+                "showInProjectOrder": "bool",
+                "startDate": "str"
+              }
+            ],
+            "projectManager": {
+              "id": "int"
+            },
+            "startDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/project/projectActivity",
+          "body_shape": {
+            "activity": {
+              "id": "int"
+            },
+            "project": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/timesheet/entry",
+          "body_shape": {
+            "activity": {
+              "id": "int"
+            },
+            "date": "str",
+            "employee": {
+              "id": "int"
+            },
+            "hours": "float",
+            "project": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str",
+            "project": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        }
+      ],
+      "total_calls": 11,
+      "total_errors": 0,
+      "score": 2.5714,
+      "source_file": "20260321-203455_08e93b26e27f458fbda363a391e9d7a8.jsonl"
+    },
+    {
+      "task_type": "create_invoice",
+      "prompt_summary": "Opprett og send ein faktura til kunden Bølgekraft AS (org.nr 892362416) på 34150 kr eksklusiv MVA. Fakturaen gjeld Vedlikehald.",
+      "language": "nn",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/customer/{id}",
+          "body_shape": {
+            "email": "str",
+            "id": "int",
+            "invoiceEmail": "str",
+            "invoiceSendMethod": "str",
+            "name": "str",
+            "organizationNumber": "str",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:send",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 8,
+      "total_errors": 0,
+      "score": 1.3333,
+      "source_file": "20260321-212928_582054d8ed52414983afd7f57443c3e7.jsonl"
+    },
+    {
+      "task_type": "create_invoice",
+      "prompt_summary": "Registrer 5 timer for Silje Strand (silje.strand@example.org) på aktiviteten \"Design\" i prosjektet \"Skytjeneste-oppsett\" for Nordhav AS (org.nr 912074005). Timesats: 1750 kr/t. Generer en prosjektfakt",
+      "language": "unknown",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/activity",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/project",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "isFixedPrice": "bool",
+            "isInternal": "bool",
+            "name": "str",
+            "projectActivities": [
+              {
+                "activity": {
+                  "id": "int"
+                }
+              }
+            ],
+            "projectHourlyRates": [
+              {
+                "fixedRate": "int",
+                "hourlyRateModel": "str",
+                "startDate": "str"
+              }
+            ],
+            "projectManager": {
+              "id": "int"
+            },
+            "startDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/timesheet/entry",
+          "body_shape": {
+            "activity": {
+              "id": "int"
+            },
+            "date": "str",
+            "employee": {
+              "id": "int"
+            },
+            "hours": "float",
+            "project": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str",
+            "project": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:send",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 11,
+      "total_errors": 0,
+      "score": 2.2857,
+      "source_file": "20260322-004600_89d257918ad745b0a15d88d10afb50b0.jsonl"
+    },
+    {
+      "task_type": "create_order",
+      "prompt_summary": "Create an order for the customer Ridgepoint Ltd (org no. 925103489) with the products Consulting Hours (5359) at 21150 NOK and Analysis Report (1028) at 1600 NOK. Convert the order to an invoice and r",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str",
+            "orderLines": [
+              {
+                "count": "int",
+                "product": {
+                  "id": "int"
+                },
+                "unitPriceExcludingVatCurrency": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/order/{id}/:invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 9,
+      "total_errors": 0,
+      "score": 2.5,
+      "source_file": "20260321-224252_a82c3bbc9a1245de9b295ea8a08bc3b3.jsonl"
+    },
+    {
+      "task_type": "create_order",
+      "prompt_summary": "Crea un pedido para el cliente Luna SL (org. nº 966920963) con los productos Desarrollo de sistemas (5271) a 6950 NOK y Asesoría de datos (3613) a 7000 NOK. Convierte el pedido en factura y registra e",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline/list",
+          "body_shape": [
+            {
+              "count": "int",
+              "order": {
+                "id": "int"
+              },
+              "product": {
+                "id": "int"
+              },
+              "unitPriceExcludingVatCurrency": "int",
+              "vatType": {
+                "id": "int"
+              }
+            }
+          ]
+        },
+        {
+          "method": "PUT",
+          "path": "/order/{id}/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/order/{id}/:invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 10,
+      "total_errors": 0,
+      "score": 2.4,
+      "source_file": "20260321-231512_ef5c98543c9b475fb51b7e907e3d9621.jsonl"
+    },
+    {
+      "task_type": "create_order",
+      "prompt_summary": "Opprett ein ordre for kunden Sjøbris AS (org.nr 935269911) med produkta Opplæring (8065) til 24550 kr og Analyserapport (9994) til 6850 kr. Konverter ordren til faktura og registrer full betaling.",
+      "language": "nn",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str",
+            "orderLines": [
+              {
+                "count": "int",
+                "description": "str",
+                "product": {
+                  "id": "int"
+                },
+                "unitPriceExcludingVatCurrency": "float",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/order/{id}/:invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 10,
+      "total_errors": 0,
+      "score": 2.5,
+      "source_file": "20260322-001200_e33278e613f84801b68015e2d3455362.jsonl"
+    },
+    {
+      "task_type": "create_product",
+      "prompt_summary": "Erstellen Sie das Produkt \"Beratungsstunden\" mit der Produktnummer 3512. Der Preis beträgt 42600 NOK ohne MwSt., mit dem Standardsatz von 25 %.",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/product",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "number": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 2,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260320-224735_6284a3109a094a8b8086758f807e6622.jsonl"
+    },
+    {
+      "task_type": "create_product",
+      "prompt_summary": "Create the product \"Training Session\" with product number 2451. The price is 20350 NOK excluding VAT, using the standard 25% VAT rate.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/product",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "number": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 2,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260320-224509_2af07551895640209f058b0cda58a8a2.jsonl"
+    },
+    {
+      "task_type": "create_product",
+      "prompt_summary": "Crea el producto \"Informe de análisis\" con número de producto 6859. El precio es 34700 NOK sin IVA, utilizando la tasa estándar del 25 %.",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "number": "str",
+            "priceExcludingVat": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/product/{id}",
+          "body_shape": {
+            "id": "int",
+            "name": "str",
+            "number": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            },
+            "version": "int"
+          }
+        }
+      ],
+      "total_calls": 2,
+      "total_errors": 0,
+      "score": 1.5,
+      "source_file": "20260320-134207_bc11f86f684d451b89f616f45d6b4cd4.jsonl"
+    },
+    {
+      "task_type": "create_product",
+      "prompt_summary": "Opprett produktet \"Skylagring\" med produktnummer 6283. Prisen er 19050 kr eksklusiv MVA, og standard MVA-sats på 25 % skal nyttast.",
+      "language": "nn",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/product",
+          "body_shape": {
+            "name": "str",
+            "number": "str",
+            "priceExcludingVatCurrency": "int",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 2,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260321-235435_b280df2e1cb4440eb4d40f763fdd594e.jsonl"
+    },
+    {
+      "task_type": "create_project",
+      "prompt_summary": "Create the project \"Implementation Ridgepoint\" linked to the customer Ridgepoint Ltd (org no. 948050927). The project manager is Edward Brown (edward.brown@example.org).",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/employee",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/project",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "isInternal": "bool",
+            "name": "str",
+            "projectManager": {
+              "id": "int"
+            },
+            "startDate": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260321-230044_5de68e6b58014080ad9329b79c961fb6.jsonl"
+    },
+    {
+      "task_type": "create_supplier",
+      "prompt_summary": "Register the supplier Silveroak Ltd with organization number 811867500. Email: faktura@silveroakltd.no.",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/supplier",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260321-212131_79dcc28a57a9474298666c9151ee8a68.jsonl"
+    },
+    {
+      "task_type": "create_supplier",
+      "prompt_summary": "Registre el proveedor Sierra SL con número de organización 898340473. Correo electrónico: faktura@sierrasl.no.",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/supplier",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260322-001446_31ed5a9d2a15419fa827cab262e29ddd.jsonl"
+    },
+    {
+      "task_type": "create_supplier",
+      "prompt_summary": "Enregistrez le fournisseur Rivière SARL avec le numéro d'organisation 829933152. E-mail : faktura@riviresarl.no.",
+      "language": "fr",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/supplier",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260321-215730_8e124ecebe57491e83063a967cd8a7f3.jsonl"
+    },
+    {
+      "task_type": "create_supplier",
+      "prompt_summary": "Registe o fornecedor Floresta Lda com número de organização 883568885. E-mail: faktura@florestalda.no.",
+      "language": "unknown",
+      "api_sequence": [
+        {
+          "method": "POST",
+          "path": "/supplier",
+          "body_shape": {
+            "email": "str",
+            "invoiceEmail": "str",
+            "name": "str",
+            "organizationNumber": "str"
+          }
+        }
+      ],
+      "total_calls": 3,
+      "total_errors": 0,
+      "score": 2.0,
+      "source_file": "20260321-213606_35e6da6dbe1949bd870536d7d440a27a.jsonl"
+    },
+    {
+      "task_type": "create_travel_expense",
+      "prompt_summary": "Registre una nota de gastos de viaje para Paula González (paula.gonzalez@example.org) por \"Visita cliente Bergen\". El viaje duró 4 días con dietas (tarifa diaria 800 NOK). Gastos: billete de avión 460",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rate",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rate",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rate",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense",
+          "body_shape": {
+            "departureDateTime": "str",
+            "employee": {
+              "id": "int"
+            },
+            "returnDateTime": "str",
+            "title": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "amount": "int",
+            "count": "int",
+            "countryCode": "str",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "amount": "int",
+            "count": "int",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/travelExpense/{id}",
+          "body_shape": {
+            "departureDateTime": "str",
+            "employee": {
+              "id": "int"
+            },
+            "id": "int",
+            "returnDateTime": "str",
+            "title": "str",
+            "travelDetails": {
+              "departureDate": "str",
+              "isForeignTravel": "bool",
+              "returnDate": "str"
+            },
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "amount": "int",
+            "count": "int",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 20,
+      "total_errors": 3,
+      "score": 2.1429,
+      "source_file": "20260322-004145_85de21a4690144e1a97a7c26ab1eb0d5.jsonl"
+    },
+    {
+      "task_type": "create_travel_expense",
+      "prompt_summary": "Register a travel expense for Lucy Walker (lucy.walker@example.org) for \"Client visit Trondheim\". The trip lasted 4 days with per diem (daily rate 800 NOK). Expenses: flight ticket 7200 NOK and taxi 6",
+      "language": "fr",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/v2/employee",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/v2/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/v2/travelExpense/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/v2/employee",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/v2/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/v2/travelExpense/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/employee",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rate",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense",
+          "body_shape": {
+            "departureDateTime": "str",
+            "employee": {
+              "id": "int"
+            },
+            "returnDateTime": "str",
+            "title": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "amount": "int",
+            "count": "int",
+            "countryCode": "str",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/settings",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/zone",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/zone",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "amount": "int",
+            "count": "int",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 23,
+      "total_errors": 2,
+      "score": 2.2222,
+      "source_file": "20260320-221005_67b9135067e54cb2938b7e2a88f9d8dc.jsonl"
+    },
+    {
+      "task_type": "create_travel_expense",
+      "prompt_summary": "Registrer ei reiserekning for Bjørn Brekke (bjrn.brekke@example.org) for \"Kundebesøk Bergen\". Reisa varte 4 dagar med diett (dagssats 800 kr). Utlegg: flybillett 7550 kr og taxi 250 kr.",
+      "language": "unknown",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/costCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rateCategory",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/rate",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense",
+          "body_shape": {
+            "departureDateTime": "str",
+            "employee": {
+              "id": "int"
+            },
+            "returnDateTime": "str",
+            "title": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "count": "int",
+            "countryCode": "str",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "count": "int",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/travelExpense/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/travelExpense/{id}",
+          "body_shape": {
+            "departureDateTime": "str",
+            "employee": {
+              "id": "int"
+            },
+            "id": "int",
+            "returnDateTime": "str",
+            "title": "str",
+            "travelDetails": {
+              "departureDate": "str",
+              "isForeignTravel": "bool",
+              "returnDate": "str"
+            },
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/perDiemCompensation",
+          "body_shape": {
+            "count": "int",
+            "isDeductionForBreakfast": "bool",
+            "isDeductionForDinner": "bool",
+            "isDeductionForLunch": "bool",
+            "location": "str",
+            "overnightAccommodation": "str",
+            "rate": "int",
+            "rateCategory": {
+              "id": "int"
+            },
+            "rateType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/travelExpense/cost",
+          "body_shape": {
+            "amountCurrencyIncVat": "int",
+            "comments": "str",
+            "costCategory": {
+              "id": "int"
+            },
+            "date": "str",
+            "paymentType": {
+              "id": "int"
+            },
+            "travelExpense": {
+              "id": "int"
+            }
+          }
+        }
+      ],
+      "total_calls": 18,
+      "total_errors": 3,
+      "score": 2.1429,
+      "source_file": "20260321-235359_a272a9c47c9448538767c8ff4d5d0cdc.jsonl"
+    },
+    {
+      "task_type": "create_voucher",
+      "prompt_summary": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Prosjekttype\" mit den Werten \"Internt\" und \"Utvikling\". Buchen Sie dann einen Beleg auf Konto 6340 über 44500 NOK, verknüpft mit dem Dimens",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionName",
+          "body_shape": {
+            "active": "bool",
+            "description": "str",
+            "dimensionName": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionValue",
+          "body_shape": {
+            "active": "bool",
+            "dimensionIndex": "int",
+            "displayName": "str",
+            "number": "str",
+            "showInVoucherRegistration": "bool"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionValue",
+          "body_shape": {
+            "active": "bool",
+            "dimensionIndex": "int",
+            "displayName": "str",
+            "number": "str",
+            "showInVoucherRegistration": "bool"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "description": "str",
+                "freeAccountingDimension1": {
+                  "id": "int"
+                },
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "total_calls": 6,
+      "total_errors": 0,
+      "score": 3.5,
+      "source_file": "20260321-213158_3d985b2fd9e949ca9ee03417c44f3ffa.jsonl"
+    },
+    {
+      "task_type": "create_voucher",
+      "prompt_summary": "Perform month-end closing for March 2026. Post accrual reversal (6850 NOK per month from account 1700 to expense). Record monthly depreciation for a fixed asset with acquisition cost 228600 NOK and us",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "int",
+                "amountGrossCurrency": "int",
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "int",
+                "amountGrossCurrency": "int",
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "total_calls": 13,
+      "total_errors": 0,
+      "score": 4.0,
+      "source_file": "20260321-230724_5368f48c66e345f38968438c055cb812.jsonl"
+    },
+    {
+      "task_type": "create_voucher",
+      "prompt_summary": "Créez une dimension comptable personnalisée \"Produktlinje\" avec les valeurs \"Premium\" et \"Basis\". Puis comptabilisez une pièce sur le compte 6860 pour 16900 NOK, liée à la valeur de dimension \"Premium",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionName",
+          "body_shape": {
+            "active": "bool",
+            "dimensionName": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionValue",
+          "body_shape": {
+            "active": "bool",
+            "dimensionIndex": "int",
+            "displayName": "str",
+            "number": "str",
+            "showInVoucherRegistration": "bool"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/accountingDimensionValue",
+          "body_shape": {
+            "active": "bool",
+            "dimensionIndex": "int",
+            "displayName": "str",
+            "number": "str",
+            "showInVoucherRegistration": "bool"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "description": "str",
+                "freeAccountingDimension1": {
+                  "id": "int"
+                },
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "total_calls": 6,
+      "total_errors": 0,
+      "score": 3.5,
+      "source_file": "20260321-191250_3b9d0ac7f57344ce8af4e59152367a44.jsonl"
+    },
+    {
+      "task_type": "register_payment",
+      "prompt_summary": "Me sende ein faktura på 11219 EUR til Bølgekraft AS (org.nr 825006206) då kursen var 10.02 NOK/EUR. Kunden har no betalt, men kursen er 10.29 NOK/EUR. Registrer betalinga og bokfør valutadifferansen (",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/currency",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "currency": {
+              "id": "int"
+            },
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/voucher",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/voucher/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/posting",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/posting",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 13,
+      "total_errors": 1,
+      "score": 1.2667,
+      "source_file": "20260321-205540_147eeda87d2d44448b0a41daeb2da95b.jsonl"
+    },
+    {
+      "task_type": "reverse_voucher",
+      "prompt_summary": "El pago de Olivares SL (org. nº 921296819) por la factura \"Almacenamiento en la nube\" (46300 NOK sin IVA) fue devuelto por el banco. Revierta el pago para que la factura vuelva a mostrar el importe pe",
+      "language": "es",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/voucher",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/voucher/{id}/:reverse",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 7,
+      "total_errors": 2,
+      "score": 4.0,
+      "source_file": "20260321-230049_f4eefb10a4544329a4ae8c1b8ef0ce96.jsonl"
+    },
+    {
+      "task_type": "update_invoice",
+      "prompt_summary": "Einer Ihrer Kunden hat eine uberfallige Rechnung. Finden Sie die uberfallige Rechnung und buchen Sie eine Mahngebuhr von 60 NOK. Soll Forderungen (1500), Haben Mahngebuhren (3400). Erstellen Sie außer",
+      "language": "de",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/$REF:account_1920",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "str",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "str"
+            },
+            "deliveryDate": "str",
+            "invoicesDueIn": "int",
+            "invoicesDueInType": "str",
+            "orderDate": "str",
+            "orderLines": [
+              {
+                "count": "int",
+                "description": "str",
+                "unitPriceExcludingVatCurrency": "float",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/order/$REF:order_402073165/:invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "str"
+            },
+            "deliveryDate": "str",
+            "invoicesDueIn": "int",
+            "invoicesDueInType": "str",
+            "orderDate": "str",
+            "orderLines": [
+              {
+                "count": "int",
+                "description": "str",
+                "unitPriceExcludingVatCurrency": "float",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "customer": {
+                  "id": "str"
+                },
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/order/$REF:order_402073202/:invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/$REF:order_2147689560/:payment",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/$REF:order_2147689610/:send",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 16,
+      "total_errors": 2,
+      "score": 1.3333,
+      "source_file": "20260322-093549_d1261a159802458daf3c98950e40e28a.jsonl"
+    },
+    {
+      "task_type": "update_invoice",
+      "prompt_summary": "One of your customers has an overdue invoice. Find the overdue invoice and post a reminder fee of 35 NOK. Debit accounts receivable (1500), credit reminder fees (3400). Also create an invoice for the ",
+      "language": "en",
+      "api_sequence": [
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/token/session/>whoAmI",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/customer/{id}",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/invoice/paymentType",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/ledger/account/{id}",
+          "body_shape": {
+            "bankAccountCountry": {
+              "id": "int"
+            },
+            "bankAccountNumber": "str",
+            "id": "int",
+            "isBankAccount": "bool",
+            "name": "str",
+            "number": "int",
+            "version": "int"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/account",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/customer/{id}",
+          "body_shape": {
+            "email": "str",
+            "id": "int",
+            "invoiceEmail": "str",
+            "name": "str",
+            "version": "int"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/ledger/voucher",
+          "body_shape": {
+            "date": "str",
+            "description": "str",
+            "postings": [
+              {
+                "account": {
+                  "id": "int"
+                },
+                "amountGross": "float",
+                "amountGrossCurrency": "float",
+                "currency": {
+                  "id": "int"
+                },
+                "customer": {
+                  "id": "int"
+                },
+                "date": "str",
+                "description": "str",
+                "row": "int",
+                "vatType": {
+                  "id": "int"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order",
+          "body_shape": {
+            "customer": {
+              "id": "int"
+            },
+            "deliveryDate": "str",
+            "isPrioritizeAmountsIncludingVat": "bool",
+            "orderDate": "str"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/order/orderline",
+          "body_shape": {
+            "count": "int",
+            "description": "str",
+            "order": {
+              "id": "int"
+            },
+            "unitPriceExcludingVatCurrency": "float",
+            "vatType": {
+              "id": "int"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoice",
+          "body_shape": {
+            "invoiceDate": "str",
+            "invoiceDueDate": "str",
+            "orders": [
+              {
+                "id": "int"
+              }
+            ]
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:send",
+          "body_shape": {}
+        },
+        {
+          "method": "PUT",
+          "path": "/invoice/{id}/:payment",
+          "body_shape": {}
+        }
+      ],
+      "total_calls": 17,
+      "total_errors": 1,
+      "score": 3.375,
+      "source_file": "20260321-235343_e5996d886945447abbb3ef5f491867e4.jsonl"
+    }
+  ]
+}

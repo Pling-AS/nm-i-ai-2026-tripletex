@@ -172,13 +172,61 @@ def plan_coverage_queries(
     max_budget: int = 50,
     seed_analyses: list[SeedAnalysis] | None = None,
 ) -> list[QueryPlan]:
-    """Plan coverage queries interleaved across all seeds.
+    if seed_analyses is None:
+        return _legacy_plan_coverage_queries(
+            seeds_count, map_w, map_h, max_budget, seed_analyses
+        )
 
-    Interleaving ensures that if we run out of budget, we have partial
-    coverage of ALL seeds rather than full coverage of some and zero of others.
+    vp = 15
+    queries: list[QueryPlan] = []
 
-    If seed_analyses are provided, uses entropy-aware overlap placement.
-    """
+    planned_n = np.zeros((seeds_count, map_h, map_w), dtype=np.float64)
+    prior_entropy = np.zeros((seeds_count, map_h, map_w), dtype=np.float64)
+
+    for s in range(seeds_count):
+        prior_entropy[s] = _compute_prior_entropy_map(seed_analyses[s])
+        prior_entropy[s] *= seed_analyses[s].priority_mask
+
+    for _ in range(max_budget):
+        best_score = -1.0
+        best_query = None
+
+        marginal_value = prior_entropy / (planned_n + 1.0)
+
+        for s in range(seeds_count):
+            sat = np.zeros((map_h + 1, map_w + 1), dtype=np.float64)
+            sat[1:, 1:] = np.cumsum(np.cumsum(marginal_value[s], axis=0), axis=1)
+
+            max_x = max(0, map_w - vp)
+            max_y = max(0, map_h - vp)
+
+            for vy in range(max_y + 1):
+                for vx in range(max_x + 1):
+                    ey = min(vy + vp, map_h)
+                    ex = min(vx + vp, map_w)
+                    window_val = sat[ey, ex] - sat[vy, ex] - sat[ey, vx] + sat[vy, vx]
+
+                    if window_val > best_score:
+                        best_score = window_val
+                        best_query = (s, vx, vy, ex - vx, ey - vy)
+
+        if best_query is None:
+            break
+
+        s, vx, vy, vw, vh = best_query
+        queries.append(QueryPlan(s, vx, vy, vw, vh))
+        planned_n[s, vy : vy + vh, vx : vx + vw] += 1.0
+
+    return queries
+
+
+def _legacy_plan_coverage_queries(
+    seeds_count: int,
+    map_w: int,
+    map_h: int,
+    max_budget: int = 50,
+    seed_analyses: list[SeedAnalysis] | None = None,
+) -> list[QueryPlan]:
     # Generate per-seed tilings (possibly entropy-aware)
     per_seed_tiles: list[list[tuple[int, int, int, int]]] = []
     for seed_idx in range(seeds_count):

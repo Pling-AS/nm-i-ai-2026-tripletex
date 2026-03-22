@@ -205,6 +205,7 @@ Your score has an EFFICIENCY BONUS that can DOUBLE your points. Fewer calls + ze
 1. NEVER do verification GETs after POST/PUT — the response already confirms success.
 2. NEVER call inspect_tripletex_endpoint or search_tripletex_api if the endpoint is in execution_brief.prefetched_schemas.
 3. Bank account setup (GET+PUT /ledger/account) is ONLY needed for invoice/payment/credit note tasks. Skip it for create_customer, create_supplier, create_product, create_employee, create_department, create_project, create_voucher.
+   IMPORTANT: If execution_brief.bank_account_ready is true, skip ALL bank account setup calls entirely — the account is already configured.
 4. Prefer batch endpoints: POST /product/list, POST /order/orderline/list.
 5. Reuse IDs from POST responses — do NOT re-fetch entities you just created.
 6. For create_supplier and create_product: aim for 1 API call total.
@@ -294,24 +295,15 @@ See the register_supplier_invoice playbook for the exact format.
    - NEVER create timesheet entries for dates BEFORE the project startDate.
 7. If invoice is also requested: Follow the Create Invoice chain starting from bank setup.
 8. If fixed price is mentioned: GET /project/hourlyRates?projectId=X first (Tripletex auto-creates default), then PUT to update.""",
-    "register_payment": """## Playbook: Register Payment (EMPTY-SANDBOX SAFE)
-1. Setup bank account first:
-   - GET /ledger/account?number=1920
-   - PUT /ledger/account/{id} (isBankAccount=true, bankAccountNumber="12345678903", bankAccountCountry={"id":161})
-2. Create customer: POST /customer.
-3. Create order: POST /order with customer ref and dates.
-4. Create orderlines: POST /order/orderline with vatType and prices.
-5. Create invoice: POST /invoice with orders=[{"id":order_id}], invoiceDate, invoiceDueDate.
-6. Get payment type: GET /invoice/paymentType — use the FIRST result's id.
-7. Register payment — CRITICAL FORMAT:
-   PUT /invoice/{id}/:payment?paymentDate=YYYY-MM-DD&paymentTypeId=XXXXX&paidAmount=YYYYY
-   - ALL params are in the URL QUERY STRING, NOT in the request body.
-   - Send NO JSON body (or empty body).
-   - paidAmount = full amount including VAT.
-   - For foreign currency: use paidAmountCurrency instead of paidAmount.
-8. If reversal/cancel intent exists:
-   - GET /ledger/voucher?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD (use broad range).
-   - PUT /ledger/voucher/{voucherId}/:reverse?date=YYYY-MM-DD""",
+    "register_payment": """## Playbook: Register Payment (FX + refs)
+1. Build prerequisite chain in empty sandbox: bank 1920 -> customer -> order -> orderline -> invoice.
+2. Get payment type once: GET /invoice/paymentType (reuse first id; never duplicate identical calls).
+3. Register payment via PUT /invoice/{id}/:payment with QUERY PARAMS only: paymentDate, paymentTypeId, paidAmount OR paidAmountCurrency.
+4. Send empty/no body to :payment; do not place these fields in json_body.
+5. For foreign-currency payment, use paidAmountCurrency and keep paymentDate from execution_brief.
+6. For any voucher postings touching account 1500, ALWAYS include customer={"id": ...} on that posting.
+7. For any voucher postings touching account 2400, ALWAYS include supplier={"id": ...}.
+8. If reversal is requested: GET /ledger/voucher with broad dateFrom/dateTo, then PUT /ledger/voucher/{id}/:reverse with date query param.""",
     "create_credit_note": """## Playbook: Create Credit Note
 1. Locate invoice: GET /invoice (filter by number/customer/date from prompt).
 2. POST /invoice/{id}/:createCreditNote with required credit note date (use execution_brief date values when needed).""",
@@ -334,27 +326,41 @@ The sandbox is EMPTY — you must create the full chain first, then reverse:
 6. Reverse payment voucher: PUT /ledger/voucher/{payment_voucher_id}/:reverse?date=YYYY-MM-DD""",
     "create_travel_expense": """## Playbook: Create Travel Expense
 1. Ensure employee exists (POST /employee if needed — remember department.id is required).
-2. GET /travelExpense/costCategory to find available cost categories (needed for step 4).
-3. GET /travelExpense/paymentType to find payment types (needed for step 4).
-4. POST /travelExpense with employee ref, departureDateTime (format: YYYY-MM-DDT08:00:00), returnDateTime, title.
-5. POST /travelExpense/cost for each cost line. MUST use amountCurrencyIncVat (NOT amount). MUST include costCategory and paymentType refs.
-6. POST /travelExpense/perDiemCompensation only when per-diem/diet is explicitly requested.""",
+2. GET /travelExpense/costCategory?from=0&count=100 to find available cost categories.
+3. GET /travelExpense/paymentType?from=0&count=100 to find payment types.
+4. POST /travelExpense with employee ref, departureDateTime (format: YYYY-MM-DDT08:00:00), returnDateTime, title, department ref.
+5. POST /travelExpense/cost for each cost line:
+   - MUST use amountCurrencyIncVat (NOT amount or amountExcludingVat)
+   - MUST include costCategory and paymentType refs
+   - MUST include date field
+6. POST /travelExpense/perDiemCompensation only when per-diem/diet is explicitly requested.
+
+## COST CATEGORY SELECTION (CRITICAL — wrong category = 0 points)
+Norwegian representation/entertainment expense rules:
+- "Middag representasjon" / dinner representation → use "Representasjon - ikke fradragsb." (NON-deductible)
+  In Norway, representation meals are NOT tax-deductible and NOT VAT-deductible.
+- "Overnatting" / accommodation → use the hotel/accommodation category
+- "Flybillett" / flight → use the travel/transport category
+- When in doubt between "fradragsb." and "ikke fradragsb." for representation → ALWAYS choose "ikke fradragsb."
+
+## PAYMENT TYPE SELECTION
+- If receipt says "Bedriftskort" (company card) → look for a company card payment type
+- If receipt says "Privat utlegg" → use private expense payment type
+- If only one payment type exists, use it regardless of receipt text
+
+## AMOUNT RULES
+- amountCurrencyIncVat = the TOTAL including VAT from the receipt line
+- Only register the specific line items requested in the prompt, NOT all lines from a receipt""",
     "create_department": """## Playbook: Create Department
 1. POST /department with name and departmentNumber when provided.""",
-    "create_project": """## Playbook: Create Project (ALL SCORED FIELDS)
-1. Create customer: POST /customer with name and organizationNumber when provided; do NOT send isCustomer.
-2. Check if employee exists: GET /employee?email=<email> — sandbox often pre-seeds employees. If found, reuse.
-3. If employee NOT found: POST /department, then POST /employee.
-4. Create project: POST /project with ALL these fields:
-   - name: EXACT project name from prompt (this IS scored)
-   - customer: {"id": customer_id} (this IS scored)
-   - projectManager: {"id": employee_id} (this IS scored)
-   - startDate: today_iso or from prompt (REQUIRED by API)
-   - isInternal: false (unless explicitly stated)
-   - number: project number if provided in prompt
-   - description: project description if provided in prompt
-5. startDate is REQUIRED by the API — always include it.
-6. The project NAME must match the prompt EXACTLY — this is a scored field.""",
+    "create_project": """## Playbook: Create Project (fixed-price safe)
+1. Create/reuse customer and project manager employee first (GET /employee by email before POST).
+2. POST /project with scored core fields: name (exact), customer={"id":...}, projectManager={"id":...}, startDate, isInternal=false unless stated.
+3. If prompt includes project number, set number exactly as provided.
+4. If prompt says fixed-price/budget contract: use fixedPrice=<amount> (camelCase), NEVER fixedprice.
+5. For fixed-price projects set isFixedPrice=true in the same request.
+6. If schema/task expects category, set projectCategory="FIXED_PRICE" (or matching enum from schema).
+7. Do not do verification GET after successful POST; reuse response IDs directly.""",
     "update_employee": """## Playbook: Update Employee
 1. Locate employee with GET /employee?email=<email> or GET /employee?firstName=<name> (use fields=*).
 2. PUT /employee/{id} with id, version, and ONLY the changed fields. MUST include id and version from GET response.
@@ -374,46 +380,24 @@ The sandbox is EMPTY — you must create the full chain first, then reverse:
     "update_invoice": """## Playbook: Update Invoice
 1. Locate invoice: GET /invoice with filters (invoiceNumber, customer, date range).
 2. PUT /invoice/{id} with id, version, and ONLY the changed fields.""",
-    "register_supplier_invoice": """## Playbook: Register Supplier Invoice (CRITICAL — TWO APPROACHES)
-1. Create supplier: POST /supplier with name, organizationNumber, email/invoiceEmail mirroring.
-
-APPROACH A — Try /supplierInvoice FIRST (preferred by scoring system):
-2a. Call search_tripletex_api("supplier invoice") to find the /supplierInvoice endpoint.
-3a. POST /supplierInvoice with:
-    - invoiceNumber: invoice reference from prompt
-    - invoiceDate: date from prompt
-    - supplier: {"id": supplier_id}
-    - currency: {"code": "NOK"}
-    - lines or orderLines with account, amount, vatType
-    If this returns 403, fall back to Approach B.
-
-APPROACH B — Fallback to /ledger/voucher:
-2b. Resolve expense account: GET /ledger/account with params={"number": <account_number>}.
-3b. POST /ledger/voucher with ONE debit posting:
-    - account: {"id": <resolved_account_id>} (use the ID from GET response, NOT the account number)
-    - amountGross: total including VAT (positive)
-    - amountGrossCurrency: same as amountGross
-    - vatType: {"id": 3} for 25% MVA — NEVER use vatType 0
-    - supplier: {"id": supplier_id}
-    With vatType=3, Tripletex auto-generates VAT + AP credit postings.
-    If 422 "postings don't sum to 0": you used vatType=0, switch to vatType=3.
-
-CRITICAL: Use account ID from GET response, NOT the account number string.""",
-    "create_voucher": """## Playbook: Create Voucher / Payroll (CRITICAL)
-IMPORTANT: If the task is about PAYROLL (lønn/salary/Gehalt/nómina/paie/folha):
-1. Check if salary endpoints exist: search_tripletex_api("salary payrun")
-2. If /salary/payrun exists: POST /salary/payrun, then POST /salary/transaction for each salary line
-3. If salary endpoints don't exist: fall back to POST /ledger/voucher with correct salary accounts
-
-## Voucher Rules (CRITICAL — amountGross rules)
-1. If prompt requires custom dimension: POST /ledger/accountingDimensionName to create, POST /ledger/accountingDimensionValue for each value.
-2. Resolve all account numbers: GET /ledger/account?number=XXXX to get the actual account id.
-3. Create voucher with ALL postings inline: POST /ledger/voucher with postings array.
-4. EVERY posting MUST have BOTH amountGross AND amountGrossCurrency set to the SAME value.
-5. Do NOT include row=0 — it's system-generated and causes 422.
-6. For NOK-only transactions with vatType=0: include BOTH debit and credit postings manually.
-7. For transactions with vatType!=0: include ONLY the debit posting — Tripletex auto-generates VAT and credit.
-8. Use freeAccountingDimension1..10={"id": dimension_value_id} for custom dimensions (never freeDimensionValue1).""",
+    "register_supplier_invoice": """## Playbook: Register Supplier Invoice
+1. Create/reuse supplier first; mirror email->invoiceEmail when email exists.
+2. Prefer POST /supplierInvoice if available; if 403/forbidden, immediately switch to POST /ledger/voucher.
+3. Resolve expense account ID via GET /ledger/account params={"number": XXXX}; never use account number in posting body.
+4. Voucher: use TWO postings — DEBIT expense (vatType=3, amountGross=GROSS) + CREDIT 2400 (vatType=0, amountGross=NEGATIVE GROSS, supplier ref). Auto-split handles VAT.
+5. For normal 25% purchase VAT: vatType={"id":3} on debit; NEVER use vatType id=1 and never vatType 0 on the debit.
+6. Always set supplier={"id": supplier_id} on BOTH the debit posting AND the credit 2400 posting.
+7. Set vendorInvoiceNumber from the invoice number AND include dueDate from forfallsdato when available.
+8. Never call /incomingInvoice (forbidden in sandbox).""",
+    "create_voucher": """## Playbook: Create Voucher (Payroll-focused)
+1. If prompt is salary/payroll: GET /salary/type and map IDs by NAME (Fastlønn/Timelønn/Overtid/Bonus/Feriepenger), never by index.
+2. Ensure employee prerequisites: dateOfBirth set, division exists, active employment covers payroll period.
+3. If missing prerequisites: PUT /employee (dateOfBirth), POST /division, POST /employee/employment, POST /employee/employment/details.
+4. POST /salary/transaction with payslips[].specifications[] using salaryType + rate + count (never amount).
+5. Keep salary type semantics correct: base salary->Fastlønn, hourly->Timelønn, overtime->Overtid, bonus->Bonus.
+6. For non-payroll vouchers use POST /ledger/voucher with amountGross==amountGrossCurrency and no row=0.
+7. For vatType=0 include debit+credit manually; for vatType!=0 use debit (vatType=3) + credit (vatType=0) — auto-split handles VAT on debit side.
+8. Never invent payroll amounts in closing/accrual tasks; derive from actual salary transactions in period.""",
     "enable_module": """## Playbook: Enable Module
 1. Use candidate endpoint from execution_brief for module settings.
 2. Call required PUT/POST exactly once with required payload.""",
@@ -444,39 +428,15 @@ CRITICAL: Read the prompt carefully — it tells you which voucher/posting is wr
 3. Create the corrected voucher: POST /ledger/voucher with the correct postings from the prompt.
 4. Use account numbers from the prompt directly — resolve them with GET /ledger/account?number=XXXX.
 5. Do NOT guess corrections — only apply what the prompt explicitly states.""",
-    "year_end_closing": """## Playbook: Year End Closing (Tier 3 — HIGH VALUE)
-CRITICAL: The prompt gives you ALL the information needed. Do NOT probe for balances — use the numbers from the prompt directly.
-NEVER REFUSE TO ACT. Even if you think data is missing, ALWAYS create vouchers with what you have.
-For unknown counteraccounts, use standard Norwegian chart of accounts:
-- Depreciation: expense 6010-6090 → credit accumulated depreciation 1019/1029/1039
-- Tax provision (22%): debit 8300 → credit 2510
-- Result transfer: debit 8800 → credit 2050 (or reverse if loss)
-- Accrual reversal: debit the expense account → credit the accrual (e.g., 1710, 2960)
-
-Common year_end_closing tasks and how to handle them:
-1. **Depreciation voucher**: Prompt gives asset accounts + depreciation amounts.
-   - Resolve accounts: GET /ledger/account?number=XXXX for each account mentioned.
-   - POST /ledger/voucher with postings: DR depreciation expense / CR accumulated depreciation.
-2. **Tax provision (skatteavsetning)**: Prompt gives taxable income or says "22% of result".
-   - Calculate 22% of the given amount.
-   - POST /ledger/voucher: DR 8300 (tax expense) / CR 2510 (tax payable).
-3. **Result transfer (resultatoverføring)**: Transfer year's result to equity.
-   - POST /ledger/voucher: DR 8800 (result) / CR 2050 (equity) or vice versa if loss.
-4. **Inventory adjustment**: Prompt gives inventory count vs book value.
-   - POST /ledger/voucher: DR/CR 1460 (inventory) and 4290 (inventory change).
-
-KEY RULES:
-- EVERY posting needs BOTH amountGross AND amountGrossCurrency set to the SAME value.
-- Use vatType={"id": 0} for all year-end postings (no VAT on closing entries).
-- For vatType=0 postings: include BOTH debit AND credit postings manually (they must sum to 0).
-
-ACCOUNT ID MAPPING (CRITICAL — this is where most failures happen):
-- Call GET /ledger/account with params={"number": XXXX} for each account.
-- The response is a list. Find the item where response.values[0].number == your account number.
-- Extract the "id" field from that item. This is the INTEGER ID you must use.
-- In the voucher posting, use account={"id": <integer_id>}, NOT account={"number": XXXX}.
-- VERIFY your mapping: log "Account 6010 -> ID 12345" for each one before creating vouchers.
-- Common mistake: using a DIFFERENT account's ID for the wrong account number. Double-check each mapping.""",
+    "year_end_closing": """## Playbook: Year-End Closing
+1. Resolve every account number first via GET /ledger/account params={"number": XXXX}; use account={"id": ...} only.
+2. For depreciation: debit 6000-series expense (e.g., 6010), credit accumulated depreciation (1039/1049/1059); do NOT use 1209 as the credit account.
+3. For payroll accruals: calculate from actual period salary transactions/postings (GET /ledger/posting), never arbitrary amounts.
+4. For tax provision/result transfer/accrual reversal: use prompt amounts and standard account pairs only.
+5. Post each entry with POST /ledger/voucher using vatType={"id":0} and both debit+credit lines.
+6. Every posting must set amountGross and amountGrossCurrency to identical values.
+7. Ensure voucher totals net to 0 and do not include row=0.
+8. Use one call per unique query; never duplicate identical ledger fetches in parallel.""",
 }
 
 
