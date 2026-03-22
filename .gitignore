@@ -2,28 +2,53 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+dist/
+build/
 
 # Environment
 .env
-.venv
+.venv/
 env/
 venv/
-
-# Submission artifacts
-*.zip
-task-1-norgesgruppen/submission_*.zip
-task-1-norgesgruppen/submission/*.safetensors
-task-1-norgesgruppen/submission/*.pt
 
 # IDE
 .vscode/
 .idea/
+.DS_Store
 
 # Agent/System
 .sisyphus/
+
+# Training data & model artifacts
+training_data/
+work/
+*.pt
+*.safetensors
+*.onnx
+*.zip
+reference_images/
+temp_eval/
+
+# Task 2 — Tripletex
+task-2-tripletex/runs/.syncthing*
+task-2-tripletex/runs/.st*
+task-2-tripletex/runs/*.sync-conflict*
+task-2-tripletex/runs/*.tmp
+task-2-tripletex/pdf_cache/
+task-2-tripletex/uvicorn.log
+node_modules/
+
+# Task 3 — Astar Island
+calibration.json
+data/
+autorun.log
+autorun.py
+temp_*.py
+
+# Misc
+*.log
+.pytest_cache/
 submission_status.md
-task-1-norgesgruppen/temp_eval/
-task-2-tripletex/runs/raw_requests.jsonl
-task-2-tripletex/runs/overview.json
-task-2-tripletex/runs/raw_requests.jsonl
-task-2-tripletex/runs/.stfolder/syncthing-folder-15a279.txt
+.browser-data/
+.game-tracker.json
