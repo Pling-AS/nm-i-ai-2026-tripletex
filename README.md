@@ -1,5 +1,7 @@
 # NM i AI 2026
 
+**Team: Er det kå i?**
+
 Our submission for **NM i AI 2026** (Norwegian Championship in AI) — a 69-hour AI hackathon with a 1,000,000 NOK prize pool.
 
 The competition consisted of three scored tasks plus a practice warm-up, each requiring a different AI approach.
