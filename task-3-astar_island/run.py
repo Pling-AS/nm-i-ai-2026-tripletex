@@ -135,6 +135,9 @@ def _query_phase(
     coverage_successes = 0
     coverage_failures = 0
 
+    last_queries_used = queries_used
+    last_queries_max = queries_max
+
     for i, q in enumerate(coverage_queries):
         try:
             result = client.simulate(
@@ -145,6 +148,9 @@ def _query_phase(
                 viewport_w=q.viewport_w,
                 viewport_h=q.viewport_h,
             )
+            last_queries_used = result.queries_used
+            last_queries_max = result.queries_max
+            
             observation_store.add_observation(
                 seed_index=q.seed_index,
                 viewport=result.viewport,
@@ -192,6 +198,10 @@ def _query_phase(
             if repeat_budget > 0:
                 log("  Skipping repeat phase because coverage is severely degraded.")
                 repeat_budget = 0
+        elif repeat_budget > 0:
+            # Dynamically update repeat budget based on actual usage
+            repeat_budget = max(0, last_queries_max - last_queries_used)
+            log(f"  Updated repeat budget based on actual usage: {repeat_budget}")
 
     # Phase 2: Adaptive repeat queries
     if repeat_budget > 0:
@@ -271,9 +281,11 @@ def _query_phase(
             f"({n_alive}/{n_total}), avg_pop={avg_pop:.2f}, "
             f"avg_food={avg_food:.2f}, avg_def={avg_def:.2f}"
         )
+        observation_store.settlement_vitality = vitality
         set_settlement_vitality(vitality)
     else:
         log("  No settlement data captured (predict-only or empty)")
+        observation_store.settlement_vitality = None
         set_settlement_vitality(None)
 
     return observation_store
@@ -370,6 +382,7 @@ def run(round_id: str | None = None, predict_only: bool = False) -> None:
             sys.exit(1)
         log(f"  Loading saved observations from {obs_file}...")
         observation_store = ObservationStore.load(obs_file)
+        set_settlement_vitality(observation_store.settlement_vitality)
     else:
         # Full query pipeline
         observation_store = _query_phase(

@@ -78,6 +78,11 @@ export function RunCard({ run, isSelected, onClick }: RunCardProps) {
             {run.metadata.hostname.split('.')[0]}
           </span>
         )}
+        {run.metadata?.agent_version && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-500/15 text-zinc-400 font-mono">
+            v{run.metadata.agent_version}
+          </span>
+        )}
         <span className={cn('ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium',
           run.source === 'competition' ? 'bg-purple-500/20 text-purple-300' : 'bg-zinc-500/20 text-zinc-400'
         )}>

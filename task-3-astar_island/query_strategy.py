@@ -140,7 +140,7 @@ def _compute_prior_entropy_map(analysis: SeedAnalysis) -> NDArray[np.floating]:
     High entropy = near settlements, mixed terrain, coastal development zones.
     Low entropy = deep ocean, mountains, isolated forest interiors.
     """
-    from solution_spatial import _get_calibrated_prior, _initial_terrain_prior
+    from predictor import _get_calibrated_prior, _initial_terrain_prior
 
     h, w = analysis.height, analysis.width
     entropy = np.zeros((h, w), dtype=np.float64)
@@ -232,7 +232,7 @@ def _compute_cell_value_grid(
     Uses identical posterior formula as solution_spatial.py:
       q_k = (n_k + τ·m_k) / (N + τ)  with per-archetype τ and blended prior m.
     """
-    from solution_spatial import _get_adaptive_tau, _get_prior_mean
+    from predictor import _get_adaptive_tau, _get_prior_mean
 
     h, w = analysis.height, analysis.width
     counts_grid = observation_store.get_seed_counts(seed_idx)

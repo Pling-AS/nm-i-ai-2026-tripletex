@@ -169,6 +169,11 @@ export function RunDetail({ runId }: RunDetailProps) {
           )} />
           <span className="text-sm font-semibold">{s.task_type || 'unknown'}</span>
           <span className="text-xs text-[var(--text2)]">{s.run_id.slice(0, 12)}</span>
+          {s.metadata?.agent_version && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-500/15 text-zinc-400 font-mono">
+              v{s.metadata.agent_version}
+            </span>
+          )}
           {isAwaitingScore && (
             <span className="flex items-center gap-1 text-[11px] text-[var(--yellow)]">
               <Loader2 className="h-3 w-3 animate-spin" /> awaiting score

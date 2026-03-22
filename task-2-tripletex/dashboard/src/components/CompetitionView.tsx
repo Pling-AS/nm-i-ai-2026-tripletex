@@ -1,9 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Loader2, Send, Play, Square, Trophy, CheckCircle, Hash, TrendingUp } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Loader2, Send, Play, Pause, XCircle, Trophy, CheckCircle, Hash, TrendingUp } from 'lucide-react'
 import { api } from '@/lib/api'
 import type { Submission } from '@/lib/types'
+
+type BatchProgress = {
+  status?: string
+  completed: number
+  total: number
+  running: number
+  concurrency: number
+}
+
+type BatchResult = {
+  run?: number
+  submission_id?: string
+  status?: string
+  error?: string
+}
 
 export function CompetitionView() {
   const [submissions, setSubmissions] = useState<Submission[]>([])
@@ -16,13 +31,47 @@ export function CompetitionView() {
   const [submitResult, setSubmitResult] = useState<string | null>(null)
 
   const [batchCount, setBatchCount] = useState(10)
-  const [batchDelay, setBatchDelay] = useState(2)
+  const [batchConcurrency, setBatchConcurrency] = useState(8)
   const [batchActive, setBatchActive] = useState(false)
-  const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(null)
+  const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([])
+  const [batchLoading, setBatchLoading] = useState(false)
+
+  const batchPollRef = useRef<number | null>(null)
+  const wasBatchActiveRef = useRef(false)
 
   useEffect(() => {
     fetchSubmissions()
   }, [])
+
+  useEffect(() => {
+    void refreshBatchStatus()
+  }, [])
+
+  useEffect(() => {
+    if (!batchActive) {
+      if (batchPollRef.current) {
+        window.clearInterval(batchPollRef.current)
+        batchPollRef.current = null
+      }
+      return
+    }
+
+    if (batchPollRef.current) {
+      window.clearInterval(batchPollRef.current)
+    }
+
+    batchPollRef.current = window.setInterval(() => {
+      void refreshBatchStatus()
+    }, 3000)
+
+    return () => {
+      if (batchPollRef.current) {
+        window.clearInterval(batchPollRef.current)
+        batchPollRef.current = null
+      }
+    }
+  }, [batchActive])
 
   async function fetchSubmissions() {
     setLoading(true)
@@ -49,33 +98,56 @@ export function CompetitionView() {
   }
 
   async function handleStartBatch() {
+    setBatchLoading(true)
     try {
-      await api.startBatch(batchCount, batchDelay)
+      const count = Math.max(1, Math.min(batchCount, 100))
+      const concurrency = Math.max(1, Math.min(batchConcurrency, 10))
+      await api.startBatch(count, Math.min(concurrency, count))
       setBatchActive(true)
-      pollBatch()
+      setBatchResults([])
+      setBatchProgress({
+        completed: 0,
+        total: count,
+        running: 0,
+        concurrency: Math.min(concurrency, count),
+        status: `starting batch: ${count} submissions`,
+      })
+      void refreshBatchStatus()
     } catch (e) { console.error(e) }
+    setBatchLoading(false)
   }
 
   async function handleStopBatch() {
+    setBatchLoading(true)
     try {
       await api.stopBatch()
-      setBatchActive(false)
-      setBatchProgress(null)
+      await refreshBatchStatus()
     } catch (e) { console.error(e) }
+    setBatchLoading(false)
   }
 
-  async function pollBatch() {
-    const interval = setInterval(async () => {
-      try {
-        const status = await api.getBatchStatus()
-        setBatchActive(status.active)
-        setBatchProgress(status.progress ? { completed: status.progress.completed, total: status.progress.total } : null)
-        if (!status.active) {
-          clearInterval(interval)
-          fetchSubmissions()
-        }
-      } catch { clearInterval(interval) }
-    }, 3000)
+  async function refreshBatchStatus() {
+    try {
+      const status = await api.getBatchStatus()
+      const active = Boolean(status?.active)
+
+      setBatchActive(active)
+      setBatchProgress(status?.progress ? {
+        status: status.progress.status,
+        completed: Number(status.progress.completed ?? 0),
+        total: Number(status.progress.total ?? 0),
+        running: Number(status.progress.running ?? 0),
+        concurrency: Number(status.progress.concurrency ?? 0),
+      } : null)
+      setBatchResults(Array.isArray(status?.results) ? status.results : [])
+
+      if (wasBatchActiveRef.current && !active) {
+        void fetchSubmissions()
+      }
+      wasBatchActiveRef.current = active
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   return (
@@ -130,35 +202,90 @@ export function CompetitionView() {
 
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
           <h3 className="text-sm font-semibold">Batch Runner</h3>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="text-[11px] text-[var(--text2)]">Count</label>
-              <input type="number" value={batchCount} onChange={(e) => setBatchCount(Number(e.target.value))} min={1} max={100}
-                className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs focus:border-[var(--blue)] focus:outline-none" />
-            </div>
-            <div className="flex-1">
-              <label className="text-[11px] text-[var(--text2)]">Delay (s)</label>
-              <input type="number" value={batchDelay} onChange={(e) => setBatchDelay(Number(e.target.value))} min={0} max={60}
-                className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs focus:border-[var(--blue)] focus:outline-none" />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={handleStartBatch} disabled={batchActive}
-              className="flex items-center gap-1 rounded bg-[var(--green)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
-              <Play className="h-3 w-3" /> Start
-            </button>
-            <button type="button" onClick={handleStopBatch} disabled={!batchActive}
-              className="flex items-center gap-1 rounded bg-[var(--red)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
-              <Square className="h-3 w-3" /> Stop
-            </button>
-          </div>
-          {batchProgress && (
-            <div className="text-xs text-[var(--text2)]">
-              Progress: {batchProgress.completed}/{batchProgress.total}
-              <div className="h-1.5 rounded-full bg-[var(--surface2)] mt-1 overflow-hidden">
-                <div className="h-full bg-[var(--blue)] rounded-full transition-all" style={{ width: `${(batchProgress.completed / batchProgress.total) * 100}%` }} />
+          {batchActive && batchProgress ? (
+            <div className="space-y-3">
+              <div className="text-xs font-medium text-[var(--text)] flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--blue)]" />
+                Batch Running: {batchProgress.completed}/{batchProgress.total} complete, {batchProgress.running} workers active
+              </div>
+
+              <div className="space-y-1.5 text-xs text-[var(--text2)]">
+                <div className="h-2 rounded-full bg-[var(--surface2)] overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--blue)] rounded-full transition-all"
+                    style={{ width: `${batchProgress.total > 0 ? (batchProgress.completed / batchProgress.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <div>{batchProgress.completed}/{batchProgress.total}</div>
+                <div>Workers: {batchProgress.running}/{batchProgress.concurrency} active</div>
+                <div>Status: {batchProgress.status ?? 'running'}</div>
+              </div>
+
+              <div className="rounded border border-[var(--border)] bg-[var(--bg)]">
+                <div className="px-2.5 py-2 text-[11px] text-[var(--text2)] border-b border-[var(--border)]">Results</div>
+                <div className="max-h-36 overflow-y-auto p-2 text-xs space-y-1">
+                  {batchResults.length === 0 ? (
+                    <div className="text-[var(--text2)]">No completed submissions yet…</div>
+                  ) : (
+                    batchResults.map((result, idx) => {
+                      const isOk = result.status === 'done'
+                      const isErr = result.status === 'error' || result.status === 'timeout' || result.status === 'cancelled'
+                      return (
+                        <div key={`${result.run ?? idx}-${result.submission_id ?? 'none'}-${idx}`} className="font-mono text-[11px]">
+                          #{result.run ?? idx + 1}:{' '}
+                          {isOk ? '✓' : isErr ? '✗' : '…'}{' '}
+                          {result.submission_id ? `submission ${result.submission_id}` : 'submission n/a'}
+                          {result.error ? ` — error: ${result.error}` : ''}
+                          {!result.error && result.status && result.status !== 'done' ? ` — ${result.status}` : ''}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleStopBatch}
+                  disabled={batchLoading}
+                  className="flex items-center gap-1 rounded bg-amber-500 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  <Pause className="h-3 w-3" /> Pause
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStopBatch}
+                  disabled={batchLoading}
+                  className="flex items-center gap-1 rounded bg-[var(--red)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  <XCircle className="h-3 w-3" /> Cancel
+                </button>
               </div>
             </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[11px] text-[var(--text2)]">Count</label>
+                  <input type="number" value={batchCount} onChange={(e) => setBatchCount(Number(e.target.value))} min={1} max={100}
+                    className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs focus:border-[var(--blue)] focus:outline-none" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] text-[var(--text2)]">Concurrency</label>
+                  <input type="number" value={batchConcurrency} onChange={(e) => setBatchConcurrency(Number(e.target.value))} min={1} max={10}
+                    className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs focus:border-[var(--blue)] focus:outline-none" />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleStartBatch}
+                disabled={batchLoading}
+                className="flex items-center gap-1 rounded bg-[var(--green)] px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+              >
+                {batchLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Start Batch
+              </button>
+            </>
           )}
         </div>
       </div>

@@ -937,17 +937,23 @@ _batch_runner_results: list[dict[str, Any]] = []
 _batch_runner_progress: dict[str, Any] = {
     "total": 0,
     "completed": 0,
+    "running": 0,
+    "concurrency": 0,
     "current": None,
     "status": "idle",
 }
+_batch_runner_task: asyncio.Task[None] | None = None
+_batch_runner_worker_tasks: set[asyncio.Task[Any]] = set()
 
 
 @router.post("/api/competition/batch")
 async def competition_batch(request_body: dict | None = None) -> JSONResponse:
     global _batch_runner_active, _batch_runner_results, _batch_runner_progress
+    global _batch_runner_task
     body = request_body or {}
-    count = min(int(body.get("count", 5)), 50)
-    delay = int(body.get("delay_seconds", 5))
+    count = max(1, min(int(body.get("count", 5)), 50))
+    concurrency = max(1, min(int(body.get("concurrency", 8)), 10))
+    concurrency = min(concurrency, count)
 
     if _batch_runner_active:
         return JSONResponse(
@@ -958,10 +964,15 @@ async def competition_batch(request_body: dict | None = None) -> JSONResponse:
             status_code=409,
         )
 
-    import asyncio
-
-    asyncio.create_task(_run_batch(count, delay))
-    return JSONResponse({"started": True, "count": count, "delay_seconds": delay})
+    _batch_runner_task = asyncio.create_task(_run_batch(count, concurrency))
+    return JSONResponse(
+        {
+            "started": True,
+            "count": count,
+            "concurrency": concurrency,
+            "max_concurrency": 10,
+        }
+    )
 
 
 @router.get("/api/competition/batch/status")
@@ -977,8 +988,17 @@ async def competition_batch_status() -> JSONResponse:
 
 @router.post("/api/competition/batch/stop")
 async def competition_batch_stop() -> JSONResponse:
-    global _batch_runner_active
+    global _batch_runner_active, _batch_runner_task, _batch_runner_worker_tasks
     _batch_runner_active = False
+    _batch_runner_progress["status"] = "stopping"
+
+    if _batch_runner_task and not _batch_runner_task.done():
+        _batch_runner_task.cancel()
+
+    for task in list(_batch_runner_worker_tasks):
+        if not task.done():
+            task.cancel()
+
     return JSONResponse({"stopped": True, "progress": _batch_runner_progress})
 
 
@@ -1000,137 +1020,219 @@ async def get_raw_requests() -> JSONResponse:
     return JSONResponse({"requests": entries[:200]})
 
 
-async def _run_batch(count: int, delay: int) -> None:
+def _batch_get_active_run_id_for_submission(submission_id: str) -> str | None:
+    for run_id, trace in RunTrace.get_active_runs().items():
+        if trace.metadata.get("submission_id") == submission_id:
+            return run_id
+    return None
+
+
+def _batch_get_summary_for_submission(submission_id: str) -> dict[str, Any] | None:
+    store = get_run_store()
+    for summary in store.list_summaries():
+        if summary.get("metadata", {}).get("submission_id") == submission_id:
+            return summary
+    return None
+
+
+async def _wait_for_batch_submission(
+    submission_id: str,
+    *,
+    poll_seconds: int = 5,
+    start_timeout_seconds: int = 60,
+    finish_timeout_seconds: int = 5 * 60,
+) -> str:
+    start_checks = max(1, start_timeout_seconds // poll_seconds)
+    active_run_id: str | None = None
+
+    for attempt in range(start_checks):
+        if not _batch_runner_active:
+            return "stopped"
+
+        active_run_id = _batch_get_active_run_id_for_submission(submission_id)
+        if active_run_id:
+            break
+
+        summary = _batch_get_summary_for_submission(submission_id)
+        if summary:
+            status = summary.get("status", "")
+            if status in ("completed", "error", "incomplete"):
+                return "done"
+            if status == "running":
+                active_run_id = summary.get("run_id")
+                break
+
+        if attempt < start_checks - 1:
+            await asyncio.sleep(poll_seconds)
+    else:
+        return "timeout"
+
+    finish_checks = max(1, finish_timeout_seconds // poll_seconds)
+    for _ in range(finish_checks):
+        if not _batch_runner_active:
+            return "stopped"
+
+        active_runs = RunTrace.get_active_runs()
+        if active_run_id:
+            if active_run_id not in active_runs:
+                return "done"
+        elif not any(
+            trace.metadata.get("submission_id") == submission_id
+            for trace in active_runs.values()
+        ):
+            return "done"
+
+        await asyncio.sleep(poll_seconds)
+
+    return "timeout"
+
+
+async def _resolve_batch_endpoint_url(settings: Settings) -> str:
+    endpoint_url = None
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            ngrok_resp = await c.get("http://localhost:4040/api/tunnels")
+            tunnels = ngrok_resp.json().get("tunnels", [])
+            for tunnel in tunnels:
+                public_url = tunnel.get("public_url", "")
+                if "ngrok" in public_url:
+                    endpoint_url = public_url + "/solve"
+                    break
+    except Exception:
+        pass
+
+    return endpoint_url or settings.local_solve_url
+
+
+async def _run_batch(count: int, concurrency: int) -> None:
     global _batch_runner_active, _batch_runner_results, _batch_runner_progress
+    global _batch_runner_task, _batch_runner_worker_tasks
+
     _batch_runner_active = True
     _batch_runner_results = []
     _batch_runner_progress = {
         "total": count,
         "completed": 0,
+        "running": 0,
+        "concurrency": concurrency,
         "current": None,
-        "status": "running",
+        "status": f"starting batch: {count} submissions @ concurrency {concurrency}",
     }
 
     settings = get_settings()
     token = settings.ainm_jwt_token
     task_id = settings.ainm_tripletex_task_id
     endpoint_api_key = settings.app_api_key
+    endpoint_url = await _resolve_batch_endpoint_url(settings)
+    semaphore = asyncio.Semaphore(concurrency)
+    progress_lock = asyncio.Lock()
 
-    endpoint_url = None
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            ngrok_resp = await c.get("http://localhost:4040/api/tunnels")
-            tunnels = ngrok_resp.json().get("tunnels", [])
-            for t in tunnels:
-                if "ngrok" in t.get("public_url", ""):
-                    endpoint_url = t["public_url"] + "/solve"
-                    break
-    except Exception:
-        pass
-    if not endpoint_url:
-        endpoint_url = settings.local_solve_url
+    if not token:
+        _batch_runner_progress["status"] = "failed: AINM_JWT_TOKEN not configured"
+        _batch_runner_active = False
+        _batch_runner_task = None
+        return
 
-    for i in range(count):
-        if not _batch_runner_active:
-            _batch_runner_progress["status"] = "stopped"
-            break
+    async def _submit_one(run_number: int) -> None:
+        nonlocal endpoint_url, token, task_id, endpoint_api_key
 
-        _batch_runner_progress["current"] = i + 1
-        _batch_runner_progress["status"] = f"submitting {i + 1}/{count}"
+        async with semaphore:
+            if not _batch_runner_active:
+                return
 
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(
-                    f"https://api.ainm.no/tasks/{task_id}/submissions",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "endpoint_url": endpoint_url,
-                        "endpoint_api_key": endpoint_api_key,
-                    },
+            async with progress_lock:
+                _batch_runner_progress["running"] += 1
+                _batch_runner_progress["current"] = run_number
+                _batch_runner_progress["status"] = (
+                    f"running {_batch_runner_progress['running']}/{concurrency} workers, "
+                    f"{_batch_runner_progress['completed']}/{count} done"
                 )
-                resp.raise_for_status()
-                sub_data = resp.json()
-                sub_id = sub_data.get("id", "?")
 
-            _batch_runner_progress["status"] = (
-                f"waiting for run {i + 1}/{count} (submission {sub_id[:8]})"
-            )
+            sub_id = ""
+            outcome = "error"
 
-            run_completed = False
-            for _ in range(120):
-                await asyncio.sleep(5)
-                if not _batch_runner_active:
-                    break
-                latest_files = sorted(
-                    RUNS_DIR.glob("*.jsonl"),
-                    key=lambda p: p.stat().st_mtime,
-                    reverse=True,
-                )
-                for f in latest_files[:3]:
-                    if f.name == "raw_requests.jsonl":
-                        continue
-                    events = _parse_trace_file(f)
-                    done_event = next(
-                        (e for e in events if e["event_type"] == "done"), None
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.post(
+                        f"https://api.ainm.no/tasks/{task_id}/submissions",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "endpoint_url": endpoint_url,
+                            "endpoint_api_key": endpoint_api_key,
+                        },
                     )
-                    if done_event:
-                        init_event = next(
-                            (e for e in events if e["event_type"] == "init"), None
-                        )
-                        src = (
-                            (init_event or {})
-                            .get("payload", {})
-                            .get("metadata", {})
-                            .get("source", "")
-                        )
-                        if src == "competition":
-                            dp = done_event["payload"]
-                            _batch_runner_results.append(
-                                {
-                                    "run": i + 1,
-                                    "file": f.name,
-                                    "calls": dp.get("tripletex_call_count", 0),
-                                    "errors": dp.get("tripletex_error_count", 0),
-                                    "submission_id": sub_id[:12],
-                                }
-                            )
-                            run_completed = True
-                            break
-                if run_completed:
-                    break
+                    resp.raise_for_status()
+                    sub_data = resp.json()
+                    sub_id = sub_data.get("id", "")
 
-            if not run_completed and _batch_runner_active:
+                if sub_id:
+                    register_pending_submission(sub_id)
+                    outcome = await _wait_for_batch_submission(sub_id)
+                    _batch_runner_results.append(
+                        {
+                            "run": run_number,
+                            "submission_id": sub_id[:12],
+                            "status": outcome,
+                        }
+                    )
+                else:
+                    _batch_runner_results.append(
+                        {
+                            "run": run_number,
+                            "status": "error",
+                            "error": "missing submission id",
+                        }
+                    )
+
+            except asyncio.CancelledError:
                 _batch_runner_results.append(
                     {
-                        "run": i + 1,
-                        "submission_id": sub_id[:12],
-                        "status": "timeout",
+                        "run": run_number,
+                        "submission_id": sub_id[:12] if sub_id else "",
+                        "status": "cancelled",
                     }
                 )
+                raise
+            except Exception as exc:
+                _batch_runner_results.append(
+                    {
+                        "run": run_number,
+                        "submission_id": sub_id[:12] if sub_id else "",
+                        "status": "error",
+                        "error": str(exc)[:200],
+                    }
+                )
+            finally:
+                async with progress_lock:
+                    _batch_runner_progress["running"] = max(
+                        0, _batch_runner_progress["running"] - 1
+                    )
+                    _batch_runner_progress["completed"] += 1
+                    status_word = "stopping" if not _batch_runner_active else "running"
+                    _batch_runner_progress["status"] = (
+                        f"{status_word}: {_batch_runner_progress['running']}/{concurrency} workers, "
+                        f"{_batch_runner_progress['completed']}/{count} done"
+                    )
 
-        except Exception as exc:
-            _batch_runner_results.append(
-                {
-                    "run": i + 1,
-                    "error": str(exc)[:200],
-                }
-            )
+    _batch_runner_worker_tasks = {
+        asyncio.create_task(_submit_one(i + 1)) for i in range(count)
+    }
 
-        _batch_runner_progress["completed"] = i + 1
-
-        if i < count - 1 and _batch_runner_active:
-            _batch_runner_progress["status"] = (
-                f"waiting {delay}s before next submission"
-            )
-            await asyncio.sleep(delay)
-
-    _batch_runner_progress["status"] = (
-        "completed" if _batch_runner_active else "stopped"
-    )
-    _batch_runner_active = False
+    try:
+        await asyncio.gather(*_batch_runner_worker_tasks, return_exceptions=True)
+    finally:
+        _batch_runner_worker_tasks.clear()
+        _batch_runner_progress["running"] = 0
+        _batch_runner_progress["status"] = (
+            "completed"
+            if _batch_runner_active
+            else f"stopped ({_batch_runner_progress['completed']}/{count} completed)"
+        )
+        _batch_runner_active = False
+        _batch_runner_task = None
 
 
 def _enrich_run_file(

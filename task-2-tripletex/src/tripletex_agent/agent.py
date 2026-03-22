@@ -1,3 +1,4 @@
+from collections import defaultdict
 from difflib import get_close_matches
 import json
 import re
@@ -14,7 +15,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from tripletex_agent.config import Settings
-from tripletex_agent.files import prepare_attachments
+from tripletex_agent.files import prepare_attachments, prepare_attachments_async
+from tripletex_agent.middleware import ExecutionMiddleware
 from tripletex_agent.openrouter import (
     OpenRouterClient,
     OpenRouterError,
@@ -38,6 +40,7 @@ from tripletex_agent.tripletex import (
     TripletexClient,
     compact_response,
 )
+from tripletex_agent.version import AGENT_VERSION
 
 
 @dataclass(slots=True)
@@ -71,6 +74,7 @@ class ExecutionState:
     advisor_422_endpoints: set[str] = field(default_factory=set)
     created_resources: list[CreatedResource] = field(default_factory=list)
     sandbox_discovery: dict[str, Any] = field(default_factory=dict)
+    middleware: Any = None
     reclassification_done: bool = False
     off_plan_api_calls: int = 0
 
@@ -107,6 +111,7 @@ class TripletexAccountingAgent:
             "max_attachment_chars": self._settings.max_attachment_text_chars,
             "source": "competition" if is_competition else "simulation",
             "hostname": _platform.node(),
+            "agent_version": AGENT_VERSION,
         }
         if submission_id:
             metadata["submission_id"] = submission_id
@@ -120,16 +125,27 @@ class TripletexAccountingAgent:
                 "metadata": metadata,
             },
         )
-        attachments = prepare_attachments(
-            request.files,
-            self._settings.max_attachment_text_chars,
-        )
+        try:
+            attachments = await prepare_attachments_async(
+                request.files,
+                self._settings.max_attachment_text_chars,
+                datalab_api_key=self._settings.datalab_api_key,
+            )
+        except Exception as att_exc:
+            logger.warning(
+                "Async attachment prep failed, falling back to sync: %s", att_exc
+            )
+            attachments = prepare_attachments(
+                request.files,
+                self._settings.max_attachment_text_chars,
+            )
         trace.write(
             "attachments_prepared",
             {
                 "attachments": [
                     summary.model_dump() for summary in attachments.summaries
-                ]
+                ],
+                "pdf_extractions": attachments.extraction_details,
             },
         )
         openrouter = OpenRouterClient(self._settings)
@@ -761,13 +777,109 @@ class TripletexAccountingAgent:
             request_prompt=request.prompt,
         )
         focused_prompt = build_executor_system_prompt(planner.task_type)
-        messages: list[dict[str, Any]] = [{"role": "system", "content": focused_prompt}]
+        is_salary_task = planner.task_type in ("create_voucher",) and any(
+            kw in request.prompt.lower()
+            for kw in (
+                "salary",
+                "lønn",
+                "gehalt",
+                "nómina",
+                "paie",
+                "folha",
+                "salário",
+                "payroll",
+                "lønns",
+            )
+        )
+        if is_salary_task:
+            salary_cheat_sheet = """
+## SALARY/PAYROLL TASK — SPECIAL INSTRUCTIONS
+This is a SALARY task. Do NOT use POST /ledger/voucher for salary — it scores 0 points.
+
+CORRECT APPROACH — Try these endpoints in order:
+1. GET /salary/type — List available salary/wage types
+2. POST /salary/payslip — Create a payslip for the employee
+   Body: {"employee": {"id": emp_id}, "year": 2026, "month": 3}
+3. POST /salary/payslip/{id}/wageRow — Add wage rows (base salary + bonus)
+   Body: {"wageType": {"id": wage_type_id}, "amount": 50400}
+4. PUT /salary/payslip/{id}/:approve — Approve the payslip
+
+If salary endpoints return 403 or "not found", THEN fall back to POST /ledger/voucher.
+But ALWAYS try the salary API first.
+
+Common wage types to search for:
+- "Fastlønn" or "Fast månedslønn" — base monthly salary
+- "Bonus" or "Tillegg" — one-time bonus
+"""
+            focused_prompt = focused_prompt + salary_cheat_sheet
         execution_brief = self._build_execution_brief(
             planner=planner,
             request_prompt=request.prompt,
         )
+        if is_salary_task:
+            execution_brief["planned_endpoints"] = [
+                ep
+                for ep in execution_brief.get("planned_endpoints", [])
+                if "/ledger/voucher" not in ep.get("path", "")
+            ]
+            execution_brief["planned_endpoints"].extend(
+                [
+                    {
+                        "method": "GET",
+                        "path": "/salary/type",
+                        "summary": "List salary/wage types",
+                    },
+                    {
+                        "method": "POST",
+                        "path": "/salary/payslip",
+                        "summary": "Create employee payslip",
+                    },
+                    {
+                        "method": "POST",
+                        "path": "/salary/payslip/{id}/wageRow",
+                        "summary": "Add wage row to payslip",
+                    },
+                    {
+                        "method": "PUT",
+                        "path": "/salary/payslip/{id}/:approve",
+                        "summary": "Approve payslip",
+                    },
+                ]
+            )
+        messages: list[dict[str, Any]] = [{"role": "system", "content": focused_prompt}]
+        middleware = ExecutionMiddleware()
         if execution_state.sandbox_discovery:
-            execution_brief["sandbox_discovery"] = execution_state.sandbox_discovery
+            for entity_type, entity_data in execution_state.sandbox_discovery.items():
+                if isinstance(entity_data, dict) and entity_data.get("id"):
+                    name = (
+                        entity_data.get("key_fields", {}).get("name")
+                        or entity_data.get("key_fields", {}).get("firstName")
+                        or entity_type
+                    )
+                    import re as _re2
+
+                    safe_name = _re2.sub(r"[^a-zA-Z0-9æøåÆØÅ_-]", "_", str(name))[
+                        :30
+                    ].strip("_")
+                    middleware.registry.register(
+                        f"{entity_type}_{safe_name}", entity_data["id"]
+                    )
+                    if entity_data.get("key_fields", {}).get("version") is not None:
+                        middleware.registry.register(
+                            f"{entity_type}_{safe_name}_version",
+                            entity_data["key_fields"]["version"],
+                        )
+            execution_brief["sandbox_discovery"] = middleware.scrub_ids_for_llm(
+                execution_state.sandbox_discovery
+            )
+
+        execution_brief["vat_types"] = {
+            "vat_25_id": 3,
+            "vat_15_id": 5,
+            "vat_0_id": 6,
+            "note": "These are standard Norwegian vatType IDs. Use id=3 for 25%, id=5 for 15%, id=6 for 0% exempt.",
+        }
+        execution_state.middleware = middleware
         trace.write(
             "execution_brief",
             {
@@ -1133,6 +1245,7 @@ class TripletexAccountingAgent:
                         arguments,
                         tripletex,
                         execution_state,
+                        trace,
                     )
                     trace.write(
                         "tool_result",
@@ -1332,12 +1445,17 @@ class TripletexAccountingAgent:
                                 )
                                 execution_state.reclassification_done = True
 
+                    compacted = _compact_tool_result_for_model(tool_result)
+                    if execution_state.middleware:
+                        compacted = execution_state.middleware.scrub_ids_for_llm(
+                            compacted
+                        )
                     messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": tool_call["id"],
                             "content": json.dumps(
-                                _compact_tool_result_for_model(tool_result),
+                                compacted,
                                 ensure_ascii=False,
                             ),
                         }
@@ -1379,6 +1497,7 @@ class TripletexAccountingAgent:
         arguments: dict[str, Any],
         tripletex: TripletexClient,
         execution_state: ExecutionState,
+        trace: RunTrace | None = None,
     ) -> dict[str, Any]:
         tool_call_key = _build_tool_call_key(tool_name, arguments)
         if _should_block_repeated_exploration(
@@ -1430,12 +1549,200 @@ class TripletexAccountingAgent:
                 )
                 execution_state.cached_tool_results[tool_call_key] = result
                 return result
+            if tool_name == "aggregate_endpoint":
+                if trace:
+                    trace.write(
+                        "tool_start",
+                        {
+                            "tool_name": "aggregate_endpoint",
+                            "arguments": arguments,
+                        },
+                    )
+
+                endpoint = arguments["endpoint"]
+                params = arguments.get("params", {})
+                group_by = arguments["group_by"]
+                sum_field = arguments["sum_field"]
+                sort_dir = arguments.get("sort", "desc")
+                limit = arguments.get("limit", 10)
+
+                if not isinstance(params, dict):
+                    return {"ok": False, "error": "params must be an object"}
+                if sort_dir not in ("asc", "desc"):
+                    sort_dir = "desc"
+                if not isinstance(limit, int) or limit < 1:
+                    limit = 10
+
+                all_values: list[Any] = []
+                page_from = 0
+                page_size = 1000
+                while True:
+                    page_params = {**params, "count": page_size, "from": page_from}
+                    try:
+                        response = await tripletex.request(
+                            method="GET", path=endpoint, params=page_params
+                        )
+                    except Exception as exc:
+                        return {"ok": False, "error": str(exc)[:300]}
+
+                    if isinstance(response, dict):
+                        values = response.get("values", [])
+                        full_size = response.get("fullResultSize", len(values))
+                    elif isinstance(response, list):
+                        values = response
+                        full_size = len(values)
+                    else:
+                        break
+
+                    if not isinstance(values, list):
+                        break
+
+                    all_values.extend(values)
+                    page_from += len(values)
+                    if page_from >= full_size or not values:
+                        break
+
+                groups: defaultdict[str, float] = defaultdict(float)
+                group_meta: dict[str, dict[str, Any]] = {}
+
+                def _get_nested(obj: Any, path: str) -> Any:
+                    for key in path.split("."):
+                        if isinstance(obj, dict):
+                            obj = obj.get(key)
+                        else:
+                            return None
+                    return obj
+
+                for item in all_values:
+                    if not isinstance(item, dict):
+                        continue
+                    key = _get_nested(item, group_by)
+                    if key is None:
+                        continue
+                    val = _get_nested(item, sum_field)
+                    if val is None:
+                        continue
+                    try:
+                        groups[str(key)] += float(val)
+                    except (TypeError, ValueError):
+                        continue
+
+                    if str(key) not in group_meta and "account" in group_by:
+                        account = _get_nested(item, "account")
+                        if isinstance(account, dict):
+                            group_meta[str(key)] = {
+                                "number": account.get("number"),
+                                "name": account.get("name"),
+                                "id": account.get("id"),
+                            }
+
+                sorted_groups = sorted(
+                    groups.items(), key=lambda x: x[1], reverse=(sort_dir == "desc")
+                )
+                top_results = sorted_groups[:limit]
+
+                result_list: list[dict[str, Any]] = []
+                for key, total in top_results:
+                    entry: dict[str, Any] = {
+                        "group_key": key,
+                        "total": round(total, 2),
+                    }
+                    if key in group_meta:
+                        entry["meta"] = group_meta[key]
+                    result_list.append(entry)
+
+                result = {
+                    "ok": True,
+                    "total_records_scanned": len(all_values),
+                    "groups_found": len(groups),
+                    "top_results": result_list,
+                    "summary": (
+                        f"Aggregated {len(all_values)} records into {len(groups)} groups, "
+                        f"showing top {len(result_list)} by {sum_field} ({sort_dir})"
+                    ),
+                }
+
+                if trace:
+                    trace.write(
+                        "tool_result",
+                        {
+                            "tool_name": "aggregate_endpoint",
+                            "result": {
+                                "ok": True,
+                                "summary": result["summary"],
+                            },
+                        },
+                    )
+
+                return result
             if tool_name == "tripletex_request":
                 raw_path = arguments.get("path", "")
                 if raw_path.startswith("/v2/"):
-                    arguments["path"] = raw_path[3:]
+                    raw_path = raw_path[3:]
                 elif raw_path.startswith("v2/"):
-                    arguments["path"] = raw_path[2:]
+                    raw_path = raw_path[2:]
+
+                if "?" in raw_path:
+                    from urllib.parse import urlparse, parse_qs
+
+                    parsed = urlparse(raw_path)
+                    raw_path = parsed.path
+                    extracted_params = {
+                        k: v[0] for k, v in parse_qs(parsed.query).items()
+                    }
+                    existing_params = arguments.get("params") or {}
+                    arguments["params"] = {**extracted_params, **existing_params}
+
+                arguments["path"] = raw_path
+
+                if arguments["method"] == "GET" and arguments.get("json_body"):
+                    body = arguments.pop("json_body")
+                    if isinstance(body, dict):
+                        existing_params = arguments.get("params") or {}
+                        arguments["params"] = {
+                            **{k: v for k, v in body.items() if v is not None},
+                            **existing_params,
+                        }
+
+                if arguments["method"] == "PUT" and "/:payment" in raw_path:
+                    body = arguments.get("json_body")
+                    if isinstance(body, dict) and body:
+                        params = arguments.get("params") or {}
+                        for key in (
+                            "paymentDate",
+                            "paymentTypeId",
+                            "paidAmount",
+                            "paidAmountCurrency",
+                        ):
+                            if key in body and key not in params:
+                                params[key] = body[key]
+                        arguments["params"] = params
+                        arguments["json_body"] = None
+
+                if execution_state.middleware:
+                    (
+                        arguments["method"],
+                        arguments["path"],
+                        arguments["params"],
+                        arguments["json_body"],
+                    ) = execution_state.middleware.intercept_tool_call(
+                        arguments["method"],
+                        arguments["path"],
+                        arguments.get("params"),
+                        arguments.get("json_body"),
+                    )
+                    dedup_hit = execution_state.middleware.check_dedup(
+                        arguments["method"],
+                        arguments["path"],
+                        arguments.get("json_body"),
+                    )
+                    if dedup_hit is not None:
+                        return {
+                            "ok": True,
+                            "result": dedup_hit,
+                            "dedup": True,
+                            "resource_id": _extract_primary_resource_id(dedup_hit),
+                        }
 
                 preflight_error, endpoint = self._validate_tripletex_request(
                     arguments,
@@ -1443,12 +1750,45 @@ class TripletexAccountingAgent:
                 )
                 if preflight_error is not None:
                     return preflight_error
-                response = await tripletex.request(
-                    method=arguments["method"],
-                    path=arguments["path"],
-                    params=arguments.get("params"),
-                    json_body=arguments.get("json_body"),
-                )
+                try:
+                    response = await tripletex.request(
+                        method=arguments["method"],
+                        path=arguments["path"],
+                        params=arguments.get("params"),
+                        json_body=arguments.get("json_body"),
+                    )
+                except TripletexApiError as api_err:
+                    if (
+                        api_err.status_code == 403
+                        and "supplierInvoice" in arguments.get("path", "")
+                        and arguments["method"] == "POST"
+                    ):
+                        logger.info(
+                            "Cascading fallback: /supplierInvoice 403 -> /ledger/voucher"
+                        )
+                        arguments["path"] = "/ledger/voucher"
+                        response = await tripletex.request(
+                            method=arguments["method"],
+                            path=arguments["path"],
+                            params=arguments.get("params"),
+                            json_body=arguments.get("json_body"),
+                        )
+                    else:
+                        raise
+
+                if execution_state.middleware:
+                    execution_state.middleware.process_response(
+                        arguments["method"],
+                        arguments["path"],
+                        response,
+                        request_body=arguments.get("json_body"),
+                    )
+                    execution_state.middleware.record_for_dedup(
+                        arguments["method"],
+                        arguments["path"],
+                        arguments.get("json_body"),
+                        response,
+                    )
                 result = {
                     "ok": True,
                     "endpoint": endpoint,
@@ -1457,6 +1797,12 @@ class TripletexAccountingAgent:
                 resource_id = _extract_primary_resource_id(response)
                 if resource_id is not None:
                     result["resource_id"] = resource_id
+                if execution_state.middleware:
+                    refs = execution_state.middleware.get_entity_registry_brief()
+                    if refs:
+                        result["available_refs"] = {
+                            f"$REF:{k}": v for k, v in list(refs.items())[-10:]
+                        }
                 method_upper = (arguments.get("method") or "").upper()
                 if method_upper in ("POST", "PUT"):
                     key_fields = _extract_key_fields(response)
@@ -2042,6 +2388,51 @@ def build_tool_definitions(
                         "path": {"type": "string"},
                     },
                     "required": ["method", "path"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "aggregate_endpoint",
+                "description": (
+                    "Fetch ALL data from a paginated Tripletex endpoint and perform "
+                    "server-side aggregation. Use this for analysis tasks where you need "
+                    "to find top accounts, sum amounts, or compare periods. Returns "
+                    "aggregated results — no need to paginate yourself."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {
+                            "type": "string",
+                            "description": "The GET endpoint to fetch from, e.g. '/ledger/posting'",
+                        },
+                        "params": {
+                            "type": "object",
+                            "description": 'Query params for the endpoint, e.g. {"dateFrom": "2026-01-01", "dateTo": "2026-01-31"}',
+                            "additionalProperties": True,
+                        },
+                        "group_by": {
+                            "type": "string",
+                            "description": "Field path to group by, e.g. 'account.number' or 'account.id'",
+                        },
+                        "sum_field": {
+                            "type": "string",
+                            "description": "Field to sum within each group, e.g. 'amount' or 'amountGross'",
+                        },
+                        "sort": {
+                            "type": "string",
+                            "enum": ["asc", "desc"],
+                            "description": "Sort direction for the aggregated results",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Number of top results to return (default 10)",
+                        },
+                    },
+                    "required": ["endpoint", "params", "group_by", "sum_field"],
                     "additionalProperties": False,
                 },
             },

@@ -1,0 +1,8 @@
+{
+  "text": "# Thon Hotels\n\nSolveien 77, 8006 Bodø\n\nOrg.nr: 846307869\n\n## KVITTERING - 05.04.2026\n\n| Vare                     | Pris              |\n|--------------------------|-------------------|\n| Overnatting              | 6050.00 kr        |\n| Kontorrekvisita          | 270.00 kr         |\n| <b>Total:</b>            | <b>6320.00 kr</b> |\n| herav MVA 25%:           | 1580.00 kr        |\n| Betalt med: Bedriftskort |                   |",
+  "method": "datalab",
+  "filename": "files/kvittering_fr_04.pdf",
+  "sha256": "bc1f82737268f682666ee4a90aae7800ec98f175c01f366c7a1ccfd02f733aa9",
+  "extracted_at": "2026-03-22T00:54:44.244616+00:00",
+  "char_count": 428
+}

@@ -116,21 +116,31 @@ def main():
 
         raw_dets = detector.run(img_path, img_w, img_h)
 
-        if len(raw_dets) == 1 and len(raw_dets[0]["scores"]) > 0:
-            fused = raw_dets[0]
-            fused["class_confidence"] = np.ones(len(fused["scores"]))
-        elif len(raw_dets) > 1:
+        num_models = len(detector.models)
+        full_dets = raw_dets[:num_models]
+        tile_dets = raw_dets[num_models:] if len(raw_dets) > num_models else []
+
+        if len(full_dets) == 1 and len(full_dets[0]["scores"]) > 0:
+            fused_full = full_dets[0]
+            fused_full["class_confidence"] = np.ones(len(fused_full["scores"]))
+        elif len(full_dets) > 1:
             # Model weights: favor larger/better models (sorted by file size desc)
             wbf_weights = thresholds.get("wbf_weights", None)
-            fused = fuse_detections(
-                raw_dets,
+            fused_full = fuse_detections(
+                full_dets,
                 img_w,
                 img_h,
                 wbf_iou=thresholds.get("wbf_iou", 0.50),
                 weights=wbf_weights,
             )
         else:
-            continue
+            fused_full = {"boxes_xyxy": np.empty((0, 4)), "scores": np.empty(0), "classes": np.empty(0, dtype=int), "class_confidence": np.empty(0)}
+
+        if tile_dets and len(tile_dets[0]["scores"]) > 0:
+            from fusion import combine_full_and_tile
+            fused = combine_full_and_tile(fused_full, tile_dets[0], iou_thr=thresholds.get("wbf_iou", 0.50))
+        else:
+            fused = fused_full
 
         if len(fused["scores"]) == 0:
             continue

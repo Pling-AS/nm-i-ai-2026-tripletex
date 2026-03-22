@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Activity, Database, Trophy, Volume2, VolumeX, Wifi, WifiOff, Plus, FlaskConical, Loader2 } from 'lucide-react'
 import { shortModel, cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
@@ -38,6 +38,43 @@ export function Header({
   const [submitLoading, setSubmitLoading] = useState(false)
   const [batchMenu, setBatchMenu] = useState(false)
   const [batchCount, setBatchCount] = useState(5)
+  const [batchConcurrency, setBatchConcurrency] = useState(8)
+  const [batchIndicator, setBatchIndicator] = useState<{ active: boolean; completed: number; total: number } | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadBatchStatus = async () => {
+      try {
+        const status = await api.getBatchStatus()
+        if (!mounted) return
+
+        const active = Boolean(status?.active)
+        if (!active) {
+          setBatchIndicator(null)
+          return
+        }
+
+        setBatchIndicator({
+          active,
+          completed: Number(status?.progress?.completed ?? 0),
+          total: Number(status?.progress?.total ?? 0),
+        })
+      } catch {
+        if (mounted) setBatchIndicator(null)
+      }
+    }
+
+    void loadBatchStatus()
+    const interval = window.setInterval(() => {
+      void loadBatchStatus()
+    }, 3000)
+
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+    }
+  }, [])
 
   async function handleSimulate() {
     setSimLoading(true)
@@ -56,11 +93,13 @@ export function Header({
     setTimeout(() => setSubmitLoading(false), 2000)
   }
 
-  async function handleBatchSubmit(count: number) {
+  async function handleBatchSubmit(count: number, concurrency: number = 8) {
     setBatchMenu(false)
     setSubmitLoading(true)
     try {
-      await api.startBatch(count, 2)
+      const safeCount = Math.max(1, Math.min(count, 50))
+      const safeConcurrency = Math.max(1, Math.min(concurrency, 10))
+      await api.startBatch(safeCount, Math.min(safeConcurrency, safeCount))
     } catch (e) { console.error(e) }
     setTimeout(() => setSubmitLoading(false), 2000)
   }
@@ -92,6 +131,13 @@ export function Header({
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          {batchIndicator?.active && (
+            <div className="flex items-center gap-1 rounded-md border border-[var(--blue)]/40 bg-blue-500/10 px-2 py-1 text-[var(--blue)]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span className="font-medium">Batch: {batchIndicator.completed}/{batchIndicator.total}</span>
+            </div>
+          )}
+
           <div className="relative">
             <button
               type="button"
@@ -117,8 +163,18 @@ export function Header({
                   />
                   <span className="text-xs text-[var(--text2)]">runs</span>
                 </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="number"
+                    value={batchConcurrency}
+                    onChange={(e) => setBatchConcurrency(Number(e.target.value))}
+                    min={1} max={10}
+                    className="w-16 rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs focus:border-[var(--blue)] focus:outline-none"
+                  />
+                  <span className="text-xs text-[var(--text2)]">workers</span>
+                </div>
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => handleBatchSubmit(batchCount)}
+                  <button type="button" onClick={() => handleBatchSubmit(batchCount, batchConcurrency)}
                     className="flex-1 rounded bg-[var(--green)] px-2 py-1 text-xs font-medium text-white">
                     Start
                   </button>

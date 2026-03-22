@@ -10,6 +10,7 @@ dist/
 .DS_Store
 runs/overview.json
 runs/raw_requests.jsonl
+pdf_cache/pdfs/
 dashboard/out/
 dashboard/node_modules/
 dashboard/.next/

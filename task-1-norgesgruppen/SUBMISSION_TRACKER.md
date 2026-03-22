@@ -3,7 +3,45 @@
 **Competition ends:** March 22, 15:00 CET
 **Leader:** 0.9255 | **Our best:** 0.9113 | **Gap:** 0.0142
 **Score formula:** 0.7 × det_mAP@0.5 + 0.3 × cls_mAP@0.5
-**Submissions remaining:** 6 (reset at 01:00 Oslo / 00:00 UTC)
+**Submissions remaining:** 2 (used 4 of tonight's 6)
+
+### Latest Server Results (March 22)
+| # | Score | Config | Notes |
+|---|-------|--------|-------|
+| #17 | 0.9077 | T3000 + w=[2.0,1.0] | T3000 hurts |
+| #18 | 0.9071 | l_fold3 + T4000 | Folds always fail |
+| **#19** | **0.9142** | **Ceiling fix only** | **NEW BEST — classifier now runs on all boxes** |
+| #20 | 0.9109 | All fixes + prototypes | Two-stage fusion + prototypes hurt |
+
+### Threshold Relaxation Sim (March 22, 02:30) — ALL WORSE
+| Config | Cls mAP | Hybrid | Δ |
+|--------|---------|--------|---|
+| Baseline (=0.9142) | 0.9101 | 0.9498 | — |
+| cls=0.40, margin=0.10, impl=0.12 | 0.9065 | 0.9487 | -0.0011 |
+| cls=0.40, margin=0.10, impl=0.15 | 0.9070 | 0.9489 | -0.0009 |
+
+**Conservative thresholds are optimal. More overrides = more mistakes.**
+**NOTE:** Public/private test split — final ranking uses PRIVATE set
+
+---
+
+## 🚨 BREAKTHROUGH: Bug Fix Simulation Results (March 22, 01:15)
+
+| # | Variant | Det mAP | Cls mAP | Hybrid | Δ vs Baseline |
+|---|---------|---------|---------|--------|--------------|
+| **#1** | **FIX1: ceiling removal only** | **0.9668** | **0.9101** | **0.9498** | **+0.0042** |
+| #2 | FIX_ALL: all fixes + prototypes | 0.9628 | 0.9191 | 0.9497 | +0.0041 |
+| #3 | FIX3: ceiling + fusion | 0.9628 | 0.9075 | 0.9462 | +0.0006 |
+| #5 | BASELINE (=server 0.9113) | 0.9668 | 0.8962 | 0.9456 | 0.0000 |
+| #6 | FIX2: fusion only | 0.9628 | 0.8774 | 0.9372 | -0.0084 |
+
+**The classifier ceiling bypass was costing us +0.014 cls_mAP.** The classifier is now running on ALL detections instead of ~20%.
+
+### Bug Details
+- `infer_cls.py` line 187: `if yolo_class_confidences[i] >= self.yolo_conf_ceiling: continue`
+- When WBF voting agrees, confidence = 1.0 → classifier SKIPPED
+- With yolo_conf_ceiling=0.70, most detections bypassed the DINOv2 classifier
+- FIX: Remove the ceiling check entirely → classifier runs on everything
 
 ---
 

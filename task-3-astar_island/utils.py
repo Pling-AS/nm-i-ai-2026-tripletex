@@ -54,7 +54,7 @@ def is_static(terrain_code: int) -> bool:
 # ---------------------------------------------------------------------------
 # Probability helpers
 # ---------------------------------------------------------------------------
-FLOOR_EPS = 0.001
+FLOOR_EPS = 0.01
 
 
 def apply_floor_and_normalize(

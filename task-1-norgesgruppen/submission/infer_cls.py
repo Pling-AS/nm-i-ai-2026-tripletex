@@ -81,7 +81,7 @@ class TrainedClassifier:
             model_name, pretrained=False, num_classes=nc, img_size=CROP_SIZE
         )
         self.model.load_state_dict(model_state)
-        self.model = self.model.to(self.device).eval()
+        self.model = self.model.to(self.device).train(False)
 
         if self.device == "cuda":
             self.model = self.model.half()

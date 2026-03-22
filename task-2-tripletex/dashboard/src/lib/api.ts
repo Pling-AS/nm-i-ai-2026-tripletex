@@ -17,10 +17,10 @@ export const api = {
       ...(apiKey ? { endpoint_api_key: apiKey } : {}),
     })
   }).then(r => r.json()),
-  startBatch: (count: number, delaySeconds: number) => fetch(`${API_BASE}/api/competition/batch`, {
+  startBatch: (count: number, concurrency: number) => fetch(`${API_BASE}/api/competition/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ count, delay_seconds: delaySeconds })
+    body: JSON.stringify({ count, concurrency })
   }).then(r => r.json()),
   stopBatch: () => fetch(`${API_BASE}/api/competition/batch/stop`, { method: 'POST' }).then(r => r.json()),
   getBatchStatus: () => fetch(`${API_BASE}/api/competition/batch/status`).then(r => r.json()),

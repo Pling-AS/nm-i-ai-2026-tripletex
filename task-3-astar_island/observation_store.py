@@ -42,6 +42,7 @@ class ObservationStore:
             lambda: np.zeros(NUM_CLASSES, dtype=np.int32)
         )
         self._archetype_obs_count: dict[CellArchetype, int] = defaultdict(int)
+        self.settlement_vitality: dict | None = None
 
     def add_observation(
         self,
@@ -177,6 +178,7 @@ class ObservationStore:
             "height": self.height,
             "width": self.width,
             "archetype_pools": arch_data,
+            "settlement_vitality": getattr(self, "settlement_vitality", None),
         }
         json_path.write_text(json.dumps(meta, indent=2))
         print(f"[obs_store] Saved to {path.with_suffix('.npz')} + {json_path}")
@@ -190,26 +192,14 @@ class ObservationStore:
                 ", has_adjacent_ruin=False", ""
             )
 
-        # Try new format with pressure_bucket first
-        m = re.search(
-            r"initial_terrain=(\d+).*is_coastal=(True|False).*dist_settlement_bucket=(\d+).*has_adjacent_settlement=(True|False).*pressure_bucket=(\d+)",
-            key,
-        )
-        if m:
-            return CellArchetype(
-                initial_terrain=int(m.group(1)),
-                is_coastal=m.group(2) == "True",
-                dist_settlement_bucket=int(m.group(3)),
-                has_adjacent_settlement=m.group(4) == "True",
-                pressure_bucket=int(m.group(5)),
-            )
-
-        # Fallback: old format without pressure_bucket
+        # Regex to extract fields
+        # pattern: initial_terrain=(\d+), is_coastal=(True|False), dist_settlement_bucket=(\d+), has_adjacent_settlement=(True|False)
         m = re.search(
             r"initial_terrain=(\d+).*is_coastal=(True|False).*dist_settlement_bucket=(\d+).*has_adjacent_settlement=(True|False)",
             key,
         )
         if not m:
+            # Fallback for empty/malformed keys (should not happen in valid saves)
             raise ValueError(f"Could not parse archetype key: {key}")
 
         return CellArchetype(
@@ -217,7 +207,6 @@ class ObservationStore:
             is_coastal=m.group(2) == "True",
             dist_settlement_bucket=int(m.group(3)),
             has_adjacent_settlement=m.group(4) == "True",
-            pressure_bucket=2,  # default medium for legacy data
         )
 
     @classmethod
@@ -236,6 +225,7 @@ class ObservationStore:
         store._counts = data["counts"]
         store._obs_count = data["obs_count"]
 
+        store.settlement_vitality = meta.get("settlement_vitality")
         for key_str, pool in meta["archetype_pools"].items():
             arch = cls._parse_archetype_key(key_str)
             store._archetype_counts[arch] += np.array(pool["counts"], dtype=np.int32)

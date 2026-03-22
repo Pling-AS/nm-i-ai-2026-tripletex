@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     tripletex_sandbox_api_session_token: str | None = None
     local_solve_url: str = "http://127.0.0.1:8000/solve"
     ainm_jwt_token: str = ""
+    datalab_api_key: str = ""
     ainm_tripletex_task_id: str = "cccccccc-cccc-cccc-cccc-cccccccccccc"
     app_api_key: str | None = None
     app_host: str = "0.0.0.0"

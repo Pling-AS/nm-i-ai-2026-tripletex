@@ -43,10 +43,14 @@ function InlineToolInfo({ event }: { event: TraceEvent }) {
   const p = event.payload
   if (event.event_type === 'tool_start' && p?.tool_name === 'tripletex_request') {
     const args = p.arguments ?? {}
+    const bodyStr = JSON.stringify(args.json_body ?? args.params ?? {})
+    const hasRefs = bodyStr.includes('$REF:')
+    const refCount = (bodyStr.match(/\$REF:/g) || []).length
     return (
       <span className="flex items-center gap-1.5 text-[11px] font-mono truncate">
         <span className={cn('font-semibold', methodColors[args.method] ?? '')}>{args.method}</span>
         <span className="text-[var(--text2)] truncate">{args.path}</span>
+        {hasRefs && <span className="text-[var(--cyan)] shrink-0">{refCount} $REF</span>}
       </span>
     )
   }
@@ -54,17 +58,34 @@ function InlineToolInfo({ event }: { event: TraceEvent }) {
     const result = p.result ?? {}
     const code = result.status_code
     const ok = result.ok
+    const refs = result.available_refs
+    const refCount = refs ? Object.keys(refs).length : 0
     return (
       <span className="flex items-center gap-1.5 text-[11px] font-mono">
         {code && <span className={cn('font-semibold', statusColor(code))}>{code}</span>}
         <span className={ok ? 'text-[var(--green)]' : 'text-[var(--red)]'}>{ok ? 'OK' : 'FAIL'}</span>
-        {result.summary && <span className="text-[var(--text2)] truncate max-w-[250px]">{result.summary}</span>}
-        {!ok && result.error && <span className="text-[var(--red)] truncate max-w-[200px]">{typeof result.error === 'string' ? result.error : 'error'}</span>}
+        {result.summary && <span className="text-[var(--text2)] truncate max-w-[200px]">{result.summary}</span>}
+        {!ok && result.error && <span className="text-[var(--red)] truncate max-w-[150px]">{typeof result.error === 'string' ? result.error : 'error'}</span>}
+        {refCount > 0 && <span className="text-[var(--cyan)] shrink-0">{refCount} refs</span>}
       </span>
     )
   }
   if (event.event_type === 'tool_start' && p?.tool_name) {
     return <span className="text-[11px] text-[var(--text2)] font-mono">{p.tool_name}</span>
+  }
+  if (event.event_type === 'attachments_prepared' && p?.pdf_extractions?.length > 0) {
+    return (
+      <span className="flex items-center gap-1.5 text-[11px]">
+        {p.pdf_extractions.map((ext: { filename: string; method: string; cached: boolean; char_count: number }, i: number) => (
+          <span key={i} className="flex items-center gap-1">
+            <span className="text-[var(--text2)]">{ext.filename}</span>
+            <span className={ext.method === 'datalab' ? 'text-[var(--green)]' : 'text-[var(--yellow)]'}>{ext.method}</span>
+            {ext.cached && <span className="text-[var(--cyan)]">cached</span>}
+            <span className="text-[var(--text2)]">{ext.char_count}ch</span>
+          </span>
+        ))}
+      </span>
+    )
   }
   if (event.event_type === 'thinking' && p?.text) {
     return <span className="text-[11px] text-[var(--text2)] italic truncate max-w-[300px]">{p.text.slice(0, 80)}</span>

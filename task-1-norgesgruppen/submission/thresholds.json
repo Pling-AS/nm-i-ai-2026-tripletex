@@ -1,9 +1,9 @@
 {
-    "cls_conf_threshold": 0.40,
-    "cls_margin_threshold": 0.10,
+    "cls_conf_threshold": 0.50,
+    "cls_margin_threshold": 0.15,
     "yolo_conf_ceiling": 1.1,
-    "score_floor": 0.02,
-    "yolo_implausible": 1.1,
+    "score_floor": 0.03,
+    "yolo_implausible": 0.08,
     "conf": 0.01,
     "tile_threshold": 4000,
     "iou": 0.7,

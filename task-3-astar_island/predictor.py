@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from correction import apply_correction, load_correction_table
 from features import CellArchetype, SeedAnalysis
 from observation_store import ObservationStore
 from utils import (
@@ -83,6 +84,12 @@ _settlement_vitality: dict | None = None
 FIELD_SIGMA = 2.0
 FIELD_LAMBDA0 = 8.0
 FIELD_ALPHA = 1.0
+TEMP_ALPHA = 0.95
+
+# ---------------------------------------------------------------------------
+# Correction table (loaded once at import time)
+# ---------------------------------------------------------------------------
+_correction_table = load_correction_table()
 
 # ---------------------------------------------------------------------------
 # Per-archetype adaptive τ — computed once after coverage queries
@@ -347,21 +354,18 @@ MIN_ARCHETYPE_BLEND = 5
 
 
 def _archetype_backoff_chain(archetype: CellArchetype) -> list[CellArchetype]:
-    """Progressively coarser archetypes for backoff with 5-field tuple."""
-    t, coast, dist, adj_sett, pressure = archetype
-    return [
+    """Progressively coarser archetypes: full → drop coastal → drop dist → terrain only."""
+    t, coast, dist, adj_sett = archetype
+    chain = []
+    for arch in [
         archetype,
-        # Drop pressure
-        CellArchetype(t, coast, dist, adj_sett, 2),
-        # Drop coastal + pressure
-        CellArchetype(t, False, dist, adj_sett, 2),
-        # Drop adj_sett
-        CellArchetype(t, False, dist, False, 2),
-        # Coarsen dist (far bucket)
-        CellArchetype(t, False, min(dist, 8), False, 2),
-        # Terrain only
-        CellArchetype(t, False, 8, False, 2),
-    ]
+        CellArchetype(t, False, dist, adj_sett),
+        CellArchetype(t, False, dist, False),
+        CellArchetype(t, False, 3, False),
+    ]:
+        if arch not in chain:
+            chain.append(arch)
+    return chain
 
 
 def _get_prior_mean(
@@ -673,7 +677,12 @@ def predict_full_grid_vectorized(
             prediction[y, x] = (effective_counts + tau * prior_mean) / (n_eff + tau)
 
     prediction = apply_floor_and_normalize_grid(prediction, class_masks)
-    prediction = _spatial_smooth(prediction, class_masks, grid)
+    prediction = _spatial_smooth(prediction, class_masks, grid, max_beta=0.0)
+    prediction = apply_correction(prediction, seed_analysis, _correction_table)
+
+    # Apply temperature scaling
+    prediction = np.power(prediction, TEMP_ALPHA)
+    prediction = apply_floor_and_normalize_grid(prediction, class_masks)
 
     return prediction
 

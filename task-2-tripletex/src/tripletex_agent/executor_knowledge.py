@@ -21,11 +21,14 @@ FIELD_RULES: dict[str, list[str]] = {
     "POST /ledger/voucher": [
         "ALWAYS set BOTH amountGross AND amountGrossCurrency to the SAME value on every posting.",
         "Do NOT include postings with row=0 — row 0 is system-generated and will cause a 422.",
-        "When using vatType != 0 (e.g. VAT 25%), include ONLY the debit posting with the GROSS amount (incl VAT). Tripletex auto-generates VAT split and credit posting. If this fails with a balance error, fall back to manual postings for all legs.",
+        "AUTO-SPLIT RULES: ONLY vatType id=3 (25% utgående) triggers auto-split. vatType id=1 does NOT auto-split.",
+        "For supplier costs: use vatType=3 (NOT id=1) with ONLY the debit posting. Tripletex detects the expense account and applies inngående MVA automatically.",
+        "For vatType=0: include BOTH debit AND credit postings manually. They must sum to 0.",
+        "If you get 422 'postings don't sum to 0': switch to vatType=3 with single debit posting, OR add both debit+credit with vatType=0.",
+        "NEVER use vatType=1 — it does NOT auto-generate balancing entries and will always cause 422 with single posting.",
+        "Do NOT include currency on postings — let it default. Including currency={} causes 'factor must be >= 1' error.",
         'For supplier invoices, set supplier={"id": supplier_id} on the debit posting.',
-        'For salary/payroll vouchers, set employee={"id": employee_id} on each posting.',
-        'Always resolve account numbers via GET /ledger/account?number=XXXX first, then use account={"id": resolved_id}.',
-        'Postings with vatType={"id":0} (exempt) can include both debit and credit lines manually.',
+        'Resolve account numbers: GET /ledger/account with params={"number": XXXX}, then use account={"id": resolved_id}. NEVER use account={"number": XXXX} in postings.',
     ],
     "PUT /ledger/voucher/{id}/:reverse": [
         "Method is PUT, not POST.",
@@ -37,13 +40,29 @@ FIELD_RULES: dict[str, list[str]] = {
         "ALWAYS search first: GET /employee?email=<email> — the sandbox often has pre-existing employees. Reuse if found.",
         "Only POST /employee if GET returns 0 results.",
         'When POSTing, ALWAYS include department={"id": dept_id}. Create department first if needed.',
-        "userType should be 'STANDARD' unless admin is explicitly requested.",
+        "userType should be 'NO_ACCESS' (safest default — avoids 422 errors). Only use 'STANDARD' if email login is explicitly needed.",
+        "startDate is a TOP-LEVEL field on the employee object. Do NOT put it inside an employments array.",
+        "dateOfBirth is a TOP-LEVEL field. Format: 'YYYY-MM-DD'.",
+        "jobTitle is set via PUT /employee/{id} AFTER creation — it cannot be set in the initial POST.",
+        "Do NOT include an 'employments' array in POST /employee — employment details go via separate POST /employee/employment endpoint.",
+        "For occupation codes (STYRK/yrkeskode): POST /employee/employment first, then GET /employee/employment/occupationCode?nameAndCode=XXXX to find the code, then PUT /employee/employment/details to set it.",
     ],
     "PUT /employee/{id}": [
         "For update tasks, GET /employee with fields=* first so you have id and version.",
         "PUT /employee/{id} MUST include id and version from the GET response.",
         "Only send the fields the prompt explicitly asks to change.",
         "If the prompt asks for admin/access privileges, use grant_employee_entitlements instead of guessing employee fields.",
+    ],
+    "POST /employee/employment/details": [
+        "Use 'annualSalary' NOT 'salary' for the salary field.",
+        "Use 'percentageOfFullTimeEquivalent' for stillingsprosent (e.g., 80.0 for 80%).",
+        "For employment type: use 'employmentType' with values like 'ORDINARY' (fast stilling), not 'FIXED_SALARY'.",
+        "For shift work: use 'shiftWork' with values like 'NONE', not 'NOT_SHIFT_WORK'.",
+    ],
+    "GET /employee/employment/occupationCode": [
+        'ALWAYS use params={"nameAndCode": "XXXX"} to filter by STYRK code. NEVER paginate through all codes.',
+        'Example: GET /employee/employment/occupationCode with params={"nameAndCode": "3512"} to find STYRK 3512.',
+        'If no results, try broader search: params={"nameAndCode": "351"}.',
     ],
     # ---- Customer / Supplier ----
     "POST /customer": [
@@ -83,8 +102,10 @@ FIELD_RULES: dict[str, list[str]] = {
     ],
     "PUT /invoice/{id}/:payment": [
         "Method is PUT, not POST.",
-        "All params are QUERY PARAMETERS: paymentDate, paymentTypeId, paidAmount or paidAmountCurrency.",
-        "Get paymentTypeId first via GET /invoice/paymentType.",
+        "ALL params are QUERY PARAMETERS — NOT in body: PUT /invoice/{id}/:payment?paymentDate=YYYY-MM-DD&paymentTypeId=XXXXX&paidAmount=YYYYY",
+        "Do NOT send a JSON body — send empty body or no body. ALL data goes in the URL query string.",
+        "Get paymentTypeId first via GET /invoice/paymentType — use the first result's id.",
+        "paidAmount is the full payment amount (e.g., 47200). For foreign currency, use paidAmountCurrency instead.",
     ],
     "PUT /invoice/{id}/:createCreditNote": [
         "Method is PUT, not POST.",
@@ -111,11 +132,11 @@ FIELD_RULES: dict[str, list[str]] = {
     # ---- Project ----
     "POST /project": [
         'Requires customer={"id": customer_id} and projectManager={"id": employee_id}.',
-        "startDate is REQUIRED — use today_iso from execution_brief if prompt doesn't specify a date.",
+        "startDate is REQUIRED — set to 2026-01-01 or earlier to allow timesheet entries on any date.",
         "If the prompt mentions a project number (prosjektnummer), set number=<project_number>.",
         "isInternal should be false unless explicitly stated as internal project.",
-        "If description text is provided, set description=<text>.",
-        "For fixed-price projects, set isFixedPrice=true and fixedPrice=<amount> (camelCase).",
+        "For project BUDGET (budsjett/orçamento): use fixedprice=<amount> (this is the budget field in Tripletex).",
+        "For fixed-price projects, also set isFixedPrice=true.",
     ],
     "POST /project/projectActivity": [
         'Requires project={"id": project_id} and activity={"id": activity_id}.',
@@ -138,6 +159,36 @@ FIELD_RULES: dict[str, list[str]] = {
         "Requires project, activity, employee, date, hours.",
         "Only one entry per employee/date/activity/project combination.",
         "hours is a decimal number (e.g. 8.0, 7.5).",
+    ],
+    # ---- Forbidden Endpoints ----
+    "POST /incomingInvoice": [
+        "FORBIDDEN: /incomingInvoice is a BETA endpoint requiring special permissions. It ALWAYS returns 403.",
+        "Use POST /ledger/voucher with supplier reference instead. See register_supplier_invoice playbook.",
+    ],
+    "POST /supplierInvoice": [
+        "Try this endpoint FIRST for supplier invoices — the scoring system prefers it.",
+        "If it returns 403, fall back to POST /ledger/voucher with supplier reference.",
+        "Required fields: invoiceNumber, supplier, currency, orderLines with account/amount/vatType.",
+    ],
+    # ---- Year-End / Closing ----
+    "GET /ledger/voucher": [
+        "REQUIRES dateFrom and dateTo as query params. Without them you get 422.",
+        "dateTo is EXCLUSIVE — if you want vouchers from March 22, use dateTo=2026-03-23 (next day).",
+        "NEVER use dateFrom == dateTo — it always returns 422. Always set dateTo = dateFrom + 1 day minimum.",
+        'Example for single day: params={"dateFrom": "2026-03-22", "dateTo": "2026-03-23"}',
+        'Example for broad range: params={"dateFrom": "2026-01-01", "dateTo": "2026-12-31"}',
+        "These are QUERY PARAMS via the params field — NOT json_body.",
+    ],
+    "GET /ledger/posting": [
+        "Use dateFrom and dateTo for date range filtering.",
+        "Use count and from for pagination — ALWAYS paginate if fullResultSize > count.",
+        "For expense analysis: filter accounts in range 4000-7999 (Norwegian expense accounts).",
+        "Response may be truncated — check fullResultSize vs count and paginate if needed.",
+    ],
+    "GET /ledger/account": [
+        'Use params={"number": XXXX} to resolve a specific account number to its ID.',
+        "This is a QUERY PARAM via the params field — NOT json_body.",
+        "Do NOT use /ledger/accountingPeriod — it does not exist.",
     ],
     # ---- Ledger Account ----
     "PUT /ledger/account/{id}": [
@@ -315,6 +366,28 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
         "POST /order",
         "POST /order/orderline",
         "POST /invoice",
+    ],
+    "year_end_closing": [
+        "GET /ledger/account",
+        "POST /ledger/voucher",
+    ],
+    "ledger_error_correction": [
+        "GET /ledger/voucher",
+        "PUT /ledger/voucher/{id}/:reverse",
+        "GET /ledger/account",
+        "POST /ledger/voucher",
+    ],
+    "bank_reconciliation": [
+        "GET /ledger/account",
+        "PUT /ledger/account/{id}",
+        "POST /customer",
+        "POST /supplier",
+        "POST /order",
+        "POST /order/orderline",
+        "POST /invoice",
+        "GET /invoice/paymentType",
+        "PUT /invoice/{id}/:payment",
+        "POST /ledger/voucher",
     ],
     "enable_module": [
         "GET /token/session/>whoAmI",
@@ -673,14 +746,14 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                 "step": 1,
                 "method": "GET",
                 "path": "/employee?email=<email>",
-                "note": "Check if employee already exists — sandbox often pre-seeds employees",
+                "note": "Check if employee already exists",
             },
             {
                 "step": 2,
                 "method": "POST",
                 "path": "/department",
                 "body_shape": {"name": "Avdeling", "departmentNumber": "1"},
-                "note": "Only if employee not found AND no department exists",
+                "note": "Only if needed",
             },
             {
                 "step": 3,
@@ -690,11 +763,23 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                     "firstName": "str",
                     "lastName": "str",
                     "email": "str",
-                    "dateOfBirth": "YYYY-MM-DD or null",
-                    "userType": "STANDARD",
+                    "dateOfBirth": "YYYY-MM-DD (TOP-LEVEL, not in employments)",
+                    "startDate": "YYYY-MM-DD (TOP-LEVEL, not in employments)",
+                    "userType": "NO_ACCESS",
                     "department": {"id": "from_step2"},
                 },
-                "note": "Only if GET returned 0 results",
+                "note": "userType=NO_ACCESS avoids 422. startDate+dateOfBirth are TOP-LEVEL fields.",
+            },
+            {
+                "step": 4,
+                "method": "PUT",
+                "path": "/employee/{id}",
+                "body_shape": {
+                    "id": "from_step3",
+                    "version": "from_step3",
+                    "jobTitle": "str (stillingstittel from prompt)",
+                },
+                "note": "Only if prompt specifies a job title. Must include id+version.",
             },
         ],
     },
@@ -1046,6 +1131,72 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
             },
         ],
     },
+    "year_end_closing": {
+        "description": "Year-end closing vouchers. 3-6 API calls. Use account numbers from prompt directly.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/account?number=XXXX",
+                "note": "Resolve each account number from prompt to get ID. Repeat for each account.",
+            },
+            {
+                "step": 2,
+                "method": "POST",
+                "path": "/ledger/voucher",
+                "body_shape": {
+                    "date": "YYYY-12-31 (year-end date from prompt)",
+                    "description": "Depreciation / Tax provision / Result transfer",
+                    "postings": [
+                        {
+                            "account": {"id": "from_step1"},
+                            "amountGross": "number",
+                            "amountGrossCurrency": "same_as_amountGross",
+                            "vatType": {"id": 0},
+                            "row": 1,
+                        },
+                        {
+                            "account": {"id": "from_step1_other"},
+                            "amountGross": "-number",
+                            "amountGrossCurrency": "same_as_amountGross",
+                            "vatType": {"id": 0},
+                            "row": 2,
+                        },
+                    ],
+                },
+                "note": "ALWAYS vatType 0. ALWAYS both amountGross AND amountGrossCurrency. Repeat POST for each closing entry.",
+            },
+        ],
+    },
+    "ledger_error_correction": {
+        "description": "Reverse wrong voucher then rebook correct one. 3-4 API calls.",
+        "calls": [
+            {
+                "step": 1,
+                "method": "GET",
+                "path": "/ledger/voucher?number=XXXX&dateFrom=YYYY-01-01&dateTo=YYYY-12-31",
+                "note": "Find voucher by number from prompt",
+            },
+            {
+                "step": 2,
+                "method": "PUT",
+                "path": "/ledger/voucher/{id}/:reverse?date=YYYY-MM-DD",
+                "note": "Method is PUT. Date is QUERY PARAM.",
+            },
+            {
+                "step": 3,
+                "method": "GET",
+                "path": "/ledger/account?number=XXXX",
+                "note": "Resolve correct account number",
+            },
+            {
+                "step": 4,
+                "method": "POST",
+                "path": "/ledger/voucher",
+                "note": "Rebook with correct accounts/amounts",
+            },
+        ],
+    },
     "create_department": {
         "description": "Create department. 1 API call.",
         "calls": [
@@ -1058,7 +1209,7 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
         ],
     },
     "register_supplier_invoice": {
-        "description": "Create supplier then register invoice via /incomingInvoice or /ledger/voucher. 3-5 API calls.",
+        "description": "Create supplier then register invoice via /ledger/voucher. 3 API calls, 0 errors. vatType=3 for 25% MVA.",
         "calls": [
             {
                 "step": 1,
@@ -1068,34 +1219,38 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                     "name": "str",
                     "organizationNumber": "str",
                     "email": "str",
-                    "invoiceEmail": "str",
+                    "invoiceEmail": "str (same as email)",
                 },
             },
             {
                 "step": 2,
                 "method": "GET",
-                "path": "/ledger/account?number=<expense_account>",
-                "note": "Resolve expense account number to ID",
+                "path": "/ledger/account",
+                "note": 'Resolve expense account: params={"number": <account_number>}. Use the params field, NOT path query string.',
             },
             {
                 "step": 3,
                 "method": "POST",
                 "path": "/ledger/voucher",
                 "body_shape": {
-                    "date": "today_iso",
-                    "description": "str",
+                    "date": "invoice_date or today_iso",
+                    "description": "Supplier invoice - supplier_name",
                     "postings": [
                         {
                             "account": {"id": "from_step2"},
-                            "amountGross": "total_incl_vat",
-                            "amountGrossCurrency": "same",
-                            "vatType": {"id": 3},
+                            "amountGross": "total_incl_vat (GROSS, positive)",
+                            "amountGrossCurrency": "same_as_amountGross",
+                            "vatType": {
+                                "id": 3,
+                                "note": "25% MVA — NEVER use 0 for standard purchases",
+                            },
                             "supplier": {"id": "from_step1"},
+                            "description": "expense description",
                             "row": 1,
                         }
                     ],
                 },
-                "note": "Only debit posting. Tripletex auto-generates VAT + credit.",
+                "note": "ONE debit posting with vatType=3. Tripletex auto-generates VAT (2710) + AP credit (2400). If 422 'balance error', you used vatType=0 — change to vatType=3.",
             },
         ],
     },
