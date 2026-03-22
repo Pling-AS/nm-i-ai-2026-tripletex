@@ -21,14 +21,15 @@ FIELD_RULES: dict[str, list[str]] = {
     "POST /ledger/voucher": [
         "ALWAYS set BOTH amountGross AND amountGrossCurrency to the SAME value on every posting.",
         "Do NOT include postings with row=0 — row 0 is system-generated and will cause a 422.",
-        "AUTO-SPLIT RULES: ONLY vatType id=3 (25% utgående) triggers auto-split. vatType id=1 does NOT auto-split.",
-        "For supplier costs: use vatType=3 (NOT id=1) with ONLY the debit posting. Tripletex detects the expense account and applies inngående MVA automatically.",
+        "AUTO-SPLIT RULES: vatType id=3 (25% MVA) triggers auto-split ONLY when the account supports it (check legalVatTypes from GET response).",
+        "For supplier costs with GROSS amount: first try vatType=3 with ONLY the debit posting (amountGross = total incl. VAT). If the account's legalVatTypes (from GET /ledger/account response) does NOT include id=3, fall back to manual 3-posting: debit expense (vatType=0, net amount), debit 2710 (vatType=0, VAT amount), credit 2400 (vatType=0, negative gross). All three must sum to 0.",
         "For vatType=0: include BOTH debit AND credit postings manually. They must sum to 0.",
-        "If you get 422 'postings don't sum to 0': switch to vatType=3 with single debit posting, OR add both debit+credit with vatType=0.",
+        "If you get 422 'postings don't sum to 0' with vatType=3: the account may not support it. Switch to manual 3-posting with vatType=0 on all rows.",
         "NEVER use vatType=1 — it does NOT auto-generate balancing entries and will always cause 422 with single posting.",
         "Do NOT include currency on postings — let it default. Including currency={} causes 'factor must be >= 1' error.",
         'For supplier invoices, set supplier={"id": supplier_id} on the debit posting.',
         'Resolve account numbers: GET /ledger/account with params={"number": XXXX}, then use account={"id": resolved_id}. NEVER use account={"number": XXXX} in postings.',
+        "IMPORTANT: When GET /ledger/account returns legalVatTypes for an expense account, check if id=3 is in the list before using vatType=3. If not, use manual 3-posting with vatType=0.",
     ],
     "PUT /ledger/voucher/{id}/:reverse": [
         "Method is PUT, not POST.",
@@ -128,6 +129,16 @@ FIELD_RULES: dict[str, list[str]] = {
         'costCategory={"id": ...} and paymentType={"id": ...} are REQUIRED.',
         "GET /travelExpense/costCategory and GET /travelExpense/paymentType first.",
         "For per-diem/diet, use POST /travelExpense/perDiemCompensation instead.",
+    ],
+    "POST /travelExpense/perDiemCompensation": [
+        "FORBIDDEN sub-endpoints: /perDiemCompensation/rateType and /perDiemCompensation/rateCategory do NOT exist — they return 422.",
+        "Use GET /travelExpense/rateCategory (top-level) to find per-diem rate categories.",
+        "Use GET /travelExpense/rate?rateCategoryId=XXX to find rates for a category.",
+        "Do NOT use countryCode field — it causes 'Country not enabled for travel expense' error.",
+        "Instead use travelExpenseZoneId (integer). GET /travelExpense/zone to discover valid zone IDs.",
+        "For domestic Norwegian travel, look for a zone with 'innland' or 'domestic' in the name.",
+        "Required fields: travelExpense, rateCategory, overnightAccommodation (HOTEL/NONE/etc.), count, location.",
+        "If per-diem creation fails due to zone/country issues, fall back to POST /travelExpense/cost with the total per-diem amount as a regular cost line.",
     ],
     # ---- Project ----
     "POST /project": [
@@ -313,6 +324,9 @@ TASK_ENDPOINT_CHAINS: dict[str, list[str]] = {
         "GET /travelExpense/paymentType",
         "POST /travelExpense",
         "POST /travelExpense/cost",
+        "GET /travelExpense/rateCategory",
+        "GET /travelExpense/zone",
+        "GET /travelExpense/rate",
         "POST /travelExpense/perDiemCompensation",
     ],
     "delete_travel_expense": [
@@ -692,7 +706,7 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
         ],
     },
     "create_travel_expense": {
-        "description": "Travel expense with costs. 10 optimal calls (actual was 14 with 4 retries).",
+        "description": "Travel expense with costs and per-diem. 7-12 API calls.",
         "calls": [
             {
                 "step": 1,
@@ -704,7 +718,7 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                 "step": 2,
                 "method": "GET",
                 "path": "/travelExpense/costCategory",
-                "note": "Get available cost categories",
+                "note": "Get available cost categories (Fly, Taxi, etc.)",
             },
             {
                 "step": 3,
@@ -736,6 +750,32 @@ SUCCESSFUL_TRACES: dict[str, dict] = {
                     "date": "YYYY-MM-DD",
                 },
                 "note": "Repeat for each cost line. ALWAYS use amountCurrencyIncVat.",
+            },
+            {
+                "step": 6,
+                "method": "GET",
+                "path": "/travelExpense/rateCategory?type=PER_DIEM",
+                "note": "Only if per-diem requested. Find valid rate categories.",
+            },
+            {
+                "step": 7,
+                "method": "GET",
+                "path": "/travelExpense/zone",
+                "note": "Find valid zone IDs. NEVER use countryCode.",
+            },
+            {
+                "step": 8,
+                "method": "POST",
+                "path": "/travelExpense/perDiemCompensation",
+                "body_shape": {
+                    "travelExpense": {"id": "from_step4"},
+                    "rateCategory": {"id": "from_step6"},
+                    "overnightAccommodation": "HOTEL",
+                    "travelExpenseZoneId": "from_step7 (integer zone ID)",
+                    "location": "str",
+                    "count": "number_of_days",
+                },
+                "note": "NEVER use countryCode. Use travelExpenseZoneId. If fails, fall back to /travelExpense/cost.",
             },
         ],
     },

@@ -338,7 +338,14 @@ The sandbox is EMPTY — you must create the full chain first, then reverse:
 3. GET /travelExpense/paymentType to find payment types (needed for step 4).
 4. POST /travelExpense with employee ref, departureDateTime (format: YYYY-MM-DDT08:00:00), returnDateTime, title.
 5. POST /travelExpense/cost for each cost line. MUST use amountCurrencyIncVat (NOT amount). MUST include costCategory and paymentType refs.
-6. POST /travelExpense/perDiemCompensation only when per-diem/diet is explicitly requested.""",
+6. For per-diem/diet (diett/indemnités journalières/Tagegeld):
+   a. GET /travelExpense/rateCategory to find valid rate categories (filter by type=PER_DIEM).
+   b. GET /travelExpense/zone to find valid zone IDs. Use zone for domestic travel (look for 'innland').
+   c. GET /travelExpense/rate?rateCategoryId=XXX to find the rate for the category.
+   d. POST /travelExpense/perDiemCompensation with travelExpense, rateCategory, overnightAccommodation, count, location, travelExpenseZoneId.
+   e. NEVER use countryCode — it causes 'Country not enabled' error. Use travelExpenseZoneId instead.
+   f. FORBIDDEN: /perDiemCompensation/rateType and /perDiemCompensation/rateCategory sub-paths do NOT exist.
+   g. FALLBACK: If per-diem POST fails, create a regular /travelExpense/cost with the total per-diem amount (count × rate).""",
     "create_department": """## Playbook: Create Department
 1. POST /department with name and departmentNumber when provided.""",
     "create_project": """## Playbook: Create Project (ALL SCORED FIELDS)
@@ -377,28 +384,32 @@ The sandbox is EMPTY — you must create the full chain first, then reverse:
     "register_supplier_invoice": """## Playbook: Register Supplier Invoice (CRITICAL — TWO APPROACHES)
 1. Create supplier: POST /supplier with name, organizationNumber, email/invoiceEmail mirroring.
 
-APPROACH A — Try /supplierInvoice FIRST (preferred by scoring system):
-2a. Call search_tripletex_api("supplier invoice") to find the /supplierInvoice endpoint.
-3a. POST /supplierInvoice with:
+APPROACH A — Try /supplierInvoice FIRST (preferred by scoring system — gives higher score):
+2a. POST /supplierInvoice directly with:
     - invoiceNumber: invoice reference from prompt
-    - invoiceDate: date from prompt
+    - invoiceDate: date from prompt (YYYY-MM-DD)
+    - dueDate: due date from prompt (YYYY-MM-DD)
     - supplier: {"id": supplier_id}
     - currency: {"code": "NOK"}
-    - lines or orderLines with account, amount, vatType
+    - orderLines: [{"account": {"id": account_id}, "amount": net_amount, "vatType": {"id": 3}}]
     If this returns 403, fall back to Approach B.
 
 APPROACH B — Fallback to /ledger/voucher:
 2b. Resolve expense account: GET /ledger/account with params={"number": <account_number>}.
-3b. POST /ledger/voucher with ONE debit posting:
-    - account: {"id": <resolved_account_id>} (use the ID from GET response, NOT the account number)
-    - amountGross: total including VAT (positive)
-    - amountGrossCurrency: same as amountGross
-    - vatType: {"id": 3} for 25% MVA — NEVER use vatType 0
+    CHECK the response's legalVatTypes array to see if id=3 is supported.
+3b. If legalVatTypes includes id=3: POST /ledger/voucher with ONE debit posting:
+    - account: {"id": <resolved_account_id>}, amountGross: total incl. VAT (positive)
+    - amountGrossCurrency: same as amountGross, vatType: {"id": 3}
     - supplier: {"id": supplier_id}
-    With vatType=3, Tripletex auto-generates VAT + AP credit postings.
-    If 422 "postings don't sum to 0": you used vatType=0, switch to vatType=3.
+    Tripletex auto-generates VAT + AP credit postings.
+3c. If legalVatTypes does NOT include id=3: POST /ledger/voucher with THREE manual postings (all vatType=0):
+    - Row 1: Debit expense account (net amount)
+    - Row 2: Debit account 2710 (VAT amount)
+    - Row 3: Credit account 2400 (negative gross amount)
+    All three must sum to 0.
 
-CRITICAL: Use account ID from GET response, NOT the account number string.""",
+CRITICAL: Use account ID from GET response, NOT the account number string.
+CRITICAL: If 422 "postings don't sum to 0" with vatType=3, switch to manual 3-posting with vatType=0.""",
     "create_voucher": """## Playbook: Create Voucher / Payroll (CRITICAL)
 IMPORTANT: If the task is about PAYROLL (lønn/salary/Gehalt/nómina/paie/folha):
 1. Check if salary endpoints exist: search_tripletex_api("salary payrun")

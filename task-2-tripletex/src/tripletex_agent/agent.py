@@ -437,7 +437,11 @@ class TripletexAccountingAgent:
             "4. For percentages: is the math correct? (e.g., 75% of 342600 = 256950)\n"
             "5. For orderlines: does unitPriceExcludingVatCurrency match the line item price?\n\n"
             "DO NOT reject for: missing fields, wrong IDs, call ordering, prerequisites, or sequencing.\n"
-            "ASSUME all entity IDs are correct — they come from prior API responses.\n\n"
+            "ASSUME all entity IDs are correct — they come from prior API responses.\n"
+            "CRITICAL: The sandbox starts EMPTY. The agent often creates PREREQUISITE entities "
+            "(e.g., an overdue invoice for 10000 NOK) that are NOT in the task's line_items. "
+            "If the amount does NOT appear in line_items, it is likely a bootstrap entity — ALLOW it.\n"
+            "Only reject amounts that CONTRADICT a specific line_item from the prompt.\n\n"
             'Return JSON: {"allowed": true} or {"allowed": false, "reason": "...", "suggestion": "..."}\n'
             "Only reject for CLEAR NUMERIC ERRORS. When in doubt, ALLOW."
         )
@@ -3757,6 +3761,16 @@ def _detect_off_target_drift(
             "incomingInvoice",
         },
         "create_credit_note": {"invoice", "credit", "ledger"},
+        "update_invoice": {
+            "invoice",
+            "order",
+            "orderline",
+            "customer",
+            "ledger",
+            "voucher",
+            "payment",
+            "product",
+        },
         "delete_invoice": {"invoice", "ledger", "order"},
         "create_order": {"order", "customer", "product", "orderline"},
         "create_project": {
@@ -3780,6 +3794,9 @@ def _detect_off_target_drift(
             "currency",
             "token",
             "department",
+            "zone",
+            "rate",
+            "rateCategory",
         },
         "delete_travel_expense": {"travelExpense", "employee"},
         "bank_reconciliation": {
@@ -3788,6 +3805,14 @@ def _detect_off_target_drift(
             "ledger",
             "statement",
             "account",
+            "order",
+            "orderline",
+            "invoice",
+            "customer",
+            "supplier",
+            "product",
+            "voucher",
+            "payment",
         },
         "ledger_error_correction": {"ledger", "voucher", "account", "posting"},
         "year_end_closing": {
