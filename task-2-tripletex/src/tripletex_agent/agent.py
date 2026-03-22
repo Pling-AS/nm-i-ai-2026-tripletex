@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 from difflib import get_close_matches
 import json
@@ -1239,17 +1240,43 @@ GET /salary/type to find "Fastlønn" (base salary) and "Bonus" type IDs.
             num_steps = len(getattr(planner, "ordered_steps", None) or [])
             use_thinking = num_steps >= 5 or task_tier >= 2
             llm_retries = 2 if step_idx == 0 else 1
+            llm_timeout = 90.0
             for llm_attempt in range(llm_retries):
                 try:
-                    message = await self._chat_completion_with_fallback(
-                        openrouter,
-                        messages=messages,
-                        tools=tools,
-                        max_tokens=64000 if use_thinking else 16000,
-                        model_chain=executor_model_chain,
-                        enable_thinking=use_thinking,
+                    message = await asyncio.wait_for(
+                        self._chat_completion_with_fallback(
+                            openrouter,
+                            messages=messages,
+                            tools=tools,
+                            max_tokens=64000 if use_thinking else 16000,
+                            model_chain=executor_model_chain,
+                            enable_thinking=use_thinking,
+                        ),
+                        timeout=llm_timeout,
                     )
                     break
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "Executor LLM call hard-timeout after %.0fs (step %d, attempt %d/%d)",
+                        llm_timeout,
+                        step_idx,
+                        llm_attempt + 1,
+                        llm_retries,
+                    )
+                    trace.write(
+                        "executor_llm_timeout",
+                        {
+                            "step": step_idx,
+                            "attempt": llm_attempt + 1,
+                            "timeout_seconds": llm_timeout,
+                        },
+                    )
+                    if llm_attempt >= llm_retries - 1:
+                        raise OpenRouterError(
+                            f"LLM call timed out after {llm_timeout}s on all {llm_retries} attempts"
+                        )
+                    await asyncio.sleep(2)
+                    continue
                 except Exception as llm_exc:
                     if llm_attempt < llm_retries - 1:
                         logger.warning(
@@ -2826,11 +2853,19 @@ GET /salary/type to find "Fastlønn" (base salary) and "Bonus" type IDs.
         for entity in getattr(planner, "entities", []):
             role = entity.role.lower()
             entry: dict[str, Any] = {}
+            is_employee = role in ("employee", "project_manager")
             if entity.name:
-                entry["name"] = entity.name
+                if is_employee:
+                    parts = entity.name.split(None, 1)
+                    entry["firstName"] = parts[0]
+                    if len(parts) > 1:
+                        entry["lastName"] = parts[1]
+                else:
+                    entry["name"] = entity.name
             if entity.email:
                 entry["email"] = entity.email
-                entry["invoiceEmail"] = entity.email
+                if not is_employee:
+                    entry["invoiceEmail"] = entity.email
             if entity.organization_number:
                 entry["organizationNumber"] = entity.organization_number
             if entity.phone:

@@ -392,8 +392,11 @@ class OpenRouterClient:
                     enable_thinking=enable_thinking,
                 )
 
+        openrouter_model = model
+        if _is_anthropic_model(model) and not model.startswith("anthropic/"):
+            openrouter_model = f"anthropic/{model}"
         return await self._openai_chat_completion(
-            model=model,
+            model=openrouter_model,
             messages=messages,
             tools=tools,
             response_format=response_format,

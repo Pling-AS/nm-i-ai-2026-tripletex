@@ -6,6 +6,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+_FIELD_OVERRIDES: dict[str, dict[str, str]] = {
+    "/project": {"fixedprice": "fixedPrice"},
+}
+
+
 def validate_and_fix_payload(
     method: str,
     path: str,
@@ -18,6 +23,15 @@ def validate_and_fix_payload(
     normalized_method = (method or "").upper()
     normalized_path = path if str(path).startswith("/") else f"/{path}"
     corrections: list[str] = []
+
+    overrides = _FIELD_OVERRIDES.get(normalized_path, {})
+    if overrides:
+        for wrong, right in overrides.items():
+            if wrong in payload and right not in payload:
+                payload[right] = payload.pop(wrong)
+                corrections.append(
+                    f"Renamed '{wrong}' to '{right}' (hardcoded override)."
+                )
 
     try:
         cache = _get_runtime_cache(spec_index)

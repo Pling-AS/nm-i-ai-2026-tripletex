@@ -769,6 +769,112 @@ async def generate_run_postmortem(run_id: str) -> JSONResponse:
     return JSONResponse({"status": "generated", "post_mortem": analysis})
 
 
+def _randomize_prompt(prompt: str) -> str:
+    import random as _rnd
+    import re as _re
+
+    _FIRST_NAMES = [
+        "Emma",
+        "Liam",
+        "Sofia",
+        "Noah",
+        "Olivia",
+        "Henrik",
+        "Ingrid",
+        "Magnus",
+        "Astrid",
+        "Erik",
+        "Freya",
+        "Lars",
+        "Marta",
+        "Oscar",
+        "Linnea",
+        "Aksel",
+        "Nora",
+        "Jonas",
+        "Sigrid",
+        "Tobias",
+    ]
+    _LAST_NAMES = [
+        "Andersen",
+        "Berg",
+        "Dahl",
+        "Eriksen",
+        "Hansen",
+        "Johansen",
+        "Larsen",
+        "Nilsen",
+        "Olsen",
+        "Pedersen",
+        "Schmidt",
+        "Weber",
+        "Fischer",
+        "Müller",
+        "Dubois",
+        "Martin",
+        "Silva",
+        "Costa",
+    ]
+    _COMPANY_SUFFIXES = ["AS", "ASA", "Lda", "SARL", "GmbH", "SL", "Ltd"]
+    _COMPANY_WORDS = [
+        "Nordic",
+        "Fjord",
+        "Summit",
+        "Arctic",
+        "Baltic",
+        "Coastal",
+        "Alpine",
+        "Terra",
+        "Skyline",
+        "Vertex",
+        "Horizon",
+        "Crest",
+    ]
+
+    seen_names: dict[str, str] = {}
+
+    def _replace_name(match: _re.Match) -> str:  # type: ignore[type-arg]
+        original = match.group(0)
+        if original in seen_names:
+            return seen_names[original]
+        replacement = f"{_rnd.choice(_FIRST_NAMES)} {_rnd.choice(_LAST_NAMES)}"
+        seen_names[original] = replacement
+        return replacement
+
+    name_pattern = _re.compile(
+        r"\b(?:[A-ZÆØÅÉÈÊËÀÂÄÖÜ][a-zæøåéèêëàâäöü]+)\s+"
+        r"(?:[A-ZÆØÅÉÈÊËÀÂÄÖÜ][a-zæøåéèêëàâäöü]+)\b"
+    )
+
+    skip_words = {
+        "Tripletex",
+        "Cloud Run",
+        "Google Cloud",
+        "Clas Ohlson",
+        "Porto Alegre",
+    }
+    result = prompt
+    names_found = name_pattern.findall(result)
+    for name in names_found:
+        if name not in skip_words and "@" not in name:
+            new_name = f"{_rnd.choice(_FIRST_NAMES)} {_rnd.choice(_LAST_NAMES)}"
+            result = result.replace(name, new_name, 1)
+
+    org_pattern = _re.compile(r"\b(\d{9})\b")
+    for match in org_pattern.finditer(result):
+        old = match.group(1)
+        new_org = str(_rnd.randint(800000000, 999999999))
+        result = result.replace(old, new_org, 1)
+
+    email_pattern = _re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
+    for match in email_pattern.finditer(result):
+        old_email = match.group(0)
+        new_email = f"{_rnd.choice(_FIRST_NAMES).lower()}.{_rnd.choice(_LAST_NAMES).lower()}@example.org"
+        result = result.replace(old_email, new_email, 1)
+
+    return result
+
+
 @router.post("/api/runs/simulate")
 async def simulate_run() -> JSONResponse:
     import asyncio
@@ -800,7 +906,7 @@ async def simulate_run() -> JSONResponse:
             status_code=400,
         )
 
-    prompt = _random.choice(competition_prompts)
+    prompt = _randomize_prompt(_random.choice(competition_prompts))
 
     async def _run_sim() -> None:
         agent = TripletexAccountingAgent(settings)
@@ -1284,12 +1390,20 @@ def _enrich_run_file(
     ):
         return None
 
+    scoring_events = [e for e in events if e["event_type"] == "competition_scoring"]
     existing_scoring = next(
-        (e for e in events if e["event_type"] == "competition_scoring"), None
+        (
+            e
+            for e in scoring_events
+            if e.get("payload", {}).get("score_raw") is not None
+        ),
+        scoring_events[-1] if scoring_events else None,
     )
-    has_final_scoring = existing_scoring is not None and existing_scoring.get(
-        "payload", {}
-    ).get("status") in ("completed", "failed")
+    has_final_scoring = (
+        existing_scoring is not None
+        and existing_scoring.get("payload", {}).get("status") in ("completed", "failed")
+        and existing_scoring.get("payload", {}).get("score_raw") is not None
+    )
     has_error_summary = "error_summary" in existing_types
 
     run_endpoint_url = ""

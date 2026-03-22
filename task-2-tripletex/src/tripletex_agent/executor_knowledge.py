@@ -185,6 +185,7 @@ FIELD_RULES: dict[str, list[str]] = {
         "For project BUDGET/fixed-price amount, use field name fixedPrice (camelCase) — NEVER fixedprice.",
         "For fixed-price projects, set isFixedPrice=true and fixedPrice=<amount> in the same request.",
         "When prompt explicitly says fixed-price project, set projectCategory='FIXED_PRICE' (or matching enum value from schema if required).",
+        "PROJECT MANAGER SETUP: The employee MUST have userType='STANDARD' (not NO_ACCESS) and entitlements granted BEFORE being assigned as project manager. Steps: (1) POST /employee with userType='STANDARD' and dateOfBirth, (2) PUT /employee/entitlement/:grantEntitlementsByTemplate with params employeeId=ID&template=ALL_PRIVILEGES, (3) THEN POST /project.",
     ],
     "POST /project/projectActivity": [
         'Requires project={"id": project_id} and activity={"id": activity_id}.',
