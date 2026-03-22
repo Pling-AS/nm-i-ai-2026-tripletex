@@ -97,13 +97,17 @@ docker run -p 8000:8000 --env-file .env tripletex-agent
 
 ## Environment Variables
 
-The only **required** variable is `OPENROUTER_API_KEY`. Everything else has sensible defaults or graceful fallbacks.
-
 ### Required
 
 | Variable | Purpose |
 |----------|---------|
 | `OPENROUTER_API_KEY` | LLM API access via [OpenRouter](https://openrouter.ai/) |
+| `TRIPLETEX_SANDBOX_API_URL` | Your Tripletex sandbox URL (e.g. `https://xxx.tripletex.dev/v2`) |
+| `TRIPLETEX_SANDBOX_API_SESSION_TOKEN` | Session token for your sandbox account |
+| `TRIPLETEX_SANDBOX_LOGIN_EMAIL` | Email used for sandbox login |
+| `LOCAL_SOLVE_URL` | URL where your agent is running (e.g. `http://127.0.0.1:8000/solve`) |
+
+Get sandbox credentials by creating a free Tripletex test account at [tripletex.no](https://www.tripletex.no/). The `LOCAL_SOLVE_URL` is used by the dashboard's batch runner to test your agent locally.
 
 ### Optional — LLM Providers
 
