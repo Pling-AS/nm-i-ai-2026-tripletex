@@ -19,6 +19,25 @@ venv/
 
 # Agent/System
 .sisyphus/
+.tmp_mcp_docs/
+
+# Non-tripletex tasks (tracked in separate repo)
+task-1-norgesgruppen/
+task-3-astar_island/
+groccery-practice-task/
+google-cloud-docs/
+getting-started.md
+opencode.json
+pyrightconfig.json
+submission_instructions.md
+submission_status.md
+AGENTS.md
+competition_simulator.py
+dashboard-overview.png
+verification.log
+temp_extract/
+patch*.py
+test_*.py
 
 # Training data & model artifacts
 training_data/
@@ -30,7 +49,7 @@ work/
 reference_images/
 temp_eval/
 
-# Task 2 — Tripletex
+# Tripletex specifics
 task-2-tripletex/runs/.syncthing*
 task-2-tripletex/runs/.st*
 task-2-tripletex/runs/*.sync-conflict*
@@ -39,16 +58,8 @@ task-2-tripletex/pdf_cache/
 task-2-tripletex/uvicorn.log
 node_modules/
 
-# Task 3 — Astar Island
-calibration.json
-data/
-autorun.log
-autorun.py
-temp_*.py
-
 # Misc
 *.log
 .pytest_cache/
-submission_status.md
 .browser-data/
 .game-tracker.json
